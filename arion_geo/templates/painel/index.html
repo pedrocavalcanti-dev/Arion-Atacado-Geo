@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Visão geral · Arion Atacado Geo{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/painel/painel.css' %}">{% endblock %}
+{% block content %}
+<section class="overview-page" aria-labelledby="overview-title">
+  <div class="overview-hero">
+    <p class="section-kicker overview-kicker">ARION <span>/</span> NOC ATACADO</p>
+    <h1 id="overview-title">Visão geral</h1>
+    <p class="overview-lead">Uma leitura geográfica e operacional do NOC Atacado.</p>
+    <p class="overview-description">Explore a distribuição da base, concentre análises por operadora e acompanhe os principais indicadores em uma única experiência.</p>
+    <nav class="overview-actions" aria-label="Acessar áreas do sistema">
+      <a class="overview-link" href="{% url 'mapa:index' %}">Abrir mapa <span aria-hidden="true">↗</span></a>
+      <a class="overview-link overview-link--quiet" href="{% url 'dashboard' %}">Ver dashboard <span aria-hidden="true">↗</span></a>
+    </nav>
+    <div class="overview-meta" aria-label="Escopo: 27 unidades federativas, 3 operadoras, visão nacional">
+      <span>{{ state_count }} UFs</span><i aria-hidden="true"></i><span>3 operadoras</span><i aria-hidden="true"></i><span>Visão nacional</span>
+    </div>
+  </div>
+</section>
+{% endblock %}

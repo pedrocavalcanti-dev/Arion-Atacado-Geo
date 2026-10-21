@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+{% block title %}Dashboard · Arion Atacado Geo{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/painel/dashboard.css' %}">{% endblock %}
+{% block content %}
+<section class="dashboard-page" aria-labelledby="dashboard-title">
+  <header class="dashboard-heading">
+    <div>
+      <p class="section-kicker">NOC ATACADO <span>/</span> DASHBOARD</p>
+      <h1 id="dashboard-title">Visão da operação</h1>
+      <p>Uma leitura executiva da base e dos chamados.</p>
+    </div>
+    <span class="demo-badge"><i></i>Dados demonstrativos</span>
+  </header>
+
+  {# LINHA 1 — KPIs #}
+  <div class="dashboard-kpis" aria-label="Indicadores principais">
+    <article class="kpi-card dash-card" data-tone="blue">
+      <header><span class="kpi-label">Total de links</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></span></header>
+      <strong class="kpi-value" data-count="{{ total_links }}">{{ total_links|intcomma }}</strong>
+      <small class="kpi-note">Distribuídos pelo país</small>
+      <div class="kpi-visual kpi-split" aria-hidden="true">{% for item in operators %}<i class="kpi-split-{{ item.key }}" data-share="{{ item.share|stringformat:'.1f' }}"></i>{% endfor %}</div>
+    </article>
+    <article class="kpi-card dash-card" data-tone="green">
+      <header><span class="kpi-label">Estados atendidos</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></span></header>
+      <strong class="kpi-value" data-count="{{ state_count }}">{{ state_count }}</strong>
+      <small class="kpi-note">Presença nacional</small>
+      <div class="kpi-visual kpi-dots" data-dots="{{ state_count }}" aria-hidden="true"></div>
+    </article>
+    <article class="kpi-card dash-card" data-tone="orange">
+      <header><span class="kpi-label">Chamados</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5.5 5h13L21 13v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5z"/></svg></span></header>
+      <strong class="kpi-value" data-count="{{ calls }}">{{ calls|intcomma }}</strong>
+      <small class="kpi-note">Somatório demonstrativo</small>
+      <svg class="kpi-visual kpi-sparkline" data-sparkline="calls" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"></svg>
+    </article>
+    <article class="kpi-card dash-card" data-tone="rose">
+      <header><span class="kpi-label">Reincidentes</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/></svg></span></header>
+      <strong class="kpi-value" data-count="{{ repeat }}">{{ repeat|intcomma }}</strong>
+      <small class="kpi-note"><b class="kpi-badge">{{ repeat_share|floatformat:1 }}%</b> dos chamados</small>
+      <svg class="kpi-visual kpi-sparkline" data-sparkline="repeat" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"></svg>
+    </article>
+    <article class="kpi-card dash-card" data-tone="violet">
+      <header><span class="kpi-label">Operadoras</span><span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5a7 7 0 0 1 14 0"/><path d="M8.5 12.5a3.5 3.5 0 0 1 7 0"/><path d="M12 13v8"/></svg></span></header>
+      <strong class="kpi-value" data-count="{{ operator_count }}">{{ operator_count }}</strong>
+      <small class="kpi-note">Claro, Vivo e Algar</small>
+      <div class="kpi-visual kpi-operators" aria-hidden="true">{% for item in operators %}<i class="op-dot op-dot--{{ item.key }}"></i>{% endfor %}</div>
+    </article>
+  </div>
+
+  <div class="dashboard-grid">
+    {# LINHA 2 — Dashboard principal #}
+    <article class="dash-panel dash-card trend-panel">
+      <header>
+        <div><span class="panel-kicker">EVOLUÇÃO MENSAL</span><h2>Chamados no período</h2></div>
+        <div class="chart-legend"><span class="legend-calls"><i></i>Chamados</span><span class="legend-repeat"><i></i>Reincidentes</span></div>
+      </header>
+      <div class="trend-chart" data-monthly-chart role="img" aria-label="Evolução mensal demonstrativa de chamados e reincidências"></div>
+      {{ monthly|json_script:"monthly-chart-data" }}
+    </article>
+
+    <article class="dash-panel dash-card operator-panel">
+      <header>
+        <div><span class="panel-kicker">BASE DE LINKS</span><h2>Distribuição por operadora</h2></div>
+        <span class="panel-total"><b data-count="{{ total_links }}">{{ total_links|intcomma }}</b><small>links</small></span>
+      </header>
+      <div class="operator-stack" role="img" aria-label="Participação de cada operadora na base">
+        {% for item in operators %}<i class="operator-segment operator-segment--{{ item.key }}" data-share="{{ item.share|stringformat:'.1f' }}" data-tip-title="{{ item.name }}" data-tip-value="{{ item.value|intcomma }} links · {{ item.share|floatformat:1 }}%" tabindex="0"></i>{% endfor %}
+      </div>
+      <div class="operator-chart">
+        {% for item in operators %}
+        <div class="operator-bar-row">
+          <span class="operator-name"><i class="op-dot op-dot--{{ item.key }}"></i>{{ item.name }}</span>
+          <strong>{{ item.value|intcomma }}</strong>
+          <span class="operator-share">{{ item.share|floatformat:1 }}%</span>
+          <div class="bar-track"><i class="bar-fill operator-fill--{{ item.key }}" data-value="{{ item.value }}" data-max="{{ total_links }}"></i></div>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+
+    {# LINHA 3 — Geografia / Estados #}
+    <article class="dash-panel dash-card states-panel">
+      <header>
+        <div><span class="panel-kicker">CONCENTRAÇÃO DA BASE</span><h2>Estados com maior base</h2></div>
+        <small class="demo-note">Top 5 por links</small>
+      </header>
+      <ol class="state-ranking">
+        {% for item in top_states %}
+        <li class="state-rank">
+          <span class="rank-number">0{{ forloop.counter }}</span>
+          <img class="state-flag" src="{% static item.flag %}" alt="Bandeira de {{ item.name }}" width="24" height="16" loading="lazy" decoding="async">
+          <span class="state-name">{{ item.name }}</span>
+          <span class="state-code-badge">{{ item.code }}</span>
+          <strong>{{ item.value|intcomma }}<small>links</small></strong>
+          <i class="state-bar"><b data-value="{{ item.value }}" data-max="{{ top_states.0.value }}"></b></i>
+        </li>
+        {% endfor %}
+      </ol>
+    </article>
+
+    <article class="dash-panel dash-card region-panel">
+      <header>
+        <div><span class="panel-kicker">DISTRIBUIÇÃO GEOGRÁFICA</span><h2>Chamados por região</h2></div>
+        <span class="panel-total"><b>{{ calls|intcomma }}</b><small>chamados</small></span>
+      </header>
+      <div class="rank-list">
+        {% for item in regions %}
+        <div class="rank-row region-row">
+          <span class="rank-label">{{ item.name }}</span>
+          <strong>{{ item.value|intcomma }}</strong>
+          <span class="share-badge">{{ item.share|floatformat:1 }}%</span>
+          <div class="bar-track"><i class="bar-fill" data-value="{{ item.value }}" data-max="{{ calls }}"></i></div>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+
+    {# LINHA 4 — Motivos / Reincidência #}
+    <article class="dash-panel dash-card reasons-panel">
+      <header>
+        <div><span class="panel-kicker">PERFIL DE ATENDIMENTO</span><h2>Principais motivos</h2></div>
+        <small class="demo-note">Distribuição estimada</small>
+      </header>
+      <div class="rank-list reasons-list">
+        {% for item in reasons %}
+        <div class="rank-row reason-row">
+          <span class="rank-label"><i class="reason-dot"></i>{{ item.name }}</span>
+          <div class="bar-track"><i class="bar-fill" data-value="{{ item.value }}" data-max="{{ reasons.0.value }}"></i></div>
+          <strong>{{ item.value }}%</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="dash-panel dash-card recurrence-panel">
+      <header>
+        <div><span class="panel-kicker">RECORRÊNCIA</span><h2>Chamados reincidentes</h2></div>
+      </header>
+      <div class="recurrence-body">
+        <div class="recurrence-ring" role="img" aria-label="{{ repeat_share|floatformat:1 }}% dos chamados são reincidentes">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-track" cx="60" cy="60" r="50" pathLength="100"/>
+            <circle class="ring-value" cx="60" cy="60" r="50" pathLength="100" data-ring="{{ repeat_share|stringformat:'.1f' }}"/>
+          </svg>
+          <span class="ring-label"><b>{{ repeat_share|floatformat:1 }}%</b><small>dos chamados</small></span>
+        </div>
+        <div class="recurrence-copy">
+          <strong><b data-count="{{ repeat }}">{{ repeat|intcomma }}</b></strong>
+          <span>chamados reincidentes</span>
+          <p>de <b>{{ calls|intcomma }}</b> chamados</p>
+          <ul class="recurrence-legend">
+            <li><i class="legend-swatch legend-swatch--repeat"></i>Reincidentes<b>{{ repeat|intcomma }}</b></li>
+            <li><i class="legend-swatch legend-swatch--first"></i>Demais chamados<b>{{ first_calls|intcomma }}</b></li>
+          </ul>
+        </div>
+      </div>
+      <p class="recurrence-note">Participação demonstrativa no volume total de chamados.</p>
+    </article>
+  </div>
+  <div class="chart-tooltip" data-chart-tooltip role="tooltip" hidden></div>
+</section>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/painel/dashboard.js' %}" defer></script>{% endblock %}

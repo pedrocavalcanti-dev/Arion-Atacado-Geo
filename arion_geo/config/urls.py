@@ -15,8 +15,22 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
+from django.views.generic import RedirectView
+
+from aplicativos.autenticacao.views import home
+from aplicativos.painel.views import dashboard
 
 urlpatterns = [
+    path('favicon.ico', RedirectView.as_view(url='/static/favicon/arion.svg', permanent=True), name='favicon'),
     path('admin/', admin.site.urls),
+    path('', home, name='home'),
+    path('', include('aplicativos.autenticacao.urls')),
+    path('mapa/', include('aplicativos.mapa.urls')),
+    path('dashboard/', dashboard, name='dashboard'),
+    path('painel/', include('aplicativos.painel.urls')),
 ]
+
+handler403 = "config.views.permission_denied"
+handler404 = "config.views.page_not_found"
+handler500 = "config.views.server_error"

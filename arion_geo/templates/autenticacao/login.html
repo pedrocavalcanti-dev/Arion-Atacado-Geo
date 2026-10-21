@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Entrar · Arion Atacado Geo{% endblock %}
+{% block body_class %}login-page{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/autenticacao/login.css' %}">{% endblock %}
+{% block content %}
+<section class="login-layout" aria-labelledby="login-title">
+  <div class="login-panel">
+    <div class="login-brand-mark" aria-hidden="true"><i></i><i></i><i></i></div>
+    <p class="login-eyebrow">ARION <span>ATACADO GEO</span></p>
+    <h1 id="login-title">Inteligência geográfica<br>do NOC Atacado.</h1>
+    <p class="login-description">Acesse a plataforma operacional da Arion.</p>
+    <form class="login-form" method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="form-error" role="alert">{% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
+      {% for field in form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<span class="field-error">{{ field.errors|join:", " }}</span>{% endif %}</div>{% endfor %}
+      <input type="hidden" name="next" value="{{ next|default:'' }}">
+      <button class="login-submit" type="submit">Entrar <span aria-hidden="true">↗</span></button>
+    </form>
+    <p class="login-footnote">Arion Serviços de Telecomunicações</p>
+  </div>
+  <p class="login-index" aria-hidden="true">NOC ATACADO <span>·</span> PLATAFORMA INTERNA</p>
+</section>
+{% endblock %}

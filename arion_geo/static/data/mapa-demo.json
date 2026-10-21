@@ -1,0 +1,461 @@
+{
+  "AC": {
+    "total_links": 35,
+    "claro": 10,
+    "vivo": 17,
+    "algar": 8,
+    "chamados": 4,
+    "reincidentes": 1,
+    "motivos": {
+      "falha_massiva": 1,
+      "rompimento_fibra": 1,
+      "troca_drop": 1,
+      "equipamento": 1,
+      "cabo_desconectado": 0,
+      "falha_eletrica": 0,
+      "outros": 0
+    }
+  },
+  "AL": {
+    "total_links": 130,
+    "claro": 50,
+    "vivo": 45,
+    "algar": 35,
+    "chamados": 12,
+    "reincidentes": 3,
+    "motivos": {
+      "falha_massiva": 2,
+      "rompimento_fibra": 2,
+      "troca_drop": 2,
+      "equipamento": 2,
+      "cabo_desconectado": 1,
+      "falha_eletrica": 1,
+      "outros": 2
+    }
+  },
+  "AM": {
+    "total_links": 125,
+    "claro": 40,
+    "vivo": 50,
+    "algar": 35,
+    "chamados": 11,
+    "reincidentes": 2,
+    "motivos": {
+      "falha_massiva": 2,
+      "rompimento_fibra": 2,
+      "troca_drop": 2,
+      "equipamento": 2,
+      "cabo_desconectado": 1,
+      "falha_eletrica": 1,
+      "outros": 1
+    }
+  },
+  "AP": {
+    "total_links": 35,
+    "claro": 10,
+    "vivo": 12,
+    "algar": 13,
+    "chamados": 3,
+    "reincidentes": 1,
+    "motivos": {
+      "falha_massiva": 1,
+      "rompimento_fibra": 1,
+      "troca_drop": 1,
+      "equipamento": 0,
+      "cabo_desconectado": 0,
+      "falha_eletrica": 0,
+      "outros": 0
+    }
+  },
+  "BA": {
+    "total_links": 490,
+    "claro": 200,
+    "vivo": 170,
+    "algar": 120,
+    "chamados": 42,
+    "reincidentes": 9,
+    "motivos": {
+      "falha_massiva": 9,
+      "rompimento_fibra": 8,
+      "troca_drop": 6,
+      "equipamento": 5,
+      "cabo_desconectado": 5,
+      "falha_eletrica": 4,
+      "outros": 5
+    }
+  },
+  "CE": {
+    "total_links": 280,
+    "claro": 110,
+    "vivo": 95,
+    "algar": 75,
+    "chamados": 25,
+    "reincidentes": 6,
+    "motivos": {
+      "falha_massiva": 5,
+      "rompimento_fibra": 5,
+      "troca_drop": 4,
+      "equipamento": 3,
+      "cabo_desconectado": 3,
+      "falha_eletrica": 2,
+      "outros": 3
+    }
+  },
+  "DF": {
+    "total_links": 180,
+    "claro": 60,
+    "vivo": 75,
+    "algar": 45,
+    "chamados": 16,
+    "reincidentes": 3,
+    "motivos": {
+      "falha_massiva": 3,
+      "rompimento_fibra": 3,
+      "troca_drop": 2,
+      "equipamento": 2,
+      "cabo_desconectado": 2,
+      "falha_eletrica": 2,
+      "outros": 2
+    }
+  },
+  "ES": {
+    "total_links": 200,
+    "claro": 85,
+    "vivo": 75,
+    "algar": 40,
+    "chamados": 19,
+    "reincidentes": 4,
+    "motivos": {
+      "falha_massiva": 4,
+      "rompimento_fibra": 3,
+      "troca_drop": 3,
+      "equipamento": 3,
+      "cabo_desconectado": 2,
+      "falha_eletrica": 2,
+      "outros": 2
+    }
+  },
+  "GO": {
+    "total_links": 310,
+    "claro": 120,
+    "vivo": 110,
+    "algar": 80,
+    "chamados": 27,
+    "reincidentes": 5,
+    "motivos": {
+      "falha_massiva": 6,
+      "rompimento_fibra": 5,
+      "troca_drop": 4,
+      "equipamento": 4,
+      "cabo_desconectado": 3,
+      "falha_eletrica": 2,
+      "outros": 3
+    }
+  },
+  "MA": {
+    "total_links": 170,
+    "claro": 50,
+    "vivo": 55,
+    "algar": 65,
+    "chamados": 14,
+    "reincidentes": 3,
+    "motivos": {
+      "falha_massiva": 3,
+      "rompimento_fibra": 2,
+      "troca_drop": 2,
+      "equipamento": 2,
+      "cabo_desconectado": 2,
+      "falha_eletrica": 1,
+      "outros": 2
+    }
+  },
+  "MG": {
+    "total_links": 760,
+    "claro": 210,
+    "vivo": 420,
+    "algar": 130,
+    "chamados": 58,
+    "reincidentes": 13,
+    "motivos": {
+      "falha_massiva": 12,
+      "rompimento_fibra": 10,
+      "troca_drop": 9,
+      "equipamento": 8,
+      "cabo_desconectado": 6,
+      "falha_eletrica": 5,
+      "outros": 8
+    }
+  },
+  "MS": {
+    "total_links": 140,
+    "claro": 50,
+    "vivo": 45,
+    "algar": 45,
+    "chamados": 12,
+    "reincidentes": 3,
+    "motivos": {
+      "falha_massiva": 2,
+      "rompimento_fibra": 2,
+      "troca_drop": 2,
+      "equipamento": 2,
+      "cabo_desconectado": 1,
+      "falha_eletrica": 1,
+      "outros": 2
+    }
+  },
+  "MT": {
+    "total_links": 160,
+    "claro": 55,
+    "vivo": 50,
+    "algar": 55,
+    "chamados": 15,
+    "reincidentes": 3,
+    "motivos": {
+      "falha_massiva": 3,
+      "rompimento_fibra": 3,
+      "troca_drop": 2,
+      "equipamento": 2,
+      "cabo_desconectado": 2,
+      "falha_eletrica": 1,
+      "outros": 2
+    }
+  },
+  "PA": {
+    "total_links": 230,
+    "claro": 90,
+    "vivo": 80,
+    "algar": 60,
+    "chamados": 19,
+    "reincidentes": 4,
+    "motivos": {
+      "falha_massiva": 4,
+      "rompimento_fibra": 3,
+      "troca_drop": 3,
+      "equipamento": 3,
+      "cabo_desconectado": 2,
+      "falha_eletrica": 2,
+      "outros": 2
+    }
+  },
+  "PB": {
+    "total_links": 140,
+    "claro": 45,
+    "vivo": 50,
+    "algar": 45,
+    "chamados": 13,
+    "reincidentes": 3,
+    "motivos": {
+      "falha_massiva": 3,
+      "rompimento_fibra": 2,
+      "troca_drop": 2,
+      "equipamento": 2,
+      "cabo_desconectado": 1,
+      "falha_eletrica": 1,
+      "outros": 2
+    }
+  },
+  "PE": {
+    "total_links": 330,
+    "claro": 140,
+    "vivo": 110,
+    "algar": 80,
+    "chamados": 29,
+    "reincidentes": 7,
+    "motivos": {
+      "falha_massiva": 6,
+      "rompimento_fibra": 5,
+      "troca_drop": 4,
+      "equipamento": 4,
+      "cabo_desconectado": 3,
+      "falha_eletrica": 3,
+      "outros": 4
+    }
+  },
+  "PI": {
+    "total_links": 130,
+    "claro": 45,
+    "vivo": 42,
+    "algar": 43,
+    "chamados": 11,
+    "reincidentes": 2,
+    "motivos": {
+      "falha_massiva": 2,
+      "rompimento_fibra": 2,
+      "troca_drop": 2,
+      "equipamento": 2,
+      "cabo_desconectado": 1,
+      "falha_eletrica": 1,
+      "outros": 1
+    }
+  },
+  "PR": {
+    "total_links": 390,
+    "claro": 160,
+    "vivo": 140,
+    "algar": 90,
+    "chamados": 34,
+    "reincidentes": 8,
+    "motivos": {
+      "falha_massiva": 7,
+      "rompimento_fibra": 6,
+      "troca_drop": 5,
+      "equipamento": 5,
+      "cabo_desconectado": 4,
+      "falha_eletrica": 3,
+      "outros": 4
+    }
+  },
+  "RJ": {
+    "total_links": 700,
+    "claro": 340,
+    "vivo": 320,
+    "algar": 40,
+    "chamados": 63,
+    "reincidentes": 16,
+    "motivos": {
+      "falha_massiva": 13,
+      "rompimento_fibra": 11,
+      "troca_drop": 10,
+      "equipamento": 8,
+      "cabo_desconectado": 7,
+      "falha_eletrica": 6,
+      "outros": 8
+    }
+  },
+  "RN": {
+    "total_links": 125,
+    "claro": 35,
+    "vivo": 55,
+    "algar": 35,
+    "chamados": 11,
+    "reincidentes": 2,
+    "motivos": {
+      "falha_massiva": 2,
+      "rompimento_fibra": 2,
+      "troca_drop": 2,
+      "equipamento": 2,
+      "cabo_desconectado": 1,
+      "falha_eletrica": 1,
+      "outros": 1
+    }
+  },
+  "RO": {
+    "total_links": 80,
+    "claro": 25,
+    "vivo": 35,
+    "algar": 20,
+    "chamados": 7,
+    "reincidentes": 1,
+    "motivos": {
+      "falha_massiva": 1,
+      "rompimento_fibra": 1,
+      "troca_drop": 1,
+      "equipamento": 1,
+      "cabo_desconectado": 1,
+      "falha_eletrica": 1,
+      "outros": 1
+    }
+  },
+  "RR": {
+    "total_links": 20,
+    "claro": 6,
+    "vivo": 10,
+    "algar": 4,
+    "chamados": 2,
+    "reincidentes": 0,
+    "motivos": {
+      "falha_massiva": 1,
+      "rompimento_fibra": 1,
+      "troca_drop": 0,
+      "equipamento": 0,
+      "cabo_desconectado": 0,
+      "falha_eletrica": 0,
+      "outros": 0
+    }
+  },
+  "RS": {
+    "total_links": 320,
+    "claro": 100,
+    "vivo": 90,
+    "algar": 130,
+    "chamados": 28,
+    "reincidentes": 6,
+    "motivos": {
+      "falha_massiva": 6,
+      "rompimento_fibra": 5,
+      "troca_drop": 4,
+      "equipamento": 4,
+      "cabo_desconectado": 3,
+      "falha_eletrica": 2,
+      "outros": 4
+    }
+  },
+  "SC": {
+    "total_links": 290,
+    "claro": 90,
+    "vivo": 105,
+    "algar": 95,
+    "chamados": 24,
+    "reincidentes": 5,
+    "motivos": {
+      "falha_massiva": 5,
+      "rompimento_fibra": 4,
+      "troca_drop": 4,
+      "equipamento": 3,
+      "cabo_desconectado": 3,
+      "falha_eletrica": 2,
+      "outros": 3
+    }
+  },
+  "SE": {
+    "total_links": 90,
+    "claro": 30,
+    "vivo": 30,
+    "algar": 30,
+    "chamados": 8,
+    "reincidentes": 2,
+    "motivos": {
+      "falha_massiva": 2,
+      "rompimento_fibra": 1,
+      "troca_drop": 1,
+      "equipamento": 1,
+      "cabo_desconectado": 1,
+      "falha_eletrica": 1,
+      "outros": 1
+    }
+  },
+  "SP": {
+    "total_links": 1240,
+    "claro": 680,
+    "vivo": 430,
+    "algar": 130,
+    "chamados": 87,
+    "reincidentes": 19,
+    "motivos": {
+      "falha_massiva": 18,
+      "rompimento_fibra": 16,
+      "troca_drop": 13,
+      "equipamento": 11,
+      "cabo_desconectado": 10,
+      "falha_eletrica": 8,
+      "outros": 11
+    }
+  },
+  "TO": {
+    "total_links": 100,
+    "claro": 35,
+    "vivo": 40,
+    "algar": 25,
+    "chamados": 9,
+    "reincidentes": 2,
+    "motivos": {
+      "falha_massiva": 2,
+      "rompimento_fibra": 2,
+      "troca_drop": 1,
+      "equipamento": 1,
+      "cabo_desconectado": 1,
+      "falha_eletrica": 1,
+      "outros": 1
+    }
+  }
+}

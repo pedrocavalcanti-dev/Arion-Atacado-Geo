@@ -1,0 +1,83 @@
+/* Visão Geral — landing institucional */
+.overview-page {
+  display: grid;
+  min-height: calc(100vh - 60px);
+  place-items: center;
+  padding: 5vh 24px 13vh;
+  background: radial-gradient(ellipse at 50% 44%, color-mix(in srgb, var(--text-primary) 2%, transparent), transparent 56%);
+}
+
+.overview-hero {
+  display: flex;
+  width: min(100%, 960px);
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.overview-kicker,
+.overview-hero h1,
+.overview-lead,
+.overview-description,
+.overview-actions,
+.overview-meta {
+  animation: overview-enter 600ms var(--ease-out) both;
+}
+
+.overview-kicker { margin: 0 0 28px; animation-delay: 40ms; }
+.overview-hero h1 { margin: 0; color: var(--text-primary); font-size: clamp(46px, 6vw, 72px); font-weight: 500; letter-spacing: -.065em; line-height: 1.04; animation-delay: 100ms; }
+.overview-lead { margin: 20px 0 0; color: var(--text-secondary); font-size: clamp(16px, 1.8vw, 19px); line-height: 1.5; animation-delay: 160ms; }
+.overview-description { max-width: 590px; margin: 12px 0 0; color: var(--text-muted); font-size: 13px; line-height: 1.85; animation-delay: 220ms; }
+
+.overview-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 30px; animation-delay: 280ms; }
+.overview-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 0 17px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-secondary);
+  box-shadow: inset 0 1px 0 var(--card-highlight);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.overview-link span { display: inline-block; color: var(--text-secondary); font-size: 15px; transition: transform var(--transition-fast), color var(--transition-fast); }
+.overview-link:hover { border-color: color-mix(in srgb, var(--text-primary) 25%, transparent); background: var(--surface-hover); }
+.overview-link:hover span { color: var(--text-primary); transform: translate(2px, -2px); }
+.overview-link--quiet { border-color: var(--border-primary); background: transparent; box-shadow: none; color: var(--text-secondary); }
+.overview-link--quiet:hover { color: var(--text-primary); }
+
+.overview-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 13px; margin-top: 27px; color: var(--text-muted); font-size: 10px; letter-spacing: .035em; animation-delay: 340ms; }
+.overview-meta i { width: 3px; height: 3px; border-radius: 50%; background: var(--text-faint); }
+
+@keyframes overview-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .overview-page { min-height: calc(100vh - 56px); padding: 40px 22px 72px; }
+  .overview-kicker { margin-bottom: 22px; }
+  .overview-hero h1 { font-size: clamp(42px, 11vw, 58px); }
+  .overview-lead { max-width: 420px; margin-top: 16px; font-size: 16px; }
+  .overview-description { max-width: 440px; font-size: 12px; }
+  .overview-actions { width: min(100%, 360px); flex-direction: column; margin-top: 24px; }
+  .overview-link { width: 100%; }
+  .overview-meta { gap: 9px; margin-top: 22px; font-size: 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-kicker,
+  .overview-hero h1,
+  .overview-lead,
+  .overview-description,
+  .overview-actions,
+  .overview-meta { animation: none; }
+  .overview-link:hover span { transform: none; }
+}

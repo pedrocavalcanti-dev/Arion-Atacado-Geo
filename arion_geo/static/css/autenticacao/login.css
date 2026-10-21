@@ -1,0 +1,27 @@
+.login-page { background: #090a0a; }
+.login-layout { position: relative; display: grid; min-height: 100vh; place-items: center; padding: 48px 24px; overflow: hidden; }
+.login-layout::before { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: linear-gradient(transparent, rgba(255,255,255,.025) 22%, rgba(255,255,255,.025) 78%, transparent); content: ""; pointer-events: none; }
+.login-panel { position: relative; z-index: 1; width: min(100%, 390px); padding: 22px 0; }
+.login-brand-mark { display: flex; align-items: end; gap: 3px; width: 34px; height: 34px; margin: 0 auto 27px; padding: 8px; border: 1px solid var(--border-strong); border-radius: 11px; }
+.login-brand-mark i { width: 4px; border-radius: 3px; background: #c4c9c6; }.login-brand-mark i:nth-child(1) { height: 9px; }.login-brand-mark i:nth-child(2) { height: 15px; }.login-brand-mark i:nth-child(3) { height: 11px; }
+.login-eyebrow { margin: 0 0 17px; color: var(--text-secondary); font-size: 10px; font-weight: 600; letter-spacing: .17em; text-align: center; }.login-eyebrow span { color: var(--text-muted); font-weight: 400; }
+.login-panel h1 { margin: 0; color: var(--text-primary); font-size: clamp(27px, 4vw, 32px); font-weight: 500; letter-spacing: -.055em; line-height: 1.18; text-align: center; }
+.login-description { margin: 13px 0 32px; color: var(--text-muted); font-size: 12px; text-align: center; }
+.login-form { display: grid; gap: 17px; }
+.form-field { display: grid; gap: 8px; }.form-field label { color: var(--text-secondary); font-size: 11px; }
+.form-field input { width: 100%; height: 46px; padding: 0 14px; border: 1px solid var(--border-primary); border-radius: var(--radius-sm); background: #0c0e0e; color: var(--text-primary); transition: border-color var(--transition-fast), background var(--transition-fast); }
+.form-field input::placeholder { color: #555a58; }.form-field input:hover { border-color: var(--border-strong); }.form-field input:focus { border-color: rgba(255,255,255,.32); background: #0e1010; outline: 2px solid rgba(255,255,255,.08); outline-offset: 2px; }
+.login-submit { display: flex; align-items: center; justify-content: center; gap: 10px; height: 45px; margin-top: 2px; border: 0; border-radius: var(--radius-sm); background: #e9ebe9; color: #111313; font-size: 12px; font-weight: 600; cursor: pointer; transition: background var(--transition-fast), transform var(--transition-fast); }
+.login-submit span { font-size: 15px; }.login-submit:hover { background: #fff; }.login-submit:active { transform: translateY(1px); }
+.login-footnote { margin: 30px 0 0; color: #555a58; font-size: 10px; text-align: center; }
+.login-index { position: absolute; right: 25px; bottom: 22px; left: 25px; margin: 0; color: #454948; font-size: 9px; letter-spacing: .13em; text-align: center; }.login-index span { padding: 0 5px; color: #7c817f; }
+.form-error { padding: 10px 12px; border: 1px solid rgba(210,134,128,.25); border-radius: var(--radius-sm); color: var(--danger); font-size: 11px; }.form-error p { margin: 0; }.field-error { color: var(--danger); font-size: 10px; }
+html[data-theme="light"] .login-page { background:var(--bg-primary); }
+html[data-theme="light"] .login-layout::before { background:linear-gradient(transparent,rgba(0,0,0,.045) 22%,rgba(0,0,0,.045) 78%,transparent); }
+html[data-theme="light"] .login-brand-mark i { background:#39423d; }
+html[data-theme="light"] .form-field input { background:var(--surface-primary); color:var(--text-primary); }
+html[data-theme="light"] .form-field input::placeholder,html[data-theme="light"] .login-footnote,html[data-theme="light"] .login-index { color:var(--text-muted); }
+html[data-theme="light"] .form-field input:focus { border-color:rgba(20,30,24,.36); background:#fff; outline-color:rgba(20,30,24,.08); }
+html[data-theme="light"] .login-submit { background:#171a18; color:#f4f5f4; }
+html[data-theme="light"] .login-submit:hover { background:#303632; }
+@media (max-width: 480px) { .login-layout { padding: 32px 24px 64px; }.login-panel { width: min(100%, 360px); }.login-index { bottom: 18px; } }
