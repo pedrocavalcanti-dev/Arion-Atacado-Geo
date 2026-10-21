@@ -32,8 +32,10 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "aplicativos.autenticacao.apps.AutenticacaoConfig",
+    "aplicativos.configuracoes.apps.ConfiguracoesConfig",
     "aplicativos.painel.apps.PainelConfig",
     "aplicativos.mapa.apps.MapaConfig",
+    "aplicativos.rankings.apps.RankingsConfig",
 ]
 
 MIDDLEWARE = [
@@ -55,6 +57,7 @@ TEMPLATES = [{
         "django.template.context_processors.request",
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
+        "aplicativos.configuracoes.context_processors.user_theme",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"

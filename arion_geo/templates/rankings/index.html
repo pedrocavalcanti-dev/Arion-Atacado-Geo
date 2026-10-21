@@ -1,0 +1,118 @@
+﻿{% extends "base.html" %}
+{% load static humanize %}
+{% block title %}Rankings · Arion Atacado Geo{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/rankings/rankings.css' %}">{% endblock %}
+{% block content %}
+<section class="ranking-page" aria-labelledby="ranking-title" data-ranking-root>
+  <header class="ranking-heading">
+    <div>
+      <p class="section-kicker">NOC ATACADO <span>/</span> RANKING GLOBAL</p>
+      <h1 id="ranking-title">Ranking global dos provedores</h1>
+      <p>Desempenho consolidado da operação na base total monitorada — leitura executiva do Ranking de provedores e ISPs parceiros.</p>
+    </div>
+    <div class="heading-badges">
+      <span class="scope-badge">Escopo global da operação</span>
+      <span class="demo-badge"><i></i>Dados demonstrativos</span>
+    </div>
+  </header>
+
+  <section class="ranking-kpis" aria-label="Indicadores consolidados da operação">
+    <article class="ranking-kpi">
+      <span>Base total monitorada</span>
+      <strong data-kpi-links>{{ total_links|intcomma }}<i>links</i></strong>
+      <small><b data-kpi-providers>{{ providers|length }}</b> provedores avaliados na operação</small>
+    </article>
+    <article class="ranking-kpi">
+      <span>Links ativos por provedor</span>
+      <strong data-kpi-avg-links>360<i>média</i></strong>
+      <small>Distribuição global entre parceiros</small>
+    </article>
+    <article class="ranking-kpi">
+      <span>Chamados na operação</span>
+      <strong data-kpi-calls>{{ total_calls|intcomma }}</strong>
+      <small>Volume consolidado · Out/26</small>
+    </article>
+    <article class="ranking-kpi">
+      <span>SLA médio global</span>
+      <strong data-kpi-sla>{{ average_sla|floatformat:1 }}<i>%</i></strong>
+      <small>Reincidência média de <b data-kpi-repeat>{{ average_repeat|floatformat:1 }}%</b></small>
+    </article>
+    <article class="ranking-kpi">
+      <span>Líder do ranking global</span>
+      <strong class="kpi-name" data-kpi-leader>{{ leader.nome }}</strong>
+      <small data-kpi-leader-meta>Score {{ leader.score|floatformat:1 }} · Nota {{ leader.avaliacao|floatformat:2 }} de 5</small>
+    </article>
+  </section>
+
+  <section class="ranking-controls" aria-label="Filtros do ranking">
+    <div class="controls-fields">
+      <label>Período<select disabled aria-label="Período"><option>Out/26</option></select></label>
+      <label>Operadora<select data-filter="operadora"><option value="">Todas</option><option>Claro</option><option>Vivo</option><option>Algar</option></select></label>
+      <label>Projeto<select data-filter="projeto"><option value="">Todos</option><option>Bradesco</option><option>Banco do Brasil</option><option>Caixa</option><option>Correios</option><option>Operação NOC</option></select></label>
+    </div>
+    <span class="filter-note">Desempenho consolidado da operação · Base total monitorada</span>
+  </section>
+
+  <div class="criteria-wrap">
+    <span>ORDENAR POR</span>
+    <div class="criteria-chips" role="group" aria-label="Critério do ranking">
+      <button type="button" class="is-selected" data-sort="score">Geral</button>
+      <button type="button" data-sort="links">Mais links</button>
+      <button type="button" data-sort="sla">Melhor SLA</button>
+      <button type="button" data-sort="sla-worst">Pior SLA</button>
+      <button type="button" data-sort="chamados">Mais chamados</button>
+      <button type="button" data-sort="reincidencias">Mais reincidência</button>
+      <button type="button" data-sort="estourados">Mais estourados</button>
+      <button type="button" data-sort="avaliacao">Melhor avaliação</button>
+    </div>
+  </div>
+
+  <section class="podium-section" aria-labelledby="podium-title">
+    <div class="section-title">
+      <div>
+        <span class="section-kicker">DESTAQUES DA OPERAÇÃO</span>
+        <h2 id="podium-title">Top 3 provedores no desempenho global</h2>
+      </div>
+      <span class="podium-caption">Score operacional global <b>·</b> Base total monitorada em Out/26</span>
+    </div>
+    <div class="podium" data-podium></div>
+  </section>
+
+  <section class="table-section" aria-labelledby="table-title">
+    <header>
+      <div>
+        <span class="section-kicker">VISÃO COMPLETA DA BASE</span>
+        <h2 id="table-title">Todos os provedores <small data-result-count>{{ providers|length }}</small></h2>
+      </div>
+      <span class="table-hint">Links ativos por provedor e indicadores consolidados do período</span>
+    </header>
+    <div class="table-scroll thin-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-rank">Pos.</th>
+            <th class="col-provider">Provedor</th>
+            <th class="col-num">Links ativos</th>
+            <th class="col-num">Chamados</th>
+            <th class="col-sla">SLA no prazo</th>
+            <th class="col-num">Reincid.</th>
+            <th class="col-score">Score</th>
+            <th class="col-trend">Tendência</th>
+          </tr>
+        </thead>
+        <tbody data-ranking-rows></tbody>
+      </table>
+    </div>
+    <p class="empty-state" data-empty hidden>Nenhum provedor corresponde aos filtros selecionados.</p>
+  </section>
+  <div class="provider-drawer-backdrop" data-drawer-backdrop hidden></div>
+  <aside class="provider-drawer" data-provider-drawer aria-labelledby="drawer-title" aria-modal="true" role="dialog" hidden>
+    <header class="drawer-header"><div><span class="section-kicker">ANÁLISE DO PROVEDOR</span><h2 id="drawer-title"></h2><p data-drawer-meta></p></div><button type="button" class="drawer-close" data-drawer-close aria-label="Fechar análise">×</button></header>
+    <div class="drawer-content" data-drawer-content></div>
+  </aside>
+  {{ providers|json_script:"ranking-providers" }}
+</section>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/rankings/rankings.js' %}" defer></script>{% endblock %}
+
+

@@ -118,7 +118,8 @@ a { color: inherit; }
 .brand-mark i:nth-child(1) { height: 6px; }.brand-mark i:nth-child(2) { height: 10px; }.brand-mark i:nth-child(3) { height: 7px; }
 .brand-name { font-size: 11px; font-weight: 600; letter-spacing: .12em; }.brand-name span { color: var(--text-secondary); font-weight: 400; }
 .header-nav { display: flex; align-items: center; gap: 25px; margin-left: clamp(36px, 7vw, 112px); height: 100%; }
-.header-link { position: relative; display: inline-flex; align-items: center; height: 100%; color: var(--text-muted); font-size: 12px; text-decoration: none; transition: color var(--transition-fast); }
+.header-link { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 100%; color: var(--text-muted); font-size: 12px; text-decoration: none; transition: color var(--transition-fast); }
+.header-link-icon { width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .header-link:hover, .header-link.is-active { color: var(--text-primary); }
 .header-link.is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 1px; background: var(--text-primary); content: ""; }
 
@@ -200,6 +201,7 @@ html[data-theme="light"] .theme-switch-thumb { box-shadow: 0 1px 3px rgba(20, 28
   .brand-name { font-size: 10px; letter-spacing: .08em; }
   .header-nav { gap: 13px; margin-left: auto; margin-right: 12px; }
   .header-link { font-size: 11px; }
+  .header-link-icon { display: none; }
   .user-menu summary { gap: 6px; padding-left: 4px; }
   .user-menu summary > span:nth-child(2) { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
 }

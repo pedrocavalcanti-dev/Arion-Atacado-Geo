@@ -1,0 +1,2845 @@
+{
+  "operation": "noc_atacado",
+  "operators": [
+    "claro",
+    "vivo",
+    "algar"
+  ],
+  "records": [
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "AC",
+      "links": 2
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "AC",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "AC",
+      "links": 2
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "AC",
+      "links": 2
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "AC",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AC",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AC",
+      "links": 1
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "AC",
+      "links": 4
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "AC",
+      "links": 3
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "AC",
+      "links": 3
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AC",
+      "links": 3
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AC",
+      "links": 4
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "AC",
+      "links": 3
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AC",
+      "links": 2
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AC",
+      "links": 3
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "AL",
+      "links": 12
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "AL",
+      "links": 9
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "AL",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "AL",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "AL",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AL",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AL",
+      "links": 6
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "AL",
+      "links": 12
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "AL",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "AL",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AL",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AL",
+      "links": 9
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "AL",
+      "links": 14
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AL",
+      "links": 8
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AL",
+      "links": 13
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "AM",
+      "links": 9
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "AM",
+      "links": 7
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "AM",
+      "links": 7
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "AM",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "AM",
+      "links": 3
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AM",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AM",
+      "links": 5
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "AM",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "AM",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "AM",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AM",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AM",
+      "links": 11
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "AM",
+      "links": 14
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AM",
+      "links": 8
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AM",
+      "links": 13
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "AP",
+      "links": 2
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "AP",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "AP",
+      "links": 2
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "AP",
+      "links": 2
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "AP",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AP",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AP",
+      "links": 1
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "AP",
+      "links": 3
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "AP",
+      "links": 2
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "AP",
+      "links": 2
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AP",
+      "links": 3
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AP",
+      "links": 2
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "AP",
+      "links": 5
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "AP",
+      "links": 3
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "AP",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "BA",
+      "links": 48
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "BA",
+      "links": 36
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "BA",
+      "links": 30
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "BA",
+      "links": 24
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "BA",
+      "links": 16
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "BA",
+      "links": 20
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "BA",
+      "links": 26
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "BA",
+      "links": 45
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "BA",
+      "links": 30
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "BA",
+      "links": 28
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "BA",
+      "links": 29
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "BA",
+      "links": 38
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "BA",
+      "links": 45
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "BA",
+      "links": 30
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "BA",
+      "links": 45
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "CE",
+      "links": 26
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "CE",
+      "links": 19
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "CE",
+      "links": 17
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "CE",
+      "links": 14
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "CE",
+      "links": 9
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "CE",
+      "links": 11
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "CE",
+      "links": 14
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "CE",
+      "links": 25
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "CE",
+      "links": 17
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "CE",
+      "links": 16
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "CE",
+      "links": 17
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "CE",
+      "links": 20
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "CE",
+      "links": 29
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "CE",
+      "links": 18
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "CE",
+      "links": 28
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "DF",
+      "links": 14
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "DF",
+      "links": 10
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "DF",
+      "links": 10
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "DF",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "DF",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "DF",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "DF",
+      "links": 7
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "DF",
+      "links": 20
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "DF",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "DF",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "DF",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "DF",
+      "links": 16
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "DF",
+      "links": 17
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "DF",
+      "links": 11
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "DF",
+      "links": 17
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "ES",
+      "links": 20
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "ES",
+      "links": 15
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "ES",
+      "links": 13
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "ES",
+      "links": 11
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "ES",
+      "links": 7
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "ES",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "ES",
+      "links": 11
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "ES",
+      "links": 20
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "ES",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "ES",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "ES",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "ES",
+      "links": 16
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "ES",
+      "links": 15
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "ES",
+      "links": 10
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "ES",
+      "links": 15
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "GO",
+      "links": 28
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "GO",
+      "links": 21
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "GO",
+      "links": 19
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "GO",
+      "links": 15
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "GO",
+      "links": 10
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "GO",
+      "links": 12
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "GO",
+      "links": 15
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "GO",
+      "links": 29
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "GO",
+      "links": 19
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "GO",
+      "links": 18
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "GO",
+      "links": 19
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "GO",
+      "links": 25
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "GO",
+      "links": 30
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "GO",
+      "links": 20
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "GO",
+      "links": 30
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "MA",
+      "links": 12
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "MA",
+      "links": 9
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "MA",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "MA",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "MA",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MA",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MA",
+      "links": 6
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "MA",
+      "links": 14
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "MA",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "MA",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MA",
+      "links": 10
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MA",
+      "links": 13
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "MA",
+      "links": 24
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MA",
+      "links": 16
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MA",
+      "links": 25
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "MG",
+      "links": 50
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "MG",
+      "links": 37
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "MG",
+      "links": 32
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "MG",
+      "links": 26
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "MG",
+      "links": 17
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MG",
+      "links": 21
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MG",
+      "links": 27
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "MG",
+      "links": 113
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "MG",
+      "links": 75
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "MG",
+      "links": 68
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MG",
+      "links": 72
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MG",
+      "links": 92
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "MG",
+      "links": 49
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MG",
+      "links": 32
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MG",
+      "links": 49
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "MS",
+      "links": 12
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "MS",
+      "links": 9
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "MS",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "MS",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "MS",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MS",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MS",
+      "links": 6
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "MS",
+      "links": 12
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "MS",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "MS",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MS",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MS",
+      "links": 9
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "MS",
+      "links": 17
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MS",
+      "links": 11
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MS",
+      "links": 17
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "MT",
+      "links": 13
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "MT",
+      "links": 9
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "MT",
+      "links": 9
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "MT",
+      "links": 7
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "MT",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MT",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MT",
+      "links": 7
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "MT",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "MT",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "MT",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MT",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MT",
+      "links": 11
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "MT",
+      "links": 21
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "MT",
+      "links": 13
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "MT",
+      "links": 21
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PA",
+      "links": 21
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "PA",
+      "links": 16
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "PA",
+      "links": 14
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "PA",
+      "links": 11
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "PA",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PA",
+      "links": 9
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PA",
+      "links": 11
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PA",
+      "links": 21
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "PA",
+      "links": 14
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "PA",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PA",
+      "links": 14
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PA",
+      "links": 18
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "PA",
+      "links": 22
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PA",
+      "links": 15
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PA",
+      "links": 23
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PB",
+      "links": 10
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "PB",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "PB",
+      "links": 7
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "PB",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "PB",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PB",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PB",
+      "links": 5
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PB",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "PB",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "PB",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PB",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PB",
+      "links": 11
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "PB",
+      "links": 17
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PB",
+      "links": 11
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PB",
+      "links": 17
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PE",
+      "links": 33
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "PE",
+      "links": 25
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "PE",
+      "links": 22
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "PE",
+      "links": 17
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "PE",
+      "links": 11
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PE",
+      "links": 14
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PE",
+      "links": 18
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PE",
+      "links": 29
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "PE",
+      "links": 19
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "PE",
+      "links": 18
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PE",
+      "links": 19
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PE",
+      "links": 25
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "PE",
+      "links": 30
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PE",
+      "links": 20
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PE",
+      "links": 30
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PI",
+      "links": 10
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "PI",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "PI",
+      "links": 7
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "PI",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "PI",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PI",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PI",
+      "links": 5
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PI",
+      "links": 11
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "PI",
+      "links": 7
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "PI",
+      "links": 7
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PI",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PI",
+      "links": 9
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "PI",
+      "links": 17
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PI",
+      "links": 10
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PI",
+      "links": 16
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PR",
+      "links": 38
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "PR",
+      "links": 28
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "PR",
+      "links": 25
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "PR",
+      "links": 20
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "PR",
+      "links": 13
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PR",
+      "links": 16
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PR",
+      "links": 20
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "PR",
+      "links": 37
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "PR",
+      "links": 25
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "PR",
+      "links": 23
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PR",
+      "links": 24
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PR",
+      "links": 31
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "PR",
+      "links": 34
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "PR",
+      "links": 22
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "PR",
+      "links": 34
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RJ",
+      "links": 81
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "RJ",
+      "links": 61
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "RJ",
+      "links": 52
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "RJ",
+      "links": 41
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "RJ",
+      "links": 27
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RJ",
+      "links": 34
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RJ",
+      "links": 44
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RJ",
+      "links": 86
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "RJ",
+      "links": 57
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "RJ",
+      "links": 52
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RJ",
+      "links": 55
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RJ",
+      "links": 70
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "RJ",
+      "links": 15
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RJ",
+      "links": 10
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RJ",
+      "links": 15
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RN",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "RN",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "RN",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "RN",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "RN",
+      "links": 3
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RN",
+      "links": 3
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RN",
+      "links": 4
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RN",
+      "links": 14
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "RN",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "RN",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RN",
+      "links": 10
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RN",
+      "links": 13
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "RN",
+      "links": 14
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RN",
+      "links": 8
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RN",
+      "links": 13
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RO",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "RO",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "RO",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "RO",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "RO",
+      "links": 2
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RO",
+      "links": 2
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RO",
+      "links": 3
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RO",
+      "links": 9
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "RO",
+      "links": 6
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "RO",
+      "links": 6
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RO",
+      "links": 6
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RO",
+      "links": 8
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "RO",
+      "links": 7
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RO",
+      "links": 5
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RO",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RR",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "RR",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "RR",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "RR",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "RR",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RR",
+      "links": 1
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RR",
+      "links": 0
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RR",
+      "links": 2
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "RR",
+      "links": 1
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "RR",
+      "links": 2
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RR",
+      "links": 2
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RR",
+      "links": 3
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "RR",
+      "links": 1
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RR",
+      "links": 1
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RR",
+      "links": 2
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RS",
+      "links": 24
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "RS",
+      "links": 18
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "RS",
+      "links": 15
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "RS",
+      "links": 12
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "RS",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RS",
+      "links": 10
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RS",
+      "links": 13
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "RS",
+      "links": 24
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "RS",
+      "links": 16
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "RS",
+      "links": 15
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RS",
+      "links": 16
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RS",
+      "links": 19
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "RS",
+      "links": 49
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "RS",
+      "links": 32
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "RS",
+      "links": 49
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "SC",
+      "links": 21
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "SC",
+      "links": 16
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "SC",
+      "links": 14
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "SC",
+      "links": 11
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "SC",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "SC",
+      "links": 9
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "SC",
+      "links": 11
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "SC",
+      "links": 28
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "SC",
+      "links": 18
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "SC",
+      "links": 17
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "SC",
+      "links": 18
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "SC",
+      "links": 24
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "SC",
+      "links": 36
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "SC",
+      "links": 23
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "SC",
+      "links": 36
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "SE",
+      "links": 7
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "SE",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "SE",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "SE",
+      "links": 4
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "SE",
+      "links": 3
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "SE",
+      "links": 3
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "SE",
+      "links": 3
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "SE",
+      "links": 8
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "SE",
+      "links": 5
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "SE",
+      "links": 5
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "SE",
+      "links": 6
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "SE",
+      "links": 6
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "SE",
+      "links": 11
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "SE",
+      "links": 7
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "SE",
+      "links": 12
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "SP",
+      "links": 163
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "SP",
+      "links": 122
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "SP",
+      "links": 103
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "SP",
+      "links": 82
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "SP",
+      "links": 54
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "SP",
+      "links": 68
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "SP",
+      "links": 88
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "SP",
+      "links": 116
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "SP",
+      "links": 77
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "SP",
+      "links": 69
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "SP",
+      "links": 74
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "SP",
+      "links": 94
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "SP",
+      "links": 49
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "SP",
+      "links": 32
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "SP",
+      "links": 49
+    },
+    {
+      "operator": "claro",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "TO",
+      "links": 8
+    },
+    {
+      "operator": "claro",
+      "project": "bb",
+      "project_name": "Banco do Brasil",
+      "uf": "TO",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "caixa",
+      "project_name": "Caixa Econômica",
+      "uf": "TO",
+      "links": 6
+    },
+    {
+      "operator": "claro",
+      "project": "correios",
+      "project_name": "Correios",
+      "uf": "TO",
+      "links": 5
+    },
+    {
+      "operator": "claro",
+      "project": "carrefour",
+      "project_name": "Carrefour",
+      "uf": "TO",
+      "links": 3
+    },
+    {
+      "operator": "claro",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "TO",
+      "links": 3
+    },
+    {
+      "operator": "claro",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "TO",
+      "links": 4
+    },
+    {
+      "operator": "vivo",
+      "project": "bradesco",
+      "project_name": "Bradesco",
+      "uf": "TO",
+      "links": 10
+    },
+    {
+      "operator": "vivo",
+      "project": "mcdonalds",
+      "project_name": "McDonald's",
+      "uf": "TO",
+      "links": 7
+    },
+    {
+      "operator": "vivo",
+      "project": "l2l",
+      "project_name": "L2L",
+      "uf": "TO",
+      "links": 7
+    },
+    {
+      "operator": "vivo",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "TO",
+      "links": 7
+    },
+    {
+      "operator": "vivo",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "TO",
+      "links": 9
+    },
+    {
+      "operator": "algar",
+      "project": "escolas",
+      "project_name": "Escolas Conectadas",
+      "uf": "TO",
+      "links": 9
+    },
+    {
+      "operator": "algar",
+      "project": "fust",
+      "project_name": "FUST",
+      "uf": "TO",
+      "links": 6
+    },
+    {
+      "operator": "algar",
+      "project": "diversos",
+      "project_name": "Diversos",
+      "uf": "TO",
+      "links": 10
+    }
+  ]
+}

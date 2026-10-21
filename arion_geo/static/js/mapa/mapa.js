@@ -54,7 +54,7 @@
 
   const operatorNames = { claro: "Claro", vivo: "Vivo", algar: "Algar" };
   const modeNames = { base: "links", calls: "chamados", repeat: "reincidentes", motives: "ocorrências" };
-  const motiveNames = { falha_massiva: "Falha massiva", rompimento_fibra: "Rompimento de fibra", troca_drop: "Troca de drop", equipamento: "Equipamento", cabo_desconectado: "Cabo desconectado", falha_eletrica: "Falha elétrica", outros: "Outros" };
+  const motiveNames = { falha_massiva: "Falha massiva", rompimento_fibra: "Rompimento de fibra", troca_drop: "Troca de drop", equipamento: "Equipamento", cabo_desconectado: "Cabo desconectado", falha_eletrica: "Falha elétrica", sem_intervencao: "Sem interven\u00e7\u00e3o", outros: "Outros" };
   const stateLabels = {
     AC: [-70.4, -9.3], AL: [-36.2, -9.6], AM: [-63.8, -4.2], AP: [-51.8, 1.1],
     BA: [-41.5, -12.1], CE: [-39.4, -5.1], DF: [-47.9, -15.8], ES: [-40.7, -19.5],
@@ -73,15 +73,14 @@
 
   let map = null;
   let states = null;
+  let stateGeometryBounds = null;
   let demoData = null;
-  let activeOperator = "all";
-  let activeMode = "base";
-  let activeMotive = "all";
-  let nationalTab = "summary";
-  let nationalCollapsed = false;
+  let demoStore = null;
+  const MAP_STATE_KEY = "arion-geo-map-state-v1";
+  const state = { operator: "all", project: "all", period: "2026-10", metric: "base", reason: "all", selectedUF: null, nationalPanelCollapsed: false, nationalPanelTab: "summary" };
+  let mapInteractionsBound = false;
   let searchOptions = [];
   let searchActiveIndex = -1;
-  let selectedCode = null;
   let hoveredCode = null;
   let popup = null;
   let tooltipContent = null;
@@ -125,12 +124,97 @@
     ), "claro");
   }
 
+  function saveMapState() {
+    // Future: synchronize map preferences with the user's profile.
+    try {
+      localStorage.setItem(MAP_STATE_KEY, JSON.stringify({ version: 1, ...state }));
+    } catch (_) {
+      // Storage may be unavailable in private browsing; map use can continue without persistence.
+    }
+  }
+
+  function loadMapState() {
+    try {
+      const raw = localStorage.getItem(MAP_STATE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved || saved.version !== 1 || typeof saved !== "object") throw new Error("Unsupported map state");
+      const operators = ["all", ...Object.keys(demoStore.projects)];
+      const periods = demoStore.history.periods.map(item => item.id);
+      const metrics = ["base", "calls", "repeat", "motives"];
+      const reasons = demoStore.reasons.map(item => item.id);
+      state.operator = operators.includes(saved.operator) ? saved.operator : "all";
+      state.project = state.operator !== "all" && (demoStore.projects[state.operator] || []).some(item => item[0] === saved.project) ? saved.project : "all";
+      state.period = periods.includes(saved.period) ? saved.period : periods[periods.length - 1];
+      state.metric = metrics.includes(saved.metric) ? saved.metric : "base";
+      state.reason = ["all", ...reasons].includes(saved.reason) ? saved.reason : "all";
+      state.selectedUF = typeof saved.selectedUF === "string" && states.features.some(feature => feature.properties.sigla === saved.selectedUF) ? saved.selectedUF : null;
+      state.nationalPanelCollapsed = typeof saved.nationalPanelCollapsed === "boolean" ? saved.nationalPanelCollapsed : false;
+      state.nationalPanelTab = ["summary", "ranking", "distribution"].includes(saved.nationalPanelTab) ? saved.nationalPanelTab : "summary";
+    } catch (_) {
+      Object.assign(state, { operator: "all", project: "all", period: "2026-10", metric: "base", reason: "all", selectedUF: null, nationalPanelCollapsed: false, nationalPanelTab: "summary" });
+      try { localStorage.removeItem(MAP_STATE_KEY); } catch (_) { /* Ignore unavailable storage. */ }
+    }
+  }
+
+  function syncControlsFromState() {
+    document.querySelectorAll("[data-operator]").forEach(button => {
+      const active = button.dataset.operator === state.operator;
+      button.classList.toggle("is-selected", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    document.querySelectorAll("[data-mode]").forEach(button => {
+      const active = button.dataset.mode === state.metric;
+      button.classList.toggle("is-selected", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    const period = document.querySelector("[data-period-filter]");
+    const project = document.querySelector("[data-project-filter]");
+    const motive = document.querySelector("[data-motive-filter]");
+    period.value = state.period;
+    project.value = state.project;
+    motive.value = state.reason;
+    document.querySelector("[data-motives-select]").hidden = state.metric !== "motives";
+    root.querySelectorAll("[data-national-tab]").forEach(tab => {
+      tab.setAttribute("aria-selected", String(tab.dataset.nationalTab === state.nationalPanelTab));
+      tab.tabIndex = tab.dataset.nationalTab === state.nationalPanelTab ? 0 : -1;
+    });
+    setNationalCollapsed(state.nationalPanelCollapsed, false);
+  }
+
+  function populatePeriodAndProject() {
+    const periodSelect = document.querySelector("[data-period-filter]");
+    periodSelect.innerHTML = demoStore.history.periods.map(p => `<option value="${p.id}">${p.label}</option>`).join("");
+    updateProjectOptions();
+    periodSelect.value = state.period;
+    syncControlsFromState();
+  }
+
+  function updateProjectOptions() {
+    const select = document.querySelector("[data-project-filter]");
+    const projects = state.operator === "all" ? [] : (demoStore.projects[state.operator] || []);
+    select.innerHTML = '<option value="all">Todos</option>' + projects.map(([id,label]) => `<option value="${id}">${label}</option>`).join("");
+    if (!projects.some(item => item[0] === state.project)) state.project = "all";
+    select.value = state.project;
+  }
+
+  function refreshGeoView() {
+    if (!demoStore) return;
+    demoData = window.ArionGeoData.aggregate(demoStore, state);
+    saveMapState();
+    const context = document.querySelector("[data-map-context]");
+    if (context) context.textContent = buildMapContext(state);
+    for (const feature of states.features) demoData[feature.properties.sigla] ||= { claro:0,vivo:0,algar:0,total_links:0,chamados:0,reincidentes:0,motivos:{} };
+    hideStateTooltip();
+    applyOperatorFilter();
+  }
+
   function metricValue(data) {
-    if (activeMode === "calls") return data.chamados;
-    if (activeMode === "repeat") return data.reincidentes;
-    if (activeMode === "motives") return activeMotive === "all"
+    if (state.metric === "calls") return data.chamados;
+    if (state.metric === "repeat") return data.reincidentes;
+    if (state.metric === "motives") return state.reason === "all"
       ? Object.values(data.motivos || {}).reduce((sum, value) => sum + value, 0)
-      : (data.motivos?.[activeMotive] || 0);
+      : (data.motivos?.[state.reason] || 0);
     return data.total_links;
   }
 
@@ -152,9 +236,9 @@
         const code = feature.properties.sigla;
         const metrics = demoData[code];
         const dominant = dominantOperator(metrics);
-        const activeCount = activeOperator === "all" ? metrics.total_links : metrics[activeOperator];
-        const intensity = activeMode === "base"
-          ? activeOperator === "all" ? 1 : Math.sqrt(activeCount / totals[activeOperator])
+        const activeCount = state.operator === "all" ? metrics.total_links : metrics[state.operator];
+        const intensity = state.metric === "base"
+          ? state.operator === "all" ? 1 : Math.sqrt(activeCount / totals[state.operator])
           : Math.sqrt(metricValue(metrics) / metricMaximum());
         return {
           ...feature,
@@ -165,8 +249,8 @@
             dominante: dominant,
             valor_metrica: metricValue(metrics),
             intensidade: intensity,
-            selecionado: code === selectedCode,
-            ha_selecao: Boolean(selectedCode),
+            selecionado: code === state.selectedUF,
+            ha_selecao: Boolean(state.selectedUF),
           },
         };
       }),
@@ -175,24 +259,25 @@
 
   function colorExpression(palette = currentThemePalette()) {
     const ops = palette.operators;
-    if (activeMode !== "base") {
-      const scale = palette.metrics[activeMode];
+    if (state.metric !== "base") {
+      const scale = palette.metrics[state.metric];
       return ["interpolate", ["linear"], ["get", "intensidade"], 0, scale.low, 0.45, scale.mid, 1, scale.high];
     }
-    if (activeOperator === "all") {
+    if (state.operator === "all") {
       return ["match", ["get", "dominante"],
         "claro", ops.claro.base,
         "vivo", ops.vivo.base,
         "algar", ops.algar.base,
         palette.defaultFill];
     }
-    const scale = ops[activeOperator];
+    const scale = ops[state.operator];
     return ["interpolate", ["linear"], ["get", "intensidade"], 0, scale.low, 0.35, scale.mid, 1, scale.high];
   }
 
   function fillColorExpression(palette = currentThemePalette()) {
     return [
       "case",
+      ["boolean", ["get", "selecionado"], false], colorExpression(palette),
       ["boolean", ["feature-state", "hover"], false], palette.hoverFill,
       colorExpression(palette),
     ];
@@ -201,9 +286,8 @@
   function applyOperatorFilter() {
     if (!map || !map.getSource(sourceId) || !demoData || !states) return;
     if (hoveredCode) map.setFeatureState({ source: sourceId, id: hoveredCode }, { hover: false });
-    if (popup) popup.remove();
-    hoveredCode = null;
     const palette = currentThemePalette();
+    map.setPaintProperty(fillLayerId, "fill-color-transition", { duration: 280, delay: 0 });
     map.getSource(sourceId).setData(makeDisplayCollection());
     map.setPaintProperty(fillLayerId, "fill-color", fillColorExpression(palette));
     map.setPaintProperty(fillLayerId, "fill-opacity", [
@@ -213,7 +297,7 @@
       0.9,
     ]);
     updateLegend();
-    if (selectedCode) updateStatePanel(selectedCode);
+    if (state.selectedUF) updateStatePanel(state.selectedUF);
     renderNationalPanel();
   }
 
@@ -250,18 +334,18 @@
   function updateLegend() {
     const legend = document.querySelector("[data-legend]");
     if (!legend) return;
-    if (activeMode !== "base") {
+    if (state.metric !== "base") {
       legend.classList.add("geo-legend--scale");
-      legend.innerHTML = `<span class="legend-scale-label">Menos ${modeNames[activeMode]}</span><span class="legend-scale legend-scale--${activeMode}"></span><span class="legend-scale-label">Mais</span>`;
+      legend.innerHTML = `<span class="legend-scale-label">Menos ${modeNames[state.metric]}</span><span class="legend-scale legend-scale--${state.metric}"></span><span class="legend-scale-label">Mais</span>`;
       return;
     }
-    if (activeOperator === "all") {
+    if (state.operator === "all") {
       legend.classList.remove("geo-legend--scale");
       legend.innerHTML = '<span class="legend-item"><i class="legend-dot legend-dot--claro"></i>Claro</span><span class="legend-item"><i class="legend-dot legend-dot--vivo"></i>Vivo</span><span class="legend-item"><i class="legend-dot legend-dot--algar"></i>Algar</span>';
       return;
     }
     legend.classList.add("geo-legend--scale");
-    legend.innerHTML = `<span class="legend-scale-label">Baixa intensidade</span><span class="legend-scale" data-scale="${activeOperator}"></span><span class="legend-scale-label">Alta</span><span class="legend-operator">${operatorNames[activeOperator]}</span>`;
+    legend.innerHTML = `<span class="legend-scale-label">Baixa intensidade</span><span class="legend-scale" data-scale="${state.operator}"></span><span class="legend-scale-label">Alta</span><span class="legend-operator">${operatorNames[state.operator]}</span>`;
   }
 
   function totalsByField(field) {
@@ -269,9 +353,9 @@
   }
 
   function selectedMetricLabel() {
-    if (activeMode === "calls") return "Chamados";
-    if (activeMode === "repeat") return "Reincidentes";
-    if (activeMode === "motives") return activeMotive === "all" ? "Ocorrencias" : motiveNames[activeMotive];
+    if (state.metric === "calls") return "Chamados";
+    if (state.metric === "repeat") return "Reincidentes";
+    if (state.metric === "motives") return state.reason === "all" ? "Ocorrencias" : motiveNames[state.reason];
     return "Links";
   }
 
@@ -292,41 +376,41 @@
       repeat: totalsByField("reincidentes"),
       states: states.features.length,
     };
-    view.setAttribute("aria-labelledby", `national-tab-${nationalTab}`);
+    view.setAttribute("aria-labelledby", `national-tab-${state.nationalPanelTab}`);
     document.querySelectorAll("[data-national-tab]").forEach((tab) => {
-      tab.setAttribute("aria-selected", String(tab.dataset.nationalTab === nationalTab));
-      tab.tabIndex = tab.dataset.nationalTab === nationalTab ? 0 : -1;
+      tab.setAttribute("aria-selected", String(tab.dataset.nationalTab === state.nationalPanelTab));
+      tab.tabIndex = tab.dataset.nationalTab === state.nationalPanelTab ? 0 : -1;
     });
 
-    if (nationalTab === "summary") {
+    if (state.nationalPanelTab === "summary") {
       view.innerHTML = `<div class="national-kpis"><div><strong>${numberFormat.format(totals.links)}</strong><span>Links</span></div><div><strong>${numberFormat.format(totals.calls)}</strong><span>Chamados</span></div><div><strong>${numberFormat.format(totals.repeat)}</strong><span>Reincidentes</span></div><div><strong>${totals.states}</strong><span>UFs</span></div></div><div class="national-leaders"><div><span>Maior base</span><strong>${byLinks[0].name}</strong><small>${numberFormat.format(demoData[byLinks[0].code].total_links)} links</small></div><div><span>Mais chamados</span><strong>${byCalls[0].name}</strong><small>${numberFormat.format(demoData[byCalls[0].code].chamados)} chamados</small></div></div>`;
       return;
     }
 
-    if (nationalTab === "ranking") {
+    if (state.nationalPanelTab === "ranking") {
       const label = selectedMetricLabel();
       const rows = [...stateRows].sort((a, b) => b.value - a.value).slice(0, 5);
       view.innerHTML = `<div class="national-view-heading"><span>Top 5 por ${label.toLowerCase()}</span><span class="demo-inline">Demo</span></div><ol class="national-ranking">${rows.map((row, index) => `<li><span class="national-rank-number">${String(index + 1).padStart(2, "0")}</span><img src="${stateFlags[row.code] || ""}" alt="" width="22" height="15" loading="lazy"><span class="national-rank-name">${row.name}</span><strong>${numberFormat.format(row.value)}</strong></li>`).join("")}</ol>`;
       return;
     }
 
-    const operators = [
-      { name: "Claro", key: "claro", value: totalsByField("claro") },
-      { name: "Vivo", key: "vivo", value: totalsByField("vivo") },
-      { name: "Algar", key: "algar", value: totalsByField("algar") },
-    ];
-    view.innerHTML = `<div class="national-view-heading"><span>Participacao na base</span><span class="demo-inline">Dados demonstrativos</span></div><div class="national-distribution">${operators.map((item) => `<div class="national-distribution-row"><span><i class="operator-swatch operator-swatch--${item.key}"></i>${item.name}</span><strong>${(item.value / totals.links * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</strong><small>${numberFormat.format(item.value)}</small><i class="national-distribution-track"><b class="operator-fill--${item.key}" data-value="${item.value}" data-max="${totals.links}"></b></i></div>`).join("")}</div>`;
+    const measureRecord = record => state.metric === "base" ? record.links : state.metric === "calls" ? record.tickets : state.metric === "repeat" ? record.recurrences : state.reason === "all" ? Object.values(record.reasons).reduce((sum,value)=>sum+value,0) : (record.reasons[state.reason]||0);
+    const scopedHistory = demoStore.history.records.filter(record => record.period===state.period && (state.operator==="all" || record.operator===state.operator) && (state.project==="all" || record.project===state.project));
+    const distribution = state.operator === "all"
+      ? ["claro","vivo","algar"].map(key=>({key,name:operatorNames[key],value:scopedHistory.filter(record=>record.operator===key).reduce((sum,record)=>sum+measureRecord(record),0)}))
+      : (demoStore.projects[state.operator]||[]).map(([id,name])=>({key:id,name,value:scopedHistory.filter(record=>record.project===id).reduce((sum,record)=>sum+measureRecord(record),0)}));
+    const totalDistribution = distribution.reduce((sum,item)=>sum+item.value,0);
+    view.innerHTML = `<div class="national-view-heading"><span>${state.operator === "all" ? "Distribuicao por operadora" : `Projetos ${operatorNames[state.operator]}`}</span><span class="demo-inline">${selectedMetricLabel()} ? ${periodLabel(state.period)}</span></div><div class="national-distribution">${distribution.map((item) => `<div class="national-distribution-row"><span>${state.operator === "all" ? `<i class="operator-swatch operator-swatch--${item.key}"></i>` : ""}${item.name}</span><strong>${totalDistribution ? (item.value / totalDistribution * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "0"}%</strong><small>${numberFormat.format(item.value)}</small><i class="national-distribution-track"><b class="operator-fill--${item.key}" data-value="${item.value}" data-max="${totalDistribution}"></b></i></div>`).join("")}</div>`;
     view.querySelectorAll("[data-value][data-max]").forEach((bar) => {
       bar.style.width = `${Math.max(0, Number(bar.dataset.value) / Number(bar.dataset.max) * 100)}%`;
     });
   }
 
-  function setNationalCollapsed(collapsed) {
+  function setNationalCollapsed(collapsed, persist = true) {
     const national = root.querySelector("[data-national-panel]");
     const collapse = root.querySelector("[data-national-collapse]");
     const expand = root.querySelector("[data-national-expand]");
     const content = root.querySelector("[data-national-content]");
-    nationalCollapsed = collapsed;
     national.classList.toggle("is-collapsed", collapsed);
     national.setAttribute("aria-hidden", String(collapsed));
     national.inert = collapsed;
@@ -335,6 +419,20 @@
     content.setAttribute("aria-hidden", String(collapsed));
     content.inert = collapsed;
     expand.hidden = !collapsed;
+    state.nationalPanelCollapsed = collapsed;
+    if (persist) saveMapState();
+    if (map && mapLoaded) {
+      window.requestAnimationFrame(() => {
+        if (!map || !mapLoaded) return;
+        map.resize();
+        if (state.selectedUF) {
+          const feature = getStateFeature(state.selectedUF);
+          if (feature) fitState(feature);
+        } else {
+          fitBrazil();
+        }
+      });
+    }
   }
 
   function normalizeSearch(value) {
@@ -342,8 +440,8 @@
   }
 
   function closeSearch() {
-    const input = root.querySelector("[data-state-search]");
-    const list = root.querySelector("[data-state-search-results]");
+    const input = document.querySelector("[data-state-search]");
+    const list = document.querySelector("[data-state-search-results]");
     list.hidden = true;
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");
@@ -351,8 +449,8 @@
   }
 
   function renderSearchResults(query) {
-    const list = root.querySelector("[data-state-search-results]");
-    const input = root.querySelector("[data-state-search]");
+    const list = document.querySelector("[data-state-search-results]");
+    const input = document.querySelector("[data-state-search]");
     const needle = normalizeSearch(query);
     if (!needle || !states) {
       closeSearch();
@@ -371,7 +469,7 @@
   function chooseSearchResult(code) {
     const feature = getStateFeature(code);
     if (!feature) return;
-    root.querySelector("[data-state-search]").value = `${feature.properties.sigla} - ${feature.properties.nome}`;
+    document.querySelector("[data-state-search]").value = `${feature.properties.sigla} - ${feature.properties.nome}`;
     closeSearch();
     selectState(feature);
   }
@@ -386,73 +484,146 @@
     }
   }
 
-  function createTooltip() {
-    const element = document.createElement("section");
-    element.className = "state-tooltip";
-    element.setAttribute("aria-label", "Resumo demonstrativo da unidade federativa");
-    element.innerHTML = [
-      '<div class="tooltip-heading"><div><span data-tooltip-code></span><strong data-tooltip-name></strong></div><span class="tooltip-total"><b data-tooltip-total></b><small>links</small></span></div>',
-      '<div class="tooltip-primary-metric"><strong data-tooltip-primary></strong><span data-tooltip-primary-label></span></div>',
-      '<div class="tooltip-secondary-metrics"><span>Chamados <b data-tooltip-calls></b></span><span>Reincidentes <b data-tooltip-repeat></b></span></div>',
-      '<div class="tooltip-rate" data-tooltip-rate></div>',
-      '<div class="tooltip-operators"><div><i class="operator-swatch operator-swatch--claro"></i>Claro<strong data-tooltip-claro></strong></div>',
-      '<div><i class="operator-swatch operator-swatch--vivo"></i>Vivo<strong data-tooltip-vivo></strong></div>',
-      '<div><i class="operator-swatch operator-swatch--algar"></i>Algar<strong data-tooltip-algar></strong></div></div>',
-      '<div class="tooltip-dominant"><span>Operadora predominante</span><strong data-tooltip-dominant></strong></div>',
-    ].join("");
-    return element;
+  function formatNumber(value) {
+    return numberFormat.format(Number.isFinite(Number(value)) ? Number(value) : 0);
   }
 
-  function updateTooltip(feature) {
-    const code = feature.properties.sigla;
-    const data = demoData[code];
-    if (!tooltipContent) tooltipContent = createTooltip();
-    const setText = (selector, value) => {
-      const target = tooltipContent.querySelector(selector);
-      if (target) target.textContent = value;
-    };
-    setText("[data-tooltip-code]", code);
-    setText("[data-tooltip-name]", feature.properties.nome);
-    setText("[data-tooltip-total]", numberFormat.format(data.total_links));
-    setText("[data-tooltip-claro]", numberFormat.format(data.claro));
-    setText("[data-tooltip-vivo]", numberFormat.format(data.vivo));
-    setText("[data-tooltip-algar]", numberFormat.format(data.algar));
-    setText("[data-tooltip-dominant]", operatorNames[dominantOperator(data)]);
-    setText("[data-tooltip-calls]", numberFormat.format(data.chamados));
-    setText("[data-tooltip-repeat]", numberFormat.format(data.reincidentes));
-    const primary = activeMode === "base" ? (activeOperator === "all" ? data.total_links : data[activeOperator]) : metricValue(data);
-    const primaryLabel = activeMode === "base"
-      ? (activeOperator === "all" ? "links" : `links ${operatorNames[activeOperator]}`)
-      : (activeMode === "motives" && activeMotive !== "all" ? motiveNames[activeMotive] : modeNames[activeMode]);
-    setText("[data-tooltip-primary]", numberFormat.format(primary));
-    setText("[data-tooltip-primary-label]", primaryLabel);
-    const rate = data.chamados ? Math.round((data.reincidentes / data.chamados) * 100) : 0;
-    setText("[data-tooltip-rate]", `Taxa de reincidencia ${rate}%`);
-    tooltipContent.classList.toggle("tooltip-is-base", activeMode === "base");
-    const rateLine = tooltipContent.querySelector("[data-tooltip-rate]");
-    if (rateLine) rateLine.hidden = activeMode !== "repeat";
-    const operators = tooltipContent.querySelector(".tooltip-operators");
-    if (operators) operators.hidden = activeMode !== "base";
+  function formatDecimal(value) {
+    return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Number.isFinite(value) ? value : 0);
+  }
+
+  function formatPercent(value) {
+    return `${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Number.isFinite(value) ? value : 0)}%`;
+  }
+
+  function formatPeriod(period) {
+    return demoStore.history.periods.find(item => item.id === period)?.label || "Per\u00edodo indispon\u00edvel";
+  }
+
+  function formatOperator(operator) {
+    return operator === "all" ? "Todas" : (operatorNames[operator] || "Todas");
+  }
+
+  function formatProject(project) {
+    if (project === "all") return "Todos os projetos";
+    return (demoStore.projects[state.operator] || []).find(item => item[0] === project)?.[1] || "Todos os projetos";
+  }
+
+  function escapeTooltip(value) {
+    return String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+  }
+
+  function buildMapContext(currentState) {
+    const metric = currentState.metric === "motives" && currentState.reason !== "all"
+      ? (motiveNames[currentState.reason] || "Motivos")
+      : ({ base: "Base", calls: "Chamados", repeat: "Reincid\u00eancia", motives: "Motivos" }[currentState.metric] || "Base");
+    const operator = formatOperator(currentState.operator);
+    const project = currentState.project === "all" ? "Todos os projetos" : formatProject(currentState.project);
+    return `${metric} \u2022 ${operator}${currentState.project !== "all" ? ` / ${project}` : ""} \u2022 ${formatPeriod(currentState.period)}`.toLocaleUpperCase("pt-BR");
+  }
+
+  function sumHistory(uf, operator, project, period, field) {
+    return demoStore.history.records.reduce((sum, record) => {
+      if (record.uf !== uf || record.period !== period) return sum;
+      if (operator !== "all" && record.operator !== operator) return sum;
+      if (project !== "all" && record.project !== project) return sum;
+      return sum + (field === "reason" ? (record.reasons[state.reason] || 0) : record[field]);
+    }, 0);
+  }
+
+  function buildStateTooltipContent(uf, currentState) {
+    const feature = getStateFeature(uf);
+    const data = demoData?.[uf];
+    const name = feature?.properties?.nome || "Unidade federativa";
+    const context = buildMapContext(currentState);
+    const heading = `<header class="tooltip-heading"><div><span>${escapeTooltip(uf)}</span><strong>${escapeTooltip(name)}</strong></div></header><div class="tooltip-context">${escapeTooltip(context)}</div>`;
+    if (!data) return `<section class="state-tooltip">${heading}<p class="tooltip-empty">Sem registros neste recorte.</p></section>`;
+
+    const metricCount = currentState.metric === "base" ? data.total_links
+      : currentState.metric === "calls" ? data.chamados
+        : currentState.metric === "repeat" ? data.reincidentes
+          : currentState.reason === "all" ? Object.values(data.motivos).reduce((sum, value) => sum + value, 0)
+            : (data.motivos[currentState.reason] || 0);
+    if (!metricCount) return `<section class="state-tooltip">${heading}<p class="tooltip-empty">Sem registros neste recorte.</p></section>`;
+    const main = (value, label) => `<div class="tooltip-primary-metric"><strong>${formatNumber(value)}</strong><span>${escapeTooltip(label)}</span></div>`;
+    const line = (label, value) => `<div class="tooltip-data-line"><span>${escapeTooltip(label)}</span><b>${escapeTooltip(value)}</b></div>`;
+    let details = "";
+
+    if (currentState.metric === "base") {
+      const total = currentState.operator === "all" ? data.total_links : data[currentState.operator];
+      details += main(total, "links");
+      if (currentState.operator === "all") {
+        const dominant = dominantOperator(data);
+        details += `<div class="tooltip-operators">${["claro", "vivo", "algar"].map(key => `<div><i class="operator-swatch operator-swatch--${key}"></i>${operatorNames[key]}<strong>${formatNumber(data[key])}</strong></div>`).join("")}</div>`;
+        details += line("Maior presen\u00e7a", operatorNames[dominant]);
+      } else {
+        const selectedProject = currentState.project;
+        const candidates = (demoStore.projects[currentState.operator] || []).map(([id, label]) => ({
+          id, label, links: sumHistory(uf, currentState.operator, id, currentState.period, "links"),
+        })).sort((left, right) => right.links - left.links);
+        const denominator = sumHistory(uf, "all", "all", currentState.period, "links");
+        const project = selectedProject === "all" ? candidates[0] : candidates.find(item => item.id === selectedProject);
+        if (project?.links) details += line(selectedProject === "all" ? "Projeto predominante" : "Projeto", project.label);
+        const share = denominator ? total / denominator * 100 : 0;
+        details += line("Participa\u00e7\u00e3o na base da UF", formatPercent(share));
+      }
+    } else if (currentState.metric === "calls") {
+      details += main(data.chamados, "chamados");
+      details += line("Links", formatNumber(data.total_links));
+      details += line("Chamados / 100 links", formatDecimal(data.total_links ? data.chamados / data.total_links * 100 : 0));
+      details += line("Reincidentes", formatNumber(data.reincidentes));
+      const principal = Object.entries(data.motivos).sort((left, right) => right[1] - left[1])[0];
+      details += line("Principal motivo", principal?.[1] ? motiveNames[principal[0]] : "Sem registros");
+    } else if (currentState.metric === "repeat") {
+      details += main(data.reincidentes, "reincidentes");
+      details += line("Chamados", formatNumber(data.chamados));
+      details += line("Taxa de reincid\u00eancia", formatPercent(data.chamados ? data.reincidentes / data.chamados * 100 : 0));
+      const periods = demoStore.history.periods;
+      const previous = periods[periods.findIndex(item => item.id === currentState.period) - 1];
+      if (previous) {
+        const previousData = window.ArionGeoData.aggregate(demoStore, { ...currentState, period: previous.id })[uf];
+        const delta = data.reincidentes - (previousData?.reincidentes || 0);
+        details += line(`Varia\u00e7\u00e3o vs. ${formatPeriod(previous.id)}`, `${delta > 0 ? "+" : ""}${formatNumber(delta)} reincidentes`);
+      }
+    } else {
+      const ranked = Object.entries(data.motivos).sort((left, right) => right[1] - left[1]);
+      if (currentState.reason !== "all") {
+        const count = data.motivos[currentState.reason] || 0;
+        details += main(count, "ocorr\u00eancias");
+        details += line("Participa\u00e7\u00e3o nos chamados", formatPercent(data.chamados ? count / data.chamados * 100 : 0));
+        details += line("Chamados no per\u00edodo", formatNumber(data.chamados));
+      } else {
+        const top = ranked.filter(([, value]) => value > 0).slice(0, 3);
+        if (top.length) {
+          details += main(Object.values(data.motivos).reduce((sum, value) => sum + value, 0), "ocorrências");
+          details += line("Principal motivo", motiveNames[top[0][0]] || "Outros");
+          details += `<div class="tooltip-operators">${top.map(([key, value]) => `<div>${escapeTooltip(motiveNames[key] || "Outros")}<strong>${formatNumber(value)}</strong></div>`).join("")}</div>`;
+        }
+      }
+    }
+    return `<section class="state-tooltip">${heading}${details}</section>`;
   }
 
   function showStateTooltip(event) {
     const feature = event.features && event.features[0];
     if (!feature) return;
     const code = feature.properties.sigla;
-    if (code !== hoveredCode) {
-      setFeatureHover(code);
-      updateTooltip(feature);
-      if (!popup) {
-        popup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 13, maxWidth: "none", className: "geo-popup" });
-        popup.setLngLat(event.lngLat).setDOMContent(tooltipContent).addTo(map);
-      }
+    if (!tooltipContent) {
+      tooltipContent = document.createElement("div");
+      tooltipContent.setAttribute("aria-label", "Resumo contextual demonstrativo da unidade federativa");
+      popup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 13, maxWidth: "none", className: "geo-popup" })
+        .setDOMContent(tooltipContent);
     }
-    if (popup) popup.setLngLat(event.lngLat);
+    const shouldRefresh = code !== hoveredCode || !popup.isOpen();
+    if (code !== hoveredCode) setFeatureHover(code);
+    if (shouldRefresh) tooltipContent.innerHTML = buildStateTooltipContent(code, state);
+    popup.setLngLat(event.lngLat);
+    if (!popup.isOpen()) popup.addTo(map);
   }
 
   function hideStateTooltip() {
     if (hoveredCode) setFeatureHover(null);
-    if (popup) popup.remove();
+    if (popup?.isOpen()) popup.remove();
   }
 
   function calculateGeometryBounds(geometry) {
@@ -482,13 +653,36 @@
 
   function fitBrazil(animate = true) {
     if (!map) return;
+    const national = root.querySelector("[data-national-panel]");
+    const collapsed = national.classList.contains("is-collapsed");
+    const panelLeft = window.innerWidth <= 760 ? 12 : window.innerWidth <= 1024 ? 14 : 19;
+    const panelWidth = window.innerWidth <= 760
+      ? Math.min(270, map.getContainer().clientWidth - 24)
+      : 274;
+    const leftPadding = collapsed ? 32 : panelLeft + panelWidth + 28;
+    const verticalPadding = Math.round(map.getContainer().clientHeight * 0.13);
+    const finishFit = () => {
+      if (!map || !stateGeometryBounds) return;
+      const north = mapboxgl.MercatorCoordinate.fromLngLat([0, stateGeometryBounds[1][1]]).y;
+      const south = mapboxgl.MercatorCoordinate.fromLngLat([0, stateGeometryBounds[0][1]]).y;
+      const projectedHeight = (south - north) * 512 * (2 ** map.getZoom());
+      const targetHeight = map.getContainer().clientHeight * 0.72;
+      const targetZoom = map.getZoom() + Math.log2(targetHeight / projectedHeight);
+      if (targetZoom < map.getZoom() - 0.01) {
+        const cameraZoom = Math.max(map.getMinZoom(), targetZoom);
+        if (animate) map.easeTo({ zoom: cameraZoom, duration: 240 });
+        else map.jumpTo({ zoom: cameraZoom });
+      }
+    };
+    if (animate) map.once("moveend", finishFit);
     map.fitBounds(brazilBounds, {
-      padding: { top: 36, right: 44, bottom: 40, left: 44 },
-      maxZoom: 4.35,
+      padding: { top: verticalPadding, right: 34, bottom: verticalPadding, left: leftPadding },
+      maxZoom: 4.5,
       duration: animate ? 850 : 0,
       pitch: 0,
       bearing: 0,
     });
+    if (!animate) finishFit();
   }
 
   function fitState(feature) {
@@ -512,6 +706,27 @@
     return states.features.find((feature) => feature.properties.sigla === code);
   }
 
+  function periodLabel(period) { return demoStore.history.periods.find(item => item.id === period)?.label || period; }
+  function filteredLabel() {
+    const op = state.operator === "all" ? "Todas as operadoras" : operatorNames[state.operator];
+    const project = state.project === "all" ? "Todos os projetos" : (demoStore.projects[state.operator] || []).find(item => item[0] === state.project)?.[1] || state.project;
+    return `${op} / ${project} \u2022 ${periodLabel(state.period)} \u2022 ${modeNames[state.metric]}`;
+  }
+
+  function restoreSelectedStateAfterMapLoad() {
+    if (!state.selectedUF) return;
+    const feature = getStateFeature(state.selectedUF);
+    if (!feature) {
+      state.selectedUF = null;
+      saveMapState();
+      return;
+    }
+    applyOperatorFilter();
+    updateStatePanel(state.selectedUF);
+    openStatePanel();
+    fitState(feature);
+  }
+
   function updateStatePanel(code) {
     const feature = getStateFeature(code);
     const data = demoData[code];
@@ -526,6 +741,8 @@
       flag.alt = `Bandeira de ${stateName}`;
     }
     panel.querySelector("[data-panel-total]").textContent = numberFormat.format(data.total_links);
+    panel.querySelector("[data-panel-scope]").textContent = `links demonstrativos \u2022 ${periodLabel(state.period)}`;
+    panel.querySelector("[data-panel-context]").textContent = filteredLabel();
     panel.querySelector("[data-panel-total-small]").textContent = numberFormat.format(data.total_links);
     panel.querySelector("[data-panel-claro]").textContent = numberFormat.format(data.claro);
     panel.querySelector("[data-panel-vivo]").textContent = numberFormat.format(data.vivo);
@@ -536,6 +753,15 @@
     });
     panel.querySelector("[data-panel-calls]").textContent = numberFormat.format(data.chamados);
     panel.querySelector("[data-panel-repeat]").textContent = numberFormat.format(data.reincidentes);
+    const callRate = data.total_links ? data.chamados / data.total_links * 100 : 0;
+    const repeatRate = data.chamados ? data.reincidentes / data.chamados * 100 : 0;
+    panel.querySelector("[data-panel-call-rate]").textContent = `${callRate.toLocaleString("pt-BR", {minimumFractionDigits:1,maximumFractionDigits:1})}`;
+    panel.querySelector("[data-panel-repeat-rate]").textContent = `${repeatRate.toLocaleString("pt-BR", {minimumFractionDigits:1,maximumFractionDigits:1})}%`;
+    const reasons = Object.entries(data.motivos).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    panel.querySelector("[data-panel-reasons]").innerHTML = reasons.length ? reasons.map(([key,value])=>`<div class="panel-reason-row"><span>${motiveNames[key] || "Sem interven\u00e7\u00e3o"}</span><b>${numberFormat.format(value)}</b></div>`).join("") : '<p class="panel-empty">Sem registros para este recorte.</p>';
+    const periods=demoStore.history.periods; const periodIndex=periods.findIndex(item=>item.id===state.period); const previous=periods[periodIndex-1];
+    const historyEl=panel.querySelector("[data-panel-history]");
+    if(previous){const prior=window.ArionGeoData.aggregate(demoStore,{...state,period:previous.id})[code] || {chamados:0,reincidentes:0}; const delta=prior.chamados ? (data.chamados-prior.chamados)/prior.chamados*100 : null; historyEl.innerHTML=`<div class="panel-history-line"><span>${previous.label}</span><b>${numberFormat.format(prior.chamados)} chamados</b></div><div class="panel-history-line"><span>${periodLabel(state.period)}</span><b>${numberFormat.format(data.chamados)} chamados</b></div><p class="panel-delta">${delta===null?"Sem base comparativa":`${delta>=0?"+":""}${delta.toLocaleString("pt-BR",{maximumFractionDigits:1})}% vs. m\u00eas anterior`}</p>`;} else {historyEl.innerHTML='<p class="panel-empty">Sem m\u00eas anterior para compara\u00e7\u00e3o.</p>'; }
     const dominantElement = panel.querySelector("[data-panel-dominant]");
     dominantElement.lastChild.textContent = operatorNames[dominant];
     dominantElement.querySelector("i").className = `operator-swatch operator-swatch--${dominant}`;
@@ -550,6 +776,7 @@
     document.querySelector(".geo-heading").classList.add("is-selected");
     root.querySelector("[data-panel-backdrop]").classList.add("is-visible");
     breadcrumb.hidden = false;
+    if (map) map.resize();
     window.requestAnimationFrame(() => panel.classList.add("is-open"));
   }
 
@@ -558,27 +785,30 @@
     panel.setAttribute("aria-hidden", "true");
     panel.inert = true;
     window.setTimeout(() => {
-      if (!selectedCode) panel.hidden = true;
+      if (!state.selectedUF) panel.hidden = true;
     }, 230);
     root.classList.remove("has-selection");
     document.querySelector(".geo-heading").classList.remove("is-selected");
     root.querySelector("[data-panel-backdrop]").classList.remove("is-visible");
     breadcrumb.hidden = true;
+    if (map) map.resize();
   }
 
   function selectState(feature) {
     hideStateTooltip();
-    selectedCode = feature.properties.sigla;
+    state.selectedUF = feature.properties.sigla;
+    saveMapState();
     applyOperatorFilter();
-    updateStatePanel(selectedCode);
+    updateStatePanel(state.selectedUF);
     openStatePanel();
     fitState(feature);
-    root.querySelector("[data-map-announcement]").textContent = `${feature.properties.nome}, ${demoData[selectedCode].total_links} links demonstrativos.`;
+    root.querySelector("[data-map-announcement]").textContent = `${feature.properties.nome}, ${demoData[state.selectedUF].total_links} links demonstrativos.`;
   }
 
   function clearStateSelection() {
-    if (!selectedCode) return;
-    selectedCode = null;
+    if (!state.selectedUF) return;
+    state.selectedUF = null;
+    saveMapState();
     closeStatePanel();
     applyOperatorFilter();
     fitBrazil();
@@ -593,20 +823,25 @@
         if (!response.ok) throw new Error(`GeoJSON HTTP ${response.status}`);
         return response.json();
       }),
-      fetch(root.dataset.demoUrl).then((response) => {
-        if (!response.ok) throw new Error(`Dados demonstrativos HTTP ${response.status}`);
-        return response.json();
-      }),
-    ]).then(([geojson, data]) => {
+      window.ArionGeoData.load({ base: root.dataset.baseUrl, history: root.dataset.historyUrl, projects: root.dataset.projectsUrl, reasons: root.dataset.reasonsUrl }),
+    ]).then(([geojson, store]) => {
       if (!geojson || geojson.type !== "FeatureCollection" || geojson.features.length !== 27) {
         throw new Error("O GeoJSON deve conter uma FeatureCollection com 27 UFs.");
       }
       const codes = new Set(geojson.features.map((feature) => feature.properties && feature.properties.sigla));
-      if (codes.size !== 27 || geojson.features.some((feature) => !data[feature.properties.sigla])) {
-        throw new Error("As siglas do GeoJSON não correspondem aos dados demonstrativos.");
-      }
+      if (codes.size !== 27) throw new Error("O GeoJSON deve conter 27 siglas distintas.");
       states = geojson;
-      demoData = data;
+      stateGeometryBounds = geojson.features.reduce((bounds, feature) => {
+        const featureBounds = calculateGeometryBounds(feature.geometry);
+        return [
+          [Math.min(bounds[0][0], featureBounds[0][0]), Math.min(bounds[0][1], featureBounds[0][1])],
+          [Math.max(bounds[1][0], featureBounds[1][0]), Math.max(bounds[1][1], featureBounds[1][1])],
+        ];
+      }, [[Infinity, Infinity], [-Infinity, -Infinity]]);
+      demoStore = store;
+      loadMapState();
+      populatePeriodAndProject();
+      refreshGeoView();
       return geojson;
     });
   }
@@ -696,77 +931,77 @@
     const missing = Object.entries(requiredElements).filter(([, element]) => !element).map(([name]) => name);
     if (missing.length) throw new Error(`Controles do mapa ausentes: ${missing.join(", ")}`);
 
-    map.on("mousemove", fillLayerId, showStateTooltip);
-    map.on("mouseleave", fillLayerId, () => {
-      map.getCanvas().style.cursor = "";
-      hideStateTooltip();
-    });
-    map.on("mouseenter", fillLayerId, () => { map.getCanvas().style.cursor = "pointer"; });
-    map.on("click", fillLayerId, (event) => {
-      const feature = event.features && event.features[0];
-      if (feature) selectState(feature);
-    });
-    map.on("click", (event) => {
-      const feature = map.queryRenderedFeatures(event.point, { layers: [fillLayerId] })[0];
-      if (!feature && selectedCode) clearStateSelection();
-    });
-    map.on("moveend", () => {
-      const selected = selectedCode && getStateFeature(selectedCode);
-      const target = selected ? calculateGeometryBounds(selected.geometry) : brazilBounds;
-      if (!boundsIntersect(map.getBounds(), target)) {
-        if (selected) fitState(selected);
-        else fitBrazil();
-      }
-    });
+    if (!mapInteractionsBound) {
+      map.on("mousemove", fillLayerId, showStateTooltip);
+      map.on("mouseleave", fillLayerId, () => {
+        map.getCanvas().style.cursor = "";
+        hideStateTooltip();
+      });
+      map.on("mouseenter", fillLayerId, () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("click", fillLayerId, (event) => {
+        const feature = event.features && event.features[0];
+        if (feature) selectState(feature);
+      });
+      map.on("click", (event) => {
+        const feature = map.queryRenderedFeatures(event.point, { layers: [fillLayerId] })[0];
+        if (!feature && state.selectedUF) clearStateSelection();
+      });
+      map.on("moveend", () => {
+        const selected = state.selectedUF && getStateFeature(state.selectedUF);
+        const target = selected ? calculateGeometryBounds(selected.geometry) : brazilBounds;
+        if (!boundsIntersect(map.getBounds(), target)) {
+          if (selected) fitState(selected);
+          else fitBrazil();
+        }
+      });
+      mapInteractionsBound = true;
+    }
     if (uiBound) return;
     const operatorButtons = [...document.querySelectorAll("[data-operator]")];
     const modeButtons = [...document.querySelectorAll("[data-mode]")];
     const { motiveSelect, motiveWrap, searchInput, searchList, searchWrap,
       nationalCollapse, nationalExpand, brazilLink, panelClose, panelBackdrop, retry } = requiredElements;
     const setMode = (mode) => {
-      activeMode = mode;
+      state.metric = mode;
       modeButtons.forEach((button) => {
         const active = button.dataset.mode === mode;
         button.classList.toggle("is-selected", active);
         button.setAttribute("aria-pressed", String(active));
       });
       motiveWrap.hidden = mode !== "motives";
-      operatorButtons.forEach((button) => {
-        button.disabled = mode !== "base";
-        button.title = mode === "base" ? "" : "O filtro de operadora se aplica ao modo Base.";
-      });
-      hideStateTooltip();
-      applyOperatorFilter();
-      renderNationalPanel();
+      refreshGeoView();
     };
     modeButtons.forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));
     motiveSelect.addEventListener("change", () => {
-      activeMotive = motiveSelect.value;
-      hideStateTooltip();
-      applyOperatorFilter();
+      state.reason = motiveSelect.value;
+      refreshGeoView();
     });
     operatorButtons.forEach((button) => {
       button.addEventListener("click", () => {
         if (button.disabled) return;
-        activeOperator = button.dataset.operator;
+        state.operator = button.dataset.operator;
         operatorButtons.forEach((item) => {
           const isActive = item === button;
           item.classList.toggle("is-selected", isActive);
           item.setAttribute("aria-pressed", String(isActive));
         });
-        hideStateTooltip();
-        applyOperatorFilter();
+        state.project = "all";
+        updateProjectOptions();
+        document.querySelector("[data-project-filter]").value = "all";
+        refreshGeoView();
       });
     });
+    document.querySelector("[data-project-filter]").addEventListener("change", event => { state.project = event.target.value; refreshGeoView(); });
+    document.querySelector("[data-period-filter]").addEventListener("change", event => { state.period = event.target.value; refreshGeoView(); });
     root.querySelectorAll("[data-national-tab]").forEach((tab) => {
       tab.addEventListener("click", () => {
-        nationalTab = tab.dataset.nationalTab;
+        state.nationalPanelTab = tab.dataset.nationalTab;
+        saveMapState();
         renderNationalPanel();
       });
     });
     nationalCollapse.addEventListener("click", () => setNationalCollapsed(true));
     nationalExpand.addEventListener("click", () => setNationalCollapsed(false));
-    setNationalCollapsed(window.matchMedia("(max-width: 1024px)").matches);
     searchInput.addEventListener("input", () => {
       searchActiveIndex = -1;
       renderSearchResults(searchInput.value);
@@ -802,13 +1037,13 @@
     panelBackdrop.addEventListener("click", clearStateSelection);
     retry.addEventListener("click", initializeMap);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && selectedCode) clearStateSelection();
+      if (event.key === "Escape" && state.selectedUF) clearStateSelection();
     });
     window.addEventListener("resize", () => {
       if (!map) return;
       map.resize();
-      if (selectedCode) {
-        const feature = getStateFeature(selectedCode);
+      if (state.selectedUF) {
+        const feature = getStateFeature(state.selectedUF);
         if (feature) fitState(feature);
       } else {
         fitBrazil(false);
@@ -835,16 +1070,17 @@
     if (map) {
       map.remove();
       map = null;
+      mapInteractionsBound = false;
     }
     if (popup) popup.remove();
     popup = null;
+    tooltipContent = null;
     hoveredCode = null;
     mapLoaded = false;
     clearError();
-    if (selectedCode) closeStatePanel();
+    if (state.selectedUF) closeStatePanel();
     panel.hidden = true;
     panel.inert = true;
-    selectedCode = null;
     setLoading(true);
     setMessage("Preparando mapa", "Carregando as unidades federativas.");
 
@@ -861,7 +1097,7 @@
         },
         bounds: brazilBounds,
         fitBoundsOptions: { padding: { top: 34, right: 42, bottom: 38, left: 42 }, maxZoom: 4.35 },
-        maxBounds: [[-104, -42], [-4, 14]],
+        maxBounds: [[-120, -54], [8, 26]],
         minZoom: 2.5,
         maxZoom: 8,
         minPitch: 0,
@@ -898,6 +1134,7 @@
           renderNationalPanel();
           map.resize();
           fitBrazil(false);
+          restoreSelectedStateAfterMapLoad();
           const loadingFallback = window.setTimeout(() => {
             if (mapLoaded && map) {
               setLoading(false);

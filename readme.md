@@ -56,8 +56,14 @@ As 27 bandeiras estaduais (e do Distrito Federal) em formato SVG estão armazena
 - `/logout/` - encerra a sessão por requisição POST protegida por CSRF.
 - `/mapa/` - mapa autenticado do Brasil com filtros demonstrativos por operadora.
 - `/dashboard/` - dashboard executivo autenticado com indicadores e evolução demonstrativa.
+- `/rankings/` - ranking executivo autenticado de 20 provedores com dados demonstrativos, filtros e critérios de ordenação. A leitura fica isolada em `aplicativos.rankings.services`, pronta para substituir a fonte JSON por uma integração real.
 - `/painel/` - visão geral autenticada.
 - `/admin/` - Django Admin.
 
 O mapa, integrações externas, dados operacionais e importação de planilhas pertencem a etapas posteriores.
 
+
+
+## Dados temporais demonstrativos do mapa
+
+A experi?ncia do mapa consome agregados locais em `arion_geo/static/data/demo/`: `base.json` guarda links por operadora/projeto/UF, `history.json` guarda links, chamados, reincid?ncias e motivos por compet?ncia, e `projects.json`/`reasons.json` descrevem dimens?es. O hist?rico determin?stico cobre jan/26 a out/26; os motivos particionam exatamente os chamados e reincid?ncias nunca superam chamados. `static/js/mapa/mapa-data.js` oferece a interface `load`/`aggregate` que desacopla a tela dos arquivos. Uma futura fonte pode preservar esse contrato com endpoints como `/api/geo/summary/`, `/api/geo/states/`, `/api/geo/state/SP/` e `/api/geo/history/`; nenhum endpoint ou integra??o real est? implementado nesta etapa.

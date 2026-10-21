@@ -27,7 +27,9 @@ urlpatterns = [
     path('', home, name='home'),
     path('', include('aplicativos.autenticacao.urls')),
     path('mapa/', include('aplicativos.mapa.urls')),
+    path('rankings/', include('aplicativos.rankings.urls')),
     path('dashboard/', dashboard, name='dashboard'),
+    path('api/preferences/', include('aplicativos.configuracoes.urls')),
     path('painel/', include('aplicativos.painel.urls')),
 ]
 

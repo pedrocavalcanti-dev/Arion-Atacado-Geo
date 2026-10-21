@@ -1,0 +1,34 @@
+[
+  {
+    "id": "falha_massiva",
+    "label": "Falha massiva"
+  },
+  {
+    "id": "rompimento_fibra",
+    "label": "Rompimento de fibra"
+  },
+  {
+    "id": "troca_drop",
+    "label": "Troca de drop"
+  },
+  {
+    "id": "equipamento",
+    "label": "Equipamento"
+  },
+  {
+    "id": "cabo_desconectado",
+    "label": "Cabo desconectado"
+  },
+  {
+    "id": "falha_eletrica",
+    "label": "Falha elétrica"
+  },
+  {
+    "id": "sem_intervencao",
+    "label": "Sem intervenção"
+  },
+  {
+    "id": "outros",
+    "label": "Outros"
+  }
+]

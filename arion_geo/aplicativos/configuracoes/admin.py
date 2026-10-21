@@ -1,3 +1,10 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import UserPreference
+
+
+@admin.register(UserPreference)
+class UserPreferenceAdmin(admin.ModelAdmin):
+    list_display = ("user", "theme", "updated_at")
+    list_filter = ("theme",)
+    search_fields = ("user__username",)

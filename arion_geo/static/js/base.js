@@ -32,6 +32,22 @@
     syncThemeMenu();
     // Evento global: outros módulos (mapa, dashboard) reagem sem reload.
     window.dispatchEvent(new CustomEvent("arion:themechange", { detail: { theme: next } }));
+    saveThemePreference(next);
+  }
+
+  function saveThemePreference(theme) {
+    const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
+    if (!csrfToken) return;
+    fetch("/api/preferences/theme/", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
+      body: JSON.stringify({ theme }),
+    }).then((response) => {
+      if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) {
+        throw new Error(`Theme preference request failed (${response.status})`);
+      }
+    }).catch((error) => console.warn("Não foi possível sincronizar a preferência de tema.", error));
   }
 
   syncThemeMenu();

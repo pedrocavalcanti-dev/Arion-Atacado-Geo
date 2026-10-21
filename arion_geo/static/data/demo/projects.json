@@ -1,0 +1,83 @@
+{
+  "claro": [
+    [
+      "bradesco",
+      "Bradesco",
+      24
+    ],
+    [
+      "bb",
+      "Banco do Brasil",
+      18
+    ],
+    [
+      "caixa",
+      "Caixa Econômica",
+      15
+    ],
+    [
+      "correios",
+      "Correios",
+      12
+    ],
+    [
+      "carrefour",
+      "Carrefour",
+      8
+    ],
+    [
+      "fust",
+      "FUST",
+      10
+    ],
+    [
+      "diversos",
+      "Diversos",
+      13
+    ]
+  ],
+  "vivo": [
+    [
+      "bradesco",
+      "Bradesco",
+      27
+    ],
+    [
+      "mcdonalds",
+      "McDonald's",
+      18
+    ],
+    [
+      "l2l",
+      "L2L",
+      16
+    ],
+    [
+      "fust",
+      "FUST",
+      17
+    ],
+    [
+      "diversos",
+      "Diversos",
+      22
+    ]
+  ],
+  "algar": [
+    [
+      "escolas",
+      "Escolas Conectadas",
+      38
+    ],
+    [
+      "fust",
+      "FUST",
+      25
+    ],
+    [
+      "diversos",
+      "Diversos",
+      37
+    ]
+  ]
+}
