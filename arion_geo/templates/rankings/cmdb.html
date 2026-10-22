@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% load static humanize %}
+{% block title %}Rankings · Arion Atacado Geo{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/base-links.css' %}">{% endblock %}
+{% block content %}
+<section class="links-page" aria-labelledby="ranking-title">
+  <header class="links-heading"><div><p class="section-kicker">NOC ATACADO <span>/</span> RANKINGS</p><h1 id="ranking-title">Base de links por provedor</h1><p>Quantidade de links presentes no último export CMDB.</p></div><span class="source-badge"><i></i>Dados oficiais OTRS / CMDB</span></header>
+  <div class="links-kpis links-kpis--three"><article><span>Total de links</span><strong>{{ total_links|intcomma }}</strong></article><article><span>Provedores</span><strong>{{ provider_count|intcomma }}</strong></article><article><span>Atualizado em</span><strong class="ranking-date">{{ latest_import.created_at|date:"d/m/Y" }}</strong></article></div>
+  <div class="cmdb-ranking-note">SLA, chamados, reincidência e score ficam indisponíveis até a integração dos tickets OTRS. Nenhuma métrica de atendimento é estimada nesta visão.</div>
+  <div class="links-table-wrap"><table class="links-table"><thead><tr><th>#</th><th>Provedor</th><th>ConfigItem do provedor</th><th>Links</th><th>Participação</th></tr></thead><tbody>{% for provider in providers %}<tr><td>{{ forloop.counter|stringformat:"02d" }}</td><td><strong>{{ provider.name }}</strong></td><td>{{ provider.cmdb_config_item_id|default:"—" }}</td><td><strong>{{ provider.link_count|intcomma }}</strong></td><td>{% widthratio provider.link_count total_links 100 %}%</td></tr>{% empty %}<tr><td colspan="5" class="table-empty">Nenhum provedor identificado na base atual.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

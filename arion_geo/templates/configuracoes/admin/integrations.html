@@ -1,0 +1,16 @@
+{% extends "configuracoes/base.html" %}
+{% block title %}Integrações · Administração · Arion{% endblock %}
+{% block settings_title %}Integrações{% endblock %}
+{% block settings_description %}Conexões e fontes externas utilizadas pelo Arion.{% endblock %}
+{% block settings_content %}
+<section class="settings-section integration-list">
+  <article class="integration-row">
+    <div class="integration-heading"><div><h2>OTRS / CMDB</h2><p>Espelho operacional da fonte oficial.</p></div><span class="settings-badge{% if not latest_import %} settings-badge--quiet{% endif %}">{% if latest_import %}Ativo{% else %}Aguardando importação{% endif %}</span></div>
+    <dl class="settings-details"><div><dt>Fonte atual</dt><dd>Importação XLSX</dd></div><div><dt>Última importação</dt><dd>{% if latest_import %}{{ latest_import.created_at|date:"d/m/Y H:i" }}{% else %}Nenhuma importação{% endif %}</dd></div><div><dt>Registros presentes</dt><dd>{{ cmdb_count }}</dd></div><div><dt>Resultado</dt><dd>{% if latest_import %}{{ latest_import.get_status_display }} · {{ latest_import.total_rows }} linhas · {{ latest_import.error_count }} erros{% else %}Sem execução registrada{% endif %}</dd></div></dl>
+    <p class="integration-roadmap">Evolução planejada: API / Web Service. Ainda não está ativa.</p>
+  </article>
+  <article class="integration-row">
+    <div class="integration-heading"><div><h2>Mapbox</h2><p>Renderização do mapa operacional.</p></div><span class="settings-badge">{% if mapbox_configured %}Configurado{% else %}Não configurado{% endif %}</span></div>
+  </article>
+</section>
+{% endblock %}

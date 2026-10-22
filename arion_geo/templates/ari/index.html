@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}ARI I.A · Arion Atacado Geo{% endblock %}
+{% block body_class %}ari-page{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/ari/ari.css' %}">{% endblock %}
+
+{% block content %}
+<section class="ari-app" data-ari-app data-create-url="{% url 'ari:create-message' %}" data-detail-template="{% url 'ari:conversation-detail' '00000000-0000-0000-0000-000000000000' %}" data-send-template="{% url 'ari:send-message' '00000000-0000-0000-0000-000000000000' %}" data-rename-template="{% url 'ari:rename' '00000000-0000-0000-0000-000000000000' %}" data-delete-template="{% url 'ari:delete' '00000000-0000-0000-0000-000000000000' %}" data-home-url="{% url 'ari:index' %}" data-active-id="{{ active_conversation.pk|default:'' }}" data-max-upload-mb="{{ max_attachment_mb }}" aria-label="ARI I.A">
+  <div class="ari-backdrop" data-drawer-close hidden></div>
+  <aside class="ari-sidebar" data-sidebar aria-label="Conversas da ARI">
+    <div class="ari-sidebar-head">
+      <a class="ari-brand" href="{% url 'ari:index' %}" aria-label="ARI I.A, início"><span class="ari-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 14.2 9.8 21.2 12l-7 2.2-2.2 7-2.2-7L2.8 12l7-2.2z"/><path d="m19 2 .8 2.2L22 5l-2.2.8L19 8l-.8-2.2L16 5l2.2-.8z"/></svg></span><span>ARI <small>I.A</small></span></a>
+      <button class="ari-icon-button ari-collapse" type="button" data-sidebar-toggle aria-label="Recolher histórico" aria-expanded="true" title="Recolher histórico"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4v16m3-11 2 3-2 3"/></svg></button>
+    </div>
+    <button class="ari-new-button" type="button" data-new-conversation><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Nova conversa</span></button>
+    <form class="ari-search" action="{% url 'ari:index' %}" method="get" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
+      <input type="search" name="q" value="{{ search_query }}" placeholder="Buscar conversas" aria-label="Buscar conversas por título" data-history-search>
+      <button type="button" data-clear-search aria-label="Limpar busca" {% if not search_query %}hidden{% endif %}>×</button>
+    </form>
+    <div class="ari-history-label"><span>Histórico</span><button type="button" class="ari-mobile-close" data-drawer-toggle aria-label="Fechar histórico">×</button></div>
+    <nav class="ari-history thin-scroll" data-history aria-label="Histórico de conversas">
+      {% for group in conversation_groups %}
+        <section class="ari-history-group" data-history-group>
+          <h2>{{ group.label }}</h2>
+          {% for item in group.items %}
+            <div class="ari-history-row{% if active_conversation.pk == item.pk %} is-active{% endif %}" data-history-row data-title="{{ item.title|lower }}" data-conversation-id="{{ item.pk }}" data-detail-url="{% url 'ari:conversation-detail' item.pk %}" data-page-url="{% url 'ari:conversation' item.pk %}">
+              <a href="{% url 'ari:conversation' item.pk %}" data-open-conversation><span class="ari-history-title">{{ item.title }}</span></a>
+              <button class="ari-row-menu" type="button" data-row-menu aria-label="Ações para {{ item.title }}" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+              <div class="ari-row-actions" data-row-actions hidden><button type="button" data-rename>Renomear</button><button type="button" data-delete>Excluir</button></div>
+            </div>
+          {% endfor %}
+        </section>
+      {% empty %}
+        <p class="ari-history-empty" data-history-empty>{% if search_query %}Nenhuma conversa encontrada.{% else %}Suas conversas aparecerão aqui.{% endif %}</p>
+      {% endfor %}
+      {% if search_query and conversation_groups %}<p class="ari-history-empty" data-search-empty hidden>Nenhuma conversa encontrada.</p>{% endif %}
+    </nav>
+    <div class="ari-sidebar-foot"><span class="ari-preview-dot"></span><span>Preview · respostas simuladas</span></div>
+  </aside>
+
+  <div class="ari-workspace">
+    <header class="ari-topline">
+      <button class="ari-icon-button ari-open-sidebar" type="button" data-drawer-toggle aria-label="Abrir histórico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+      <div class="ari-current-title" data-current-title>{% if active_conversation %}{{ active_conversation.title }}{% else %}Nova conversa{% endif %}</div>
+      <span class="ari-preview-badge"><i></i>Preview</span>
+    </header>
+
+    <main class="ari-main" data-ari-main>
+      <section class="ari-welcome" data-welcome {% if active_conversation %}hidden{% endif %}>
+        <div class="ari-welcome-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 4 29 19 44 24 29 29 24 44 19 29 4 24 19 19z"/><path d="m39 3 2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg></div>
+        <p class="ari-eyebrow">ARI I.A <span>·</span> MODO DEMONSTRAÇÃO</p>
+        <h1>Olá, {{ first_name }}.</h1>
+        <p class="ari-welcome-subtitle">Como posso ajudar na operação hoje?</p>
+        <p class="ari-welcome-note">A ARI está em modo demonstração enquanto as fontes operacionais são preparadas.</p>
+      </section>
+
+      <section class="ari-conversation-view" data-conversation-view {% if not active_conversation %}hidden{% endif %} aria-label="Conversa" aria-live="polite">
+        <div class="ari-messages" data-messages></div>
+      </section>
+
+      <div class="ari-bottom-area" data-bottom-area>
+        <div class="ari-suggestions" data-suggestions {% if active_conversation %}hidden{% endif %}>
+          <span>Experimente</span>
+          <button type="button" data-prompt="Resuma a operação">Resumir operação <svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button>
+          <button type="button" data-prompt="Criar plano de ação">Criar plano de ação <svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button>
+          <button type="button" data-prompt="Compare FIERCE e outro ISP">Comparar provedores <svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button>
+          <button type="button" data-prompt="Gere um relatório da operação">Gerar relatório <svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button>
+        </div>
+        <form class="ari-composer" data-composer>
+          {% csrf_token %}
+          <label class="visually-hidden" for="ari-prompt">Pergunte algo à ARI</label>
+          <div class="ari-attachment-queue" data-attachment-queue hidden aria-live="polite"></div>
+          <textarea id="ari-prompt" name="content" rows="1" maxlength="4000" placeholder="Pergunte algo à ARI..." data-prompt-input></textarea>
+          <div class="ari-composer-footer"><div class="ari-composer-tools"><button class="ari-attach-button" type="button" data-attach-trigger aria-label="Anexar arquivo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12.5 6.8-6.8a3 3 0 0 1 4.2 4.2l-8.9 8.9a5 5 0 0 1-7.1-7.1l8.5-8.5"/></svg><span>Anexar arquivo</span></button><span class="ari-composer-hint">Preview · fontes operacionais não conectadas</span></div><input class="ari-file-input" type="file" data-file-input multiple accept=".pdf,.xlsx,.csv,.txt,.docx,image/png,image/jpeg,image/gif,image/webp" aria-label="Selecionar arquivos para anexar"><button type="submit" data-send aria-label="Enviar mensagem"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
+          <p class="ari-composer-error" data-error role="alert" hidden></p>
+        </form>
+      </div>
+    </main>
+  </div>
+</section>
+
+<dialog class="ari-rename-dialog" data-rename-dialog aria-labelledby="ari-rename-heading">
+  <form method="dialog" data-rename-form>
+    <h2 id="ari-rename-heading">Renomear conversa</h2>
+    <label for="ari-rename-input">Título</label>
+    <input id="ari-rename-input" name="title" maxlength="80" required>
+    <div class="ari-dialog-actions"><button type="button" data-cancel-rename>Cancelar</button><button class="ari-dialog-primary" type="submit">Salvar</button></div>
+    <p class="ari-composer-error" data-rename-error role="alert" hidden></p>
+  </form>
+</dialog>
+{{ initial_messages|json_script:"ari-initial-messages" }}
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/ari/ari.js' %}" defer></script>{% endblock %}

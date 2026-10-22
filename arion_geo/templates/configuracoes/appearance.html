@@ -1,0 +1,18 @@
+{% extends "configuracoes/base.html" %}
+{% block title %}Aparência · Configurações · Arion{% endblock %}
+{% block settings_title %}Aparência{% endblock %}
+{% block settings_description %}Escolha como o Arion aparece nos seus dispositivos.{% endblock %}
+{% block settings_content %}
+<section class="settings-section">
+  <header class="settings-section-heading"><div><h2>Tema da interface</h2><p>A seleção é aplicada imediatamente e salva na sua conta.</p></div></header>
+  <div class="theme-choices" role="group" aria-label="Tema da interface">
+    <button class="theme-choice{% if preference.theme == 'light' %} is-selected{% endif %}" type="button" data-theme-option="light" aria-pressed="{% if preference.theme == 'light' %}true{% else %}false{% endif %}">
+      <span class="theme-preview theme-preview--light" aria-hidden="true"><i class="preview-top"></i><i class="preview-side"></i><i class="preview-content"><b></b><b></b><b></b></i></span><span class="theme-choice-label">Claro</span><span class="theme-choice-state">{% if preference.theme == 'light' %}Selecionado{% else %}Selecionar tema{% endif %}</span>
+    </button>
+    <button class="theme-choice{% if preference.theme == 'dark' %} is-selected{% endif %}" type="button" data-theme-option="dark" aria-pressed="{% if preference.theme == 'dark' %}true{% else %}false{% endif %}">
+      <span class="theme-preview theme-preview--dark" aria-hidden="true"><i class="preview-top"></i><i class="preview-side"></i><i class="preview-content"><b></b><b></b><b></b></i></span><span class="theme-choice-label">Escuro</span><span class="theme-choice-state">{% if preference.theme == 'dark' %}Selecionado{% else %}Selecionar tema{% endif %}</span>
+    </button>
+  </div>
+  <p class="theme-save-status" data-theme-save-status role="status" aria-live="polite"></p>
+</section>
+{% endblock %}

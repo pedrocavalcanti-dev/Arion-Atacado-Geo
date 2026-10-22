@@ -1,0 +1,227 @@
+.ari-page { overflow: hidden; }
+.ari-page .main-content { height: calc(100dvh - 60px); min-height: 0; overflow: hidden; }
+.ari-app { --ari-sidebar-width: 264px; position: relative; display: grid; grid-template-columns: var(--ari-sidebar-width) minmax(0, 1fr); width: 100%; height: 100%; overflow: hidden; background: var(--bg-primary); color: var(--text-primary); }
+.ari-sidebar { z-index: 3; display: flex; min-width: 0; flex-direction: column; padding: 18px 14px 12px; border-right: 1px solid var(--border-primary); background: var(--bg-secondary); transition: width var(--transition-normal), transform var(--transition-normal); }
+.ari-sidebar-head { display: flex; align-items: center; justify-content: space-between; min-height: 34px; margin: 0 2px 18px; }
+.ari-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--text-primary); text-decoration: none; font-size: 13px; font-weight: 600; letter-spacing: -.02em; }
+.ari-brand small { color: var(--text-muted); font-size: 10px; font-weight: 500; }
+.ari-mark { display: grid; width: 25px; height: 25px; place-items: center; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--surface-primary); color: var(--accent-violet); }
+.ari-mark svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.ari-icon-button { display: inline-grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.ari-icon-button:hover { border-color: var(--border-primary); background: var(--surface-hover); color: var(--text-primary); }
+.ari-icon-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.ari-new-button { display: flex; min-height: 38px; align-items: center; gap: 9px; padding: 0 11px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface-primary); color: var(--text-primary); font: inherit; font-size: 11px; font-weight: 500; text-align: left; cursor: pointer; }
+.ari-new-button:hover { border-color: color-mix(in srgb, var(--accent-violet) 55%, var(--border-strong)); background: var(--surface-hover); }
+.ari-new-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.ari-search { display: flex; height: 36px; flex: 0 0 auto; align-items: center; gap: 8px; margin: 13px 0 21px; padding: 0 9px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--surface-primary); color: var(--text-muted); }
+.ari-search:focus-within { border-color: var(--border-strong); }
+.ari-search > svg { width: 14px; height: 14px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.ari-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 10px; }
+.ari-search input::placeholder { color: var(--text-muted); }
+.ari-search button { padding: 0 2px; border: 0; background: transparent; color: var(--text-muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.ari-history-label { display: flex; min-height: 15px; justify-content: space-between; padding: 0 5px; color: var(--text-muted); font-size: 9px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.ari-history { flex: 1 1 auto; min-height: 0; overflow: auto; padding-top: 7px; }
+.ari-history-group { margin: 0 0 15px; }
+.ari-history-group h2 { margin: 0 5px 6px; color: var(--text-faint); font-size: 9px; font-weight: 500; }
+.ari-history-row { position: relative; display: flex; min-width: 0; align-items: center; margin: 1px 0; border-radius: 7px; }
+.ari-history-row:hover, .ari-history-row.is-active { background: var(--surface-hover); }
+.ari-history-row > a { display: block; min-width: 0; flex: 1; padding: 8px 7px; color: var(--text-secondary); text-decoration: none; }
+.ari-history-row.is-active > a { color: var(--text-primary); }
+.ari-history-title { display: block; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.ari-row-menu { display: grid; width: 27px; height: 27px; flex: 0 0 auto; margin-right: 3px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); opacity: 0; cursor: pointer; }
+.ari-history-row:hover .ari-row-menu, .ari-row-menu:focus-visible, .ari-row-menu[aria-expanded="true"] { opacity: 1; }
+.ari-row-menu svg { width: 14px; height: 14px; fill: currentColor; }
+.ari-row-actions { position: absolute; z-index: 5; top: 28px; right: 3px; display: grid; width: 125px; padding: 4px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--popover-bg); box-shadow: var(--popover-shadow); }
+.ari-row-actions[hidden] { display: none; }
+.ari-row-actions button { padding: 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 10px; text-align: left; cursor: pointer; }
+.ari-row-actions button:hover { background: var(--surface-hover); color: var(--text-primary); }
+.ari-row-actions [data-delete]:hover { color: var(--danger); }
+.ari-history-empty { padding: 3px 5px; color: var(--text-muted); font-size: 10px; line-height: 1.6; }
+.ari-sidebar-foot { display: flex; align-items: center; gap: 8px; min-height: 33px; margin-top: 9px; padding: 0 5px; border-top: 1px solid var(--border-primary); color: var(--text-muted); font-size: 9px; }
+.ari-preview-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--warning); }
+.ari-workspace { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; background: var(--bg-primary); }
+.ari-topline { z-index: 1; display: flex; min-height: 51px; flex: 0 0 auto; align-items: center; gap: 9px; padding: 0 21px; border-bottom: 1px solid var(--border-primary); }
+.ari-open-sidebar { display: none; }
+.ari-current-title { max-width: min(52vw, 560px); overflow: hidden; color: var(--text-secondary); font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.ari-preview-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--border-primary); border-radius: 999px; color: var(--text-muted); font-size: 9px; }
+.ari-preview-badge i { width: 5px; height: 5px; border-radius: 50%; background: var(--warning); }
+.ari-main { position: relative; display: flex; min-height: 0; flex: 1; flex-direction: column; align-items: center; }
+.ari-welcome { display: flex; width: min(700px, calc(100% - 56px)); flex: 1; flex-direction: column; align-items: center; justify-content: center; padding: 24px 0 10px; text-align: center; }
+.ari-welcome[hidden], .ari-conversation-view[hidden], .ari-suggestions[hidden] { display: none; }
+.ari-welcome-mark { display: grid; width: 43px; height: 43px; margin-bottom: 21px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent-violet) 22%, var(--border-primary)); border-radius: 14px; background: color-mix(in srgb, var(--accent-violet) 7%, var(--surface-primary)); color: var(--accent-violet); }
+.ari-welcome-mark svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
+.ari-eyebrow { margin: 0 0 10px; color: var(--text-muted); font-size: 9px; font-weight: 600; letter-spacing: .15em; }
+.ari-eyebrow span { padding: 0 4px; color: var(--text-faint); }
+.ari-welcome h1 { margin: 0; color: var(--text-primary); font-size: clamp(25px, 3vw, 34px); font-weight: 500; letter-spacing: -.05em; }
+.ari-welcome-subtitle { margin: 8px 0 0; color: var(--text-secondary); font-size: clamp(15px, 1.8vw, 19px); letter-spacing: -.025em; }
+.ari-welcome-note { margin: 13px 0 0; color: var(--text-muted); font-size: 10px; line-height: 1.6; }
+.ari-conversation-view { display: flex; width: min(820px, calc(100% - 48px)); min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
+.ari-messages { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 27px; overflow-y: auto; padding: 34px 8px 28px; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+.ari-message { max-width: min(100%, 690px); }
+.ari-message--user { align-self: flex-end; width: fit-content; max-width: 88%; padding: 13px 15px; border: 1px solid var(--border-primary); border-radius: 13px 13px 4px 13px; background: var(--surface-secondary); }
+.ari-message-label { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--text-muted); font-size: 9px; font-weight: 500; }
+.ari-message--user .ari-message-label { margin-bottom: 5px; }
+.ari-mini-mark { color: var(--accent-violet); font-size: 13px; }
+.ari-message-content { color: var(--text-secondary); font-size: 12px; line-height: 1.75; overflow-wrap: anywhere; }
+.ari-message--user .ari-message-content { color: var(--text-primary); }
+.ari-bottom-area { width: min(820px, calc(100% - 48px)); flex: 0 0 auto; padding: 4px 0 18px; }
+.ari-suggestions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; margin-bottom: 11px; }
+.ari-suggestions > span { margin-right: 1px; color: var(--text-muted); font-size: 9px; }
+.ari-suggestions button { display: inline-flex; align-items: center; gap: 6px; min-height: 27px; padding: 4px 8px; border: 1px solid var(--border-primary); border-radius: 7px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 9px; cursor: pointer; }
+.ari-suggestions button:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text-primary); }
+.ari-suggestions button svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
+.ari-composer { display: flex; flex-direction: column; padding: 11px 12px 9px 15px; border: 1px solid var(--border-strong); border-radius: 13px; background: var(--surface-primary); box-shadow: 0 6px 24px rgba(0, 0, 0, .035); }
+.ari-composer:focus-within { border-color: color-mix(in srgb, var(--accent-violet) 45%, var(--border-strong)); }
+.ari-composer textarea { width: 100%; min-height: 27px; max-height: 144px; resize: none; overflow-y: auto; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 11px; line-height: 1.6; }
+.ari-composer textarea::placeholder { color: var(--text-muted); }
+.ari-composer-footer { display: flex; min-height: 30px; align-items: center; justify-content: space-between; gap: 10px; }
+.ari-composer-hint { color: var(--text-faint); font-size: 8px; }
+.ari-composer-footer button { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 8px; background: var(--text-primary); color: var(--bg-primary); cursor: pointer; }
+.ari-composer-footer button:disabled { opacity: .45; cursor: wait; }
+.ari-composer-footer button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ari-composer-error { margin: 7px 0 1px; color: var(--danger); font-size: 10px; }
+.ari-rename-dialog { width: min(390px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--bg-elevated); color: var(--text-primary); box-shadow: var(--shadow-soft); }
+.ari-rename-dialog::backdrop { background: rgba(0, 0, 0, .48); backdrop-filter: blur(2px); }
+.ari-rename-dialog h2 { margin: 0 0 19px; font-size: 16px; font-weight: 500; }
+.ari-rename-dialog label { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 10px; }
+.ari-rename-dialog input { width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid var(--border-primary); border-radius: 8px; outline: 0; background: var(--surface-primary); color: var(--text-primary); font: inherit; font-size: 11px; }
+.ari-rename-dialog input:focus { border-color: var(--border-strong); }
+.ari-dialog-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 18px; }
+.ari-dialog-actions button { min-height: 33px; padding: 0 11px; border: 1px solid var(--border-primary); border-radius: 7px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 10px; cursor: pointer; }
+.ari-dialog-actions .ari-dialog-primary { border-color: var(--text-primary); background: var(--text-primary); color: var(--bg-primary); }
+.ari-mobile-close { display: none; padding: 0; border: 0; background: transparent; color: var(--text-muted); font-size: 18px; }
+.ari-backdrop { display: none; }
+.ari-app.is-collapsed { --ari-sidebar-width: 64px; }
+.ari-app.is-collapsed .ari-sidebar { padding-inline: 10px; }
+.ari-app.is-collapsed .ari-brand > span:last-child, .ari-app.is-collapsed .ari-new-button span, .ari-app.is-collapsed .ari-search, .ari-app.is-collapsed .ari-history-label, .ari-app.is-collapsed .ari-history, .ari-app.is-collapsed .ari-sidebar-foot { display: none; }
+.ari-app.is-collapsed .ari-sidebar-head { justify-content: center; margin-inline: 0; }
+.ari-app.is-collapsed .ari-brand { display: none; }
+.ari-app.is-collapsed .ari-new-button { justify-content: center; padding: 0; }
+.ari-app.is-collapsed .ari-new-button svg { flex: 0 0 auto; }
+@media (max-width: 800px) {
+  .ari-app { grid-template-columns: minmax(0, 1fr); }
+  .ari-sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: min(300px, calc(100vw - 52px)); transform: translateX(-101%); box-shadow: var(--shadow-soft); }
+  .ari-app.is-drawer-open .ari-sidebar { transform: translateX(0); }
+  .ari-backdrop { position: absolute; z-index: 2; inset: 0; display: block; background: rgba(0, 0, 0, .34); }
+  .ari-backdrop[hidden] { display: none; }
+  .ari-mobile-close { display: inline-block; }
+  .ari-collapse { display: none; }
+  .ari-open-sidebar { display: inline-grid; }
+  .ari-app.is-collapsed { --ari-sidebar-width: 0px; }
+  .ari-app.is-collapsed .ari-sidebar { display: flex; }
+  .ari-app.is-collapsed .ari-sidebar { padding: 18px 14px 12px; }
+  .ari-app.is-collapsed .ari-brand { display: inline-flex; }
+  .ari-app.is-collapsed .ari-new-button { justify-content: flex-start; padding-inline: 11px; }
+  .ari-app.is-collapsed .ari-new-button span { display: inline; }
+  .ari-app.is-collapsed .ari-search, .ari-app.is-collapsed .ari-history-label, .ari-app.is-collapsed .ari-sidebar-foot { display: flex; }
+  .ari-app.is-collapsed .ari-history { display: block; }
+}
+@media (max-width: 520px) {
+  .ari-page .main-content { height: calc(100dvh - 56px); }
+  .ari-topline { min-height: 47px; padding-inline: 10px; }
+  .ari-current-title { max-width: calc(100vw - 160px); font-size: 10px; }
+  .ari-welcome { width: calc(100% - 32px); padding-top: 8px; }
+  .ari-welcome-mark { width: 39px; height: 39px; margin-bottom: 18px; }
+  .ari-welcome-note { max-width: 280px; }
+  .ari-conversation-view, .ari-bottom-area { width: calc(100% - 24px); }
+  .ari-messages { gap: 22px; padding: 21px 2px; }
+  .ari-bottom-area { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .ari-suggestions { gap: 6px; }
+  .ari-suggestions > span { width: 100%; }
+  .ari-suggestions button { min-height: 28px; padding-inline: 7px; font-size: 8px; }
+  .ari-composer { padding: 10px 10px 8px 12px; }
+  .ari-composer-hint { max-width: calc(100% - 40px); line-height: 1.4; }
+}
+@media (max-width: 480px) {
+  .ari-page .app-header { gap: 4px; padding-inline: 6px; }
+  .ari-page .header-nav { min-width: 0; flex: 1 1 0; gap: 7px; margin-inline: 6px 4px; overflow-x: auto; scrollbar-width: none; }
+  .ari-page .header-nav::-webkit-scrollbar { display: none; }
+  .ari-page .header-link { flex: 0 0 auto; }
+  .ari-page .user-menu { flex: 0 0 auto; margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .ari-sidebar { transition: none; } }
+
+/* Structured Preview responses and private attachment controls */
+.ari-composer-tools { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.ari-attach-button { display: inline-flex !important; width: auto !important; min-height: 29px; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--border-primary) !important; border-radius: 7px !important; background: transparent !important; color: var(--text-secondary) !important; font: inherit; font-size: 9px; cursor: pointer; }
+.ari-attach-button:hover { background: var(--surface-hover) !important; color: var(--text-primary) !important; }
+.ari-attach-button svg { width: 13px !important; height: 13px !important; }
+.ari-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
+.ari-attachment-queue { margin: 0 0 7px; }
+.ari-attachment-queue[hidden] { display: none; }
+.ari-attachment-list { display: grid; max-width: 520px; gap: 6px; margin-top: 10px; }
+.ari-attachment-list--queue { max-width: none; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); margin-top: 0; }
+.ari-file-item { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--border-primary); border-radius: 9px; background: var(--surface-primary); }
+.ari-file-icon, .ari-artifact-icon { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 8px; background: var(--surface-secondary); color: var(--text-muted); }
+.ari-file-icon svg, .ari-artifact-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.ari-file-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.ari-file-name { overflow: hidden; color: var(--text-secondary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.ari-file-copy small { color: var(--text-faint); font-size: 9px; }
+.ari-file-remove, .ari-file-download { flex: 0 0 auto; border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 10px; text-decoration: none; cursor: pointer; }
+.ari-file-remove { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 6px; font-size: 17px; }
+.ari-file-remove:hover, .ari-file-download:hover { color: var(--text-primary); }
+.ari-data-badge { display: inline-flex; width: fit-content; margin: 3px 0 8px; padding: 4px 7px; border: 1px solid color-mix(in srgb, var(--accent-violet) 24%, var(--border-primary)); border-radius: 999px; color: var(--accent-violet); font-size: 9px; line-height: 1.3; }
+.ari-rich-title { margin: 13px 0 8px; color: var(--text-primary); font-size: 13px; font-weight: 550; }
+.ari-rich-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 7px; margin: 10px 0; }
+.ari-rich-kpi { display: grid; min-width: 0; gap: 6px; padding: 10px 11px; border: 1px solid var(--border-primary); border-radius: 9px; background: var(--surface-primary); }
+.ari-rich-kpi span { color: var(--text-muted); font-size: 9px; }
+.ari-rich-kpi strong { color: var(--text-primary); font-size: 17px; font-weight: 550; }
+.ari-rich-list { display: grid; gap: 6px; margin: 11px 0; padding-left: 17px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
+.ari-response-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.ari-response-actions button { padding: 6px 9px; border: 1px solid var(--border-primary); border-radius: 7px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 9px; cursor: pointer; }
+.ari-response-actions button:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.ari-rich-table-wrap { max-width: 100%; margin: 10px 0; overflow-x: auto; border: 1px solid var(--border-primary); border-radius: 9px; }
+.ari-rich-table { width: 100%; min-width: 460px; border-collapse: collapse; font-size: 10px; text-align: left; }
+.ari-rich-table th, .ari-rich-table td { padding: 9px 10px; border-bottom: 1px solid var(--border-primary); white-space: nowrap; }
+.ari-rich-table th { background: var(--surface-secondary); color: var(--text-muted); font-size: 9px; font-weight: 550; }
+.ari-rich-table td { color: var(--text-secondary); }
+.ari-rich-table tr:last-child td { border-bottom: 0; }
+.ari-comparison-head, .ari-comparison-row { display: grid; grid-template-columns: minmax(52px, 1fr) minmax(130px, 2fr) minmax(52px, 1fr); align-items: center; gap: 10px; }
+.ari-comparison-head { margin: 12px 0 7px; color: var(--text-muted); font-size: 10px; }
+.ari-comparison-head strong:last-child { text-align: right; }
+.ari-comparison-row { padding: 9px 0; border-top: 1px solid var(--border-primary); }
+.ari-comparison-value { color: var(--text-primary); font-size: 10px; font-weight: 550; }
+.ari-comparison-value:last-child { text-align: right; }
+.ari-comparison-center { display: grid; gap: 6px; text-align: center; }
+.ari-comparison-center > span { color: var(--text-muted); font-size: 9px; }
+.ari-comparison-bars { display: grid; gap: 3px; }
+.ari-comparison-bar { display: block; height: 4px; border-radius: 999px; background: var(--accent-violet); }
+.ari-comparison-bar--right { margin-left: auto; background: var(--text-muted); }
+.ari-structured-intro, .ari-plan-priority, .ari-plan-owner, .ari-goal-summary, .ari-goal-status { color: var(--text-secondary); font-size: 10px; line-height: 1.6; }
+.ari-rich-list--numbered { padding-left: 20px; }
+.ari-plan-priority { margin: 7px 0; }
+.ari-plan-owner { color: var(--text-muted); }
+.ari-alert-box { margin-top: 10px; padding: 12px; border: 1px solid var(--border-primary); border-left: 3px solid var(--warning); border-radius: 9px; background: var(--surface-primary); }
+.ari-alert-box--critical { border-left-color: var(--danger); }
+.ari-alert-label { display: block; margin-bottom: 7px; color: var(--text-muted); font-size: 9px; }
+.ari-alert-title { color: var(--text-primary); font-size: 12px; }
+.ari-alert-values { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 9px; color: var(--text-secondary); font-size: 10px; }
+.ari-alert-box p { margin: 7px 0 0; color: var(--text-secondary); font-size: 10px; line-height: 1.55; }
+.ari-goal-progress { display: flex; align-items: center; gap: 10px; margin: 14px 0 8px; }
+.ari-goal-track { height: 8px; flex: 1; overflow: hidden; border-radius: 999px; background: var(--surface-secondary); }
+.ari-goal-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent-violet); }
+.ari-goal-progress strong { color: var(--text-primary); font-size: 12px; }
+.ari-goal-summary, .ari-goal-status { margin: 5px 0; }
+.ari-report-sections { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; padding: 0; list-style: none; }
+.ari-report-sections li { padding: 5px 8px; border: 1px solid var(--border-primary); border-radius: 6px; color: var(--text-secondary); font-size: 9px; }
+.ari-artifact-card { display: flex; min-width: 0; align-items: center; gap: 10px; margin-top: 12px; padding: 10px; border: 1px solid var(--border-primary); border-radius: 10px; background: var(--surface-primary); }
+.ari-artifact-icon { color: var(--accent-violet); }
+.ari-artifact-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.ari-artifact-copy strong { overflow: hidden; color: var(--text-primary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.ari-artifact-copy small { color: var(--text-muted); font-size: 9px; }
+.ari-artifact-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.ari-artifact-links a { color: var(--accent-violet); font-size: 9px; text-decoration: none; white-space: nowrap; }
+.ari-artifact-links a:hover { text-decoration: underline; }
+.ari-source-note { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 12px; color: var(--text-muted); font-size: 9px; }
+.ari-source-note small { color: var(--text-faint); font-size: inherit; }
+@media (max-width: 520px) {
+  .ari-composer-tools { gap: 6px; }
+  .ari-composer-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ari-attach-button { padding-inline: 7px; }
+  .ari-attach-button span { font-size: 8px; }
+  .ari-artifact-card { flex-wrap: wrap; }
+  .ari-artifact-links { width: 100%; padding-left: 39px; }
+  .ari-rich-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ari-rich-kpi { padding: 8px; }
+  .ari-rich-kpi strong { font-size: 15px; }
+}

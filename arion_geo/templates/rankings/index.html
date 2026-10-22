@@ -8,37 +8,38 @@
     <div>
       <p class="section-kicker">NOC ATACADO <span>/</span> RANKING GLOBAL</p>
       <h1 id="ranking-title">Ranking global dos provedores</h1>
-      <p>Desempenho consolidado da operação na base total monitorada — leitura executiva do Ranking de provedores e ISPs parceiros.</p>
+      <span class="section-kicker">Ranking de provedores</span>
+      <p>Provedores e links da base CMDB real, com indicadores operacionais demonstrativos enquanto os tickets OTRS não estão integrados.</p>
     </div>
     <div class="heading-badges">
       <span class="scope-badge">Escopo global da operação</span>
-      <span class="demo-badge"><i></i>Dados demonstrativos</span>
+      <span class="scope-badge">● Base real CMDB</span><span class="demo-badge"><i></i>Performance demonstrativa</span>
     </div>
   </header>
 
   <section class="ranking-kpis" aria-label="Indicadores consolidados da operação">
     <article class="ranking-kpi">
-      <span>Base total monitorada</span>
+      <span>Base total CMDB</span>
       <strong data-kpi-links>{{ total_links|intcomma }}<i>links</i></strong>
-      <small><b data-kpi-providers>{{ providers|length }}</b> provedores avaliados na operação</small>
+      <small><b data-kpi-providers>{{ provider_count }}</b> provedores válidos com links reais</small>
     </article>
     <article class="ranking-kpi">
-      <span>Links ativos por provedor</span>
-      <strong data-kpi-avg-links>360<i>média</i></strong>
-      <small>Distribuição global entre parceiros</small>
+      <span>Maior base real</span>
+      <strong class="kpi-name" data-kpi-avg-links>{{ largest_provider.name|default:"—" }}</strong>
+      <small>{{ largest_provider.links|default:0 }} links · CMDB</small>
     </article>
     <article class="ranking-kpi">
-      <span>Chamados na operação</span>
+      <span>Chamados · Demonstração</span>
       <strong data-kpi-calls>{{ total_calls|intcomma }}</strong>
-      <small>Volume consolidado · Out/26</small>
+      <small>Estimativa demonstrativa · Out/26</small>
     </article>
     <article class="ranking-kpi">
-      <span>SLA médio global</span>
+      <span>SLA médio · Demonstração</span>
       <strong data-kpi-sla>{{ average_sla|floatformat:1 }}<i>%</i></strong>
       <small>Reincidência média de <b data-kpi-repeat>{{ average_repeat|floatformat:1 }}%</b></small>
     </article>
     <article class="ranking-kpi">
-      <span>Líder do ranking global</span>
+      <span>Maior score · Demonstração</span>
       <strong class="kpi-name" data-kpi-leader>{{ leader.nome }}</strong>
       <small data-kpi-leader-meta>Score {{ leader.score|floatformat:1 }} · Nota {{ leader.avaliacao|floatformat:2 }} de 5</small>
     </article>
@@ -47,10 +48,10 @@
   <section class="ranking-controls" aria-label="Filtros do ranking">
     <div class="controls-fields">
       <label>Período<select disabled aria-label="Período"><option>Out/26</option></select></label>
-      <label>Operadora<select data-filter="operadora"><option value="">Todas</option><option>Claro</option><option>Vivo</option><option>Algar</option></select></label>
-      <label>Projeto<select data-filter="projeto"><option value="">Todos</option><option>Bradesco</option><option>Banco do Brasil</option><option>Caixa</option><option>Correios</option><option>Operação NOC</option></select></label>
+      <label>Operadora<select data-filter="operadora"><option value="">Todas</option>{% for option in operators %}<option>{{ option.name }}</option>{% endfor %}</select></label>
+      <label>Projeto<select data-filter="projeto"><option value="">Todos</option>{% for option in projects %}<option>{{ option.name }}</option>{% endfor %}</select></label>
     </div>
-    <span class="filter-note">Desempenho consolidado da operação · Base total monitorada</span>
+    <span class="filter-note" data-source-note>Score · Demonstração</span>
   </section>
 
   <div class="criteria-wrap">
@@ -70,10 +71,10 @@
   <section class="podium-section" aria-labelledby="podium-title">
     <div class="section-title">
       <div>
-        <span class="section-kicker">DESTAQUES DA OPERAÇÃO</span>
-        <h2 id="podium-title">Top 3 provedores no desempenho global</h2>
+      <span class="section-kicker">DESTAQUES</span>
+        <h2 id="podium-title">Top 3 sobre provedores reais</h2>
       </div>
-      <span class="podium-caption">Score operacional global <b>·</b> Base total monitorada em Out/26</span>
+      <span class="podium-caption">Score demonstrativo · links reais CMDB</span>
     </div>
     <div class="podium" data-podium></div>
   </section>
@@ -81,10 +82,10 @@
   <section class="table-section" aria-labelledby="table-title">
     <header>
       <div>
-        <span class="section-kicker">VISÃO COMPLETA DA BASE</span>
+        <span class="section-kicker">PROVEDORES CMDB</span>
         <h2 id="table-title">Todos os provedores <small data-result-count>{{ providers|length }}</small></h2>
       </div>
-      <span class="table-hint">Links ativos por provedor e indicadores consolidados do período</span>
+      <span class="table-hint">Links e participação reais · performance demonstrativa</span>
     </header>
     <div class="table-scroll thin-scroll">
       <table>
@@ -93,8 +94,8 @@
             <th class="col-rank">Pos.</th>
             <th class="col-provider">Provedor</th>
             <th class="col-num">Links ativos</th>
-            <th class="col-num">Chamados</th>
-            <th class="col-sla">SLA no prazo</th>
+            <th class="col-num">Chamados demo</th>
+            <th class="col-sla">SLA demo</th>
             <th class="col-num">Reincid.</th>
             <th class="col-score">Score</th>
             <th class="col-trend">Tendência</th>

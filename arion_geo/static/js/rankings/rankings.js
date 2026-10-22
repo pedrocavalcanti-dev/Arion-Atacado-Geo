@@ -1,22 +1,56 @@
-﻿(() => {
-  const root=document.querySelector('[data-ranking-root]'); if(!root)return;
-  const source=JSON.parse(document.getElementById('ranking-providers').textContent);
-  const tbody=root.querySelector('[data-ranking-rows]'), podium=root.querySelector('[data-podium]');
-  const filters=[...root.querySelectorAll('[data-filter]')], fmt=new Intl.NumberFormat('pt-BR');
-  const drawer=document.querySelector('[data-provider-drawer]'), backdrop=document.querySelector('[data-drawer-backdrop]');
-  let sort='score'; const pct=(v,d=1)=>`${Number(v).toFixed(d).replace('.',',')}%`, dec=(v,d=1)=>Number(v).toFixed(d).replace('.',',');
-  const sorters={score:(a,b)=>b.score-a.score,links:(a,b)=>b.links-a.links,sla:(a,b)=>b.dentro_pct-a.dentro_pct,'sla-worst':(a,b)=>a.dentro_pct-b.dentro_pct,chamados:(a,b)=>b.chamados-a.chamados,reincidencias:(a,b)=>b.reincidencias-a.reincidencias,estourados:(a,b)=>b.estourados-a.estourados,avaliacao:(a,b)=>b.avaliacao-a.avaliacao};
-  const positive=['score','links','sla','avaliacao'];
-  const medal='<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="9.5" r="3.6"/><path d="M6 6 4.5 2.5h2.7L8 4.5l.8-2h2.7L10 6"/></svg>';
-  function card(p,i){const rank=i+1;return `<article class="podium-card podium-card--${rank}"><header class="podium-header"><div class="provider-brand"><span class="provider-logo">${p.logo}</span><div class="provider-identity"><h3>${p.nome}</h3><span class="provider-meta">${p.operadora} · ${p.projeto} <em class="uf-tag">${p.uf}</em></span></div></div><span class="podium-badge">${positive.includes(sort)?medal:'!'}<b>${positive.includes(sort)?`0${rank}`:'ATENÇÃO'}</b></span></header><div class="podium-hero"><div><span class="hero-label">${sort==='score'?'SCORE':'POSIÇÃO'}</span><strong class="podium-score">${sort==='score'?dec(p.score):`#${rank}`}</strong></div><div><span class="hero-label">LINKS</span><strong class="podium-links">${fmt.format(p.links)}</strong></div></div><div class="podium-quick"><span>SLA <b>${pct(p.dentro_pct)}</b></span><span>Chamados <b>${p.chamados}</b></span></div><button class="detail-link" data-open="${p.id}">Ver análise <span aria-hidden="true">→</span></button></article>`}
-  function row(p,i){const rank=i+1;return `<tr tabindex="0" data-open="${p.id}"><td class="col-rank"><span class="rank-number ${rank<=3?'rank-number--top':''}">${String(rank).padStart(2,'0')}</span></td><td class="col-provider"><div class="table-provider"><span class="provider-logo">${p.logo}</span><div class="table-provider-info"><b>${p.nome}</b><small>${p.operadora} · ${p.projeto} <em class="uf-tag">${p.uf}</em></small></div></div></td><td class="col-num"><div class="links-cell"><strong>${fmt.format(p.links)}</strong><small>${dec(p.links_share)}%</small></div></td><td class="col-num">${fmt.format(p.chamados)}<small class="row-sub">${p.fora_sla} fora SLA</small></td><td class="col-sla"><div class="sla-cell"><i class="sla-bar"><b style="width:${p.dentro_pct}%"></b></i><strong>${pct(p.dentro_pct)}</strong></div></td><td class="col-num">${p.reincidencias}<small class="row-sub">${pct(p.repeat_pct)}</small></td><td class="col-score"><b class="score-cell">${dec(p.score)}</b></td><td class="col-trend">${p.tendencia==='up'?'↑':p.tendencia==='down'?'↓':'→'}</td><td><button class="row-action" data-open="${p.id}" aria-label="Ver análise de ${p.nome}">→</button></td></tr>`}
-  function show(p){document.getElementById('drawer-title').textContent=p.nome;root.querySelector('[data-drawer-meta]').textContent=`${p.operadora} · ${p.projeto} · ${p.uf}`;
-    const bars=(items,key,val,total)=>items.map(x=>`<div class="detail-line"><span>${key(x)}</span><b>${val(x)}</b><i><em style="width:${total?val(x)/total*100:0}%"></em></i></div>`).join('');
-    const months=['Mai','Jun','Jul','Ago','Set','Out'];
-    root.querySelector('[data-drawer-content]').innerHTML=`<section class="drawer-metrics"><div><span>Score</span><b>${dec(p.score)}</b></div><div><span>Links</span><b>${fmt.format(p.links)}</b></div><div><span>SLA</span><b>${pct(p.dentro_pct)}</b></div><div><span>Chamados</span><b>${p.chamados}</b></div></section><section class="drawer-section"><h3>Desempenho operacional</h3><p>${p.dentro_sla} chamados no prazo <b>·</b> ${p.fora_sla} fora SLA <b>·</b> ${p.estourados} estourados</p><p>Reincidências: <b>${p.reincidencias} (${pct(p.repeat_pct)})</b> <span>Disponibilidade: <b>${pct(p.uptime,2)}</b></span></p><p>Avaliação: <b>★ ${dec(p.avaliacao,2)} / 5</b></p></section><section class="drawer-section"><h3>Histórico mensal <small>chamados · últimos 6 meses</small></h3><div class="history-bars">${p.history.map((n,i)=>`<div><b>${n}</b><i style="height:${Math.max(8,n/Math.max(...p.history)*100)}%"></i><small>${months[i]}</small></div>`).join('')}</div></section><section class="drawer-section"><h3>Composição do SLA</h3><p>${p.dentro_sla} no prazo <span>de ${p.chamados} chamados</span></p>${bars([{name:'No prazo',n:p.dentro_sla},{name:'Fora do SLA',n:p.fora_sla}],x=>x.name,x=>x.n,p.chamados)}</section><section class="drawer-section"><h3>Participação e cobertura</h3><p>${fmt.format(p.links)} links <span>· ${pct(p.links_share)} da base</span></p><p>Operadoras: <b>${p.operators.join(', ')}</b></p><p>Projetos</p>${bars(p.projects,x=>x.name,x=>x.links,p.links)}<p>Estados</p>${bars(p.states,x=>`🇧🇷 ${x.uf}`,x=>x.links,p.links)}</section><section class="drawer-section"><h3>Principais motivos <small>chamados</small></h3>${bars(p.reasons,x=>x.name,x=>x.count,p.chamados)}</section><section class="drawer-section"><h3>Como o score é calculado</h3><p>Score composto de SLA, avaliação, disponibilidade e reincidência.</p>${Object.entries(p.score_parts).map(([k,v])=>`<p class="score-part"><span>${k}</span><b>${dec(v)} pts</b></p>`).join('')}</section>${p.alerts.length?`<section class="drawer-section drawer-alerts"><h3>Pontos de atenção</h3>${p.alerts.map(a=>`<p>• ${a}</p>`).join('')}</section>`:''}`;
-    drawer.hidden=false;backdrop.hidden=false;document.body.classList.add('drawer-open');drawer.querySelector('[data-drawer-close]').focus();}
-  function close(){drawer.hidden=true;backdrop.hidden=true;document.body.classList.remove('drawer-open')}
-  function render(){const data=source.filter(p=>filters.every(f=>!f.value||p[f.dataset.filter]===f.value)).sort(sorters[sort]);podium.innerHTML=data.slice(0,3).map(card).join('');tbody.innerHTML=data.map(row).join('');root.querySelector('[data-result-count]').textContent=data.length;root.querySelector('[data-empty]').hidden=!!data.length;root.querySelector('.table-scroll').hidden=!data.length;root.querySelector('.podium-section').hidden=!data.length;}
-  root.querySelector('.criteria-chips').addEventListener('click',e=>{const b=e.target.closest('[data-sort]');if(!b)return;sort=b.dataset.sort;root.querySelectorAll('[data-sort]').forEach(x=>x.classList.toggle('is-selected',x===b));render()});filters.forEach(f=>f.addEventListener('change',render));
-  root.addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(b){const p=source.find(x=>x.id===b.dataset.open);if(p)show(p)}});tbody.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('tr[data-open]')){e.preventDefault();show(source.find(x=>x.id===e.target.dataset.open))}});drawer.querySelector('[data-drawer-close]').addEventListener('click',close);backdrop.addEventListener('click',close);document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!drawer.hidden)close()});render();
+(() => {
+  const root = document.querySelector('[data-ranking-root]');
+  if (!root) return;
+  const dataNode = document.getElementById('ranking-providers');
+  const rows = root.querySelector('[data-ranking-rows]');
+  const podium = root.querySelector('[data-podium]');
+  const drawer = root.querySelector('[data-provider-drawer]');
+  const backdrop = root.querySelector('[data-drawer-backdrop]');
+  if (!dataNode || !rows || !podium || !drawer || !backdrop) return;
+  const source = JSON.parse(dataNode.textContent);
+  const fmt = new Intl.NumberFormat('pt-BR');
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const pct = value => `${Number(value).toFixed(1).replace('.', ',')}%`;
+  let sort = new URLSearchParams(location.search).get('sort') || 'score';
+  const sorters = {
+    score: (a,b) => b.score-a.score, links: (a,b) => b.links-a.links,
+    sla: (a,b) => b.dentro_pct-a.dentro_pct, 'sla-worst': (a,b) => a.dentro_pct-b.dentro_pct,
+    chamados: (a,b) => b.chamados-a.chamados, reincidencias: (a,b) => b.reincidencias-a.reincidencias,
+    estourados: (a,b) => b.estourados-a.estourados, avaliacao: (a,b) => b.avaliacao-a.avaliacao,
+  };
+  const labels = {score:'Score · Demonstração',links:'Links · CMDB real',sla:'SLA · Demonstração','sla-worst':'SLA · Demonstração',chamados:'Chamados · Demonstração',reincidencias:'Reincidência · Demonstração',estourados:'Estourados · Demonstração',avaliacao:'Avaliação · Demonstração'};
+  const cards = item => `<article class="podium-card"><header class="podium-header"><div class="provider-brand"><span class="provider-logo">${esc(item.logo)}</span><div class="provider-identity"><h3>${esc(item.name)}</h3><span class="provider-meta">${fmt.format(item.links)} links · CMDB real</span></div></div><span class="demo-badge">DEMO</span></header><div class="podium-hero"><div><span class="hero-label">SCORE DEMO</span><strong class="podium-score">${item.score.toFixed(1).replace('.', ',')}</strong></div><div><span class="hero-label">PARTICIPAÇÃO REAL</span><strong class="podium-links">${pct(item.share)}</strong></div></div><div class="podium-quick"><span>SLA demo <b>${pct(item.dentro_pct)}</b></span><span>Chamados demo <b>${item.chamados}</b></span></div><button class="detail-link" data-open="${item.id}">Ver análise <span aria-hidden="true">→</span></button></article>`;
+  const row = (item, index) => `<tr tabindex="0" data-open="${item.id}"><td class="col-rank"><span class="rank-number">${String(index+1).padStart(2,'0')}</span></td><td class="col-provider"><div class="table-provider"><span class="provider-logo">${esc(item.logo)}</span><div class="table-provider-info"><b>${esc(item.name)}</b><small>${fmt.format(item.links)} links reais · ${pct(item.share)} da CMDB</small></div></div></td><td class="col-num"><div class="links-cell"><strong>${fmt.format(item.links)}</strong><small>${pct(item.share)} real</small></div></td><td class="col-num">${item.chamados}<small class="row-sub">DEMO</small></td><td class="col-sla"><div class="sla-cell"><i class="sla-bar"><b style="width:${item.dentro_pct}%"></b></i><strong>${pct(item.dentro_pct)}</strong><small>DEMO</small></div></td><td class="col-num">${item.reincidencias}<small class="row-sub">DEMO</small></td><td class="col-score"><b class="score-cell">${item.score.toFixed(1).replace('.', ',')}</b><small>DEMO</small></td><td class="col-trend">${item.tendencia==='up'?'↑':item.tendencia==='down'?'↓':'→'}</td><td><button class="row-action" data-open="${item.id}" aria-label="Ver ${esc(item.name)}">→</button></td></tr>`;
+  function show(item) {
+    root.querySelector('#drawer-title').textContent = item.name;
+    root.querySelector('[data-drawer-meta]').textContent = `${fmt.format(item.links)} links · ${pct(item.share)} da base · CMDB real`;
+    const line = (label, value) => `<p><span>${esc(label)}</span><b>${esc(value)}</b></p>`;
+    const list = (heading, values, label) => `<section class="drawer-section"><h3>${heading} <small>REAL CMDB</small></h3>${values.length ? values.map(value => line(label(value), fmt.format(value.links))).join('') : '<p>Sem classificação na base.</p>'}</section>`;
+    const months=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out'];
+    root.querySelector('[data-drawer-content]').innerHTML = `<section class="drawer-section"><h3>Dados da base <small>REAL CMDB</small></h3>${line('ConfigItem do provedor', item.cmdb_config_item_id || 'Não informado')}${line('Links presentes', fmt.format(item.links))}${line('Participação', pct(item.share))}${line('Links classificados', fmt.format(item.classified_links))}${line('Links não classificados', fmt.format(item.unclassified_links))}${line('Municípios', fmt.format(item.cities.length))}</section>${list('Projetos atendidos',item.projects,x=>x.name)}${list('Operadoras',item.operators,x=>x.name)}${list('Top UFs',item.states.slice(0,5),x=>x.uf)}<section class="drawer-section"><h3>Performance <small>DEMONSTRAÇÃO</small></h3>${line('Chamados',item.chamados)}${line('SLA',pct(item.dentro_pct))}${line('Reincidências',item.reincidencias)}${line('Estourados',item.estourados)}${line('Uptime',pct(item.uptime))}${line('Avaliação',`${item.avaliacao.toFixed(2)} / 5`)}${line('Score',item.score.toFixed(1))}<h4>Histórico mensal demo</h4><div class="history-bars">${item.history.map((n,i)=>`<div><b>${n}</b><i style="height:${Math.max(8,n/Math.max(...item.history)*100)}%"></i><small>${months[i]}</small></div>`).join('')}</div></section><a class="detail-link" href="/base/?view=links&provedor=${item.id}">Ver links deste provedor →</a>`;
+    drawer.hidden=false; backdrop.hidden=false; document.body.classList.add('drawer-open');
+  }
+  function close() { drawer.hidden=true; backdrop.hidden=true; document.body.classList.remove('drawer-open'); }
+  function render() {
+    const filters = [...root.querySelectorAll('[data-filter]')];
+    const data = source.filter(item => filters.every(filter => !filter.value || (filter.dataset.filter==='operadora' ? item.operadoras : item.projetos_nomes).includes(filter.value))).sort(sorters[sort] || sorters.score);
+    root.querySelector('[data-source-note]').textContent = labels[sort] || labels.score;
+    podium.innerHTML = data.slice(0,3).map(cards).join(''); rows.innerHTML=data.map(row).join('');
+    root.querySelector('[data-result-count]').textContent=data.length;
+    root.querySelector('[data-empty]').hidden=!!data.length;
+    root.querySelector('.table-scroll').hidden=!data.length;
+    root.querySelector('.podium-section').hidden=!data.length;
+  }
+  root.querySelector('.criteria-chips').addEventListener('click', event => {
+    const button=event.target.closest('[data-sort]'); if(!button)return;
+    sort=button.dataset.sort; root.querySelectorAll('[data-sort]').forEach(item=>item.classList.toggle('is-selected',item===button)); render();
+  });
+  root.querySelectorAll('[data-filter]').forEach(filter=>filter.addEventListener('change',render));
+  root.addEventListener('click',event=>{const button=event.target.closest('[data-open]');if(button){const item=source.find(row=>String(row.id)===button.dataset.open);if(item)show(item);}});
+  rows.addEventListener('keydown',event=>{if((event.key==='Enter'||event.key===' ')&&event.target.matches('tr[data-open]')){event.preventDefault();const item=source.find(row=>String(row.id)===event.target.dataset.open);if(item)show(item);}});
+  drawer.querySelector('[data-drawer-close]').addEventListener('click',close);backdrop.addEventListener('click',close);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!drawer.hidden)close();});
+  render();
+  const requestedProvider = new URLSearchParams(location.search).get('provider');
+  const selectedProvider = source.find(item => String(item.id) === requestedProvider);
+  if (selectedProvider) show(selectedProvider);
 })();

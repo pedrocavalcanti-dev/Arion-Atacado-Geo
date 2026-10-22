@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatório demonstrativo · ARION</title>
+  <style>
+    :root{color-scheme:light;--ink:#202522;--muted:#707a74;--line:#e4e9e5;--paper:#fff;--wash:#f4f6f3;--accent:#6b56a3;--good:#387b5e;--warn:#a06d26;font-family:Inter,Arial,sans-serif}*{box-sizing:border-box}body{margin:0;background:#eef1ed;color:var(--ink);font:14px/1.55 Inter,Arial,sans-serif}.page{max-width:1000px;margin:30px auto;padding:42px;background:var(--paper);border:1px solid var(--line);border-radius:18px}.brand{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px;letter-spacing:.13em}.mark{display:grid;width:28px;height:28px;place-items:center;border:1px solid var(--line);border-radius:9px;color:var(--accent)}.mark svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6}.tag{display:inline-flex;margin-top:25px;padding:5px 9px;border:1px solid #e8dfb9;border-radius:999px;background:#fcf9ec;color:#806423;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}.period{margin:7px 0 0;color:var(--muted);font-size:11px}h1{margin:12px 0 4px;font-size:30px;font-weight:550;letter-spacing:-.04em}.lede{margin:0;color:var(--muted)}h2{margin:0 0 14px;font-size:15px;font-weight:600}.section{margin-top:31px}.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.kpi{padding:15px;border:1px solid var(--line);border-radius:11px;background:var(--paper)}.kpi span{display:block;color:var(--muted);font-size:10px}.kpi strong{display:block;margin-top:5px;font-size:21px;font-weight:550}.columns{display:grid;grid-template-columns:1.3fr .7fr;gap:20px}.panel{padding:18px;border:1px solid var(--line);border-radius:12px}.bars{display:grid;gap:13px}.bar-label{display:flex;justify-content:space-between;margin-bottom:5px;color:var(--muted);font-size:10px}.bar-track{height:8px;overflow:hidden;border-radius:8px;background:#ecefea}.bar-fill{height:100%;border-radius:inherit;background:var(--accent)}.bar-fill.alt{background:#7a9a83}.chart{display:block;width:100%;height:auto}.chart-grid{stroke:#e7ebe7;stroke-width:1}.chart-line{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.chart-dot{fill:var(--paper);stroke:var(--accent);stroke-width:2}.chart-label{fill:var(--muted);font:10px Arial,sans-serif}.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;min-width:480px}th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:11px}th{background:var(--wash);color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}.plan{display:grid;gap:9px;padding-left:20px}.plan li{padding-left:3px;color:var(--muted)}.note{padding:13px 15px;border-left:2px solid var(--accent);background:var(--wash);color:var(--muted);font-size:11px}.footer{display:flex;justify-content:space-between;gap:16px;margin-top:34px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:9px}@media(max-width:650px){body{background:var(--paper)}.page{margin:0;padding:22px 16px;border:0;border-radius:0}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.columns{grid-template-columns:1fr}h1{font-size:24px}.footer{flex-direction:column}}
+  </style>
+</head>
+<body>
+<main class="page">
+  <div class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 15 9 21 12 15 15 12 21 9 15 3 12 9 9z"/></svg></span><span>ARION ATACADO GEO</span></div>
+  <span class="tag">Dados demonstrativos · demonstração com dados fictícios</span>
+  <h1>Relatório operacional</h1>
+  <p class="lede">Visão executiva ilustrativa para demonstrar uma futura entrega da ARI.</p>
+  <p class="period">Período fictício: 01–07 out 2026 · Gerado em {{ generated_at|date:"d/m/Y H:i" }}</p>
+
+  <section class="section"><h2>Resumo executivo</h2><div class="kpis">
+    <div class="kpi"><span>Chamados · demo</span><strong>52</strong></div><div class="kpi"><span>SLA · demo</span><strong>92%</strong></div><div class="kpi"><span>Reincidências · demo</span><strong>3</strong></div><div class="kpi"><span>Links · demo</span><strong>342</strong></div>
+  </div></section>
+  <section class="section columns">
+    <div class="panel"><h2>Tendência demonstrativa</h2><svg class="chart" viewBox="0 0 520 180" role="img" aria-label="Gráfico fictício de volume de chamados">
+      <path class="chart-grid" d="M35 25H510M35 65H510M35 105H510M35 145H510"/><path class="chart-line" d="M45 119 120 95 195 106 270 58 345 73 420 38 500 53"/>
+      <circle class="chart-dot" cx="45" cy="119" r="4"/><circle class="chart-dot" cx="120" cy="95" r="4"/><circle class="chart-dot" cx="195" cy="106" r="4"/><circle class="chart-dot" cx="270" cy="58" r="4"/><circle class="chart-dot" cx="345" cy="73" r="4"/><circle class="chart-dot" cx="420" cy="38" r="4"/><circle class="chart-dot" cx="500" cy="53" r="4"/>
+      <text class="chart-label" x="38" y="168">SEG</text><text class="chart-label" x="112" y="168">TER</text><text class="chart-label" x="188" y="168">QUA</text><text class="chart-label" x="263" y="168">QUI</text><text class="chart-label" x="338" y="168">SEX</text><text class="chart-label" x="416" y="168">SÁB</text><text class="chart-label" x="493" y="168">DOM</text>
+    </svg></div>
+    <div class="panel"><h2>Principais desvios</h2><div class="bars">
+      <div><div class="bar-label"><span>SLA atual</span><strong>92%</strong></div><div class="bar-track"><div class="bar-fill" style="width:92%"></div></div></div>
+      <div><div class="bar-label"><span>Meta fictícia</span><strong>95%</strong></div><div class="bar-track"><div class="bar-fill alt" style="width:95%"></div></div></div>
+    </div><p class="note" style="margin-top:15px">Cenário fictício: indicador ilustrativo 3 p.p. abaixo da meta demonstrativa.</p></div>
+  </section>
+  <section class="section"><h2>Comparativo de exemplo</h2><div class="table-wrap"><table><thead><tr><th>Operadora</th><th>Chamados</th><th>SLA</th><th>Reincidências</th><th>Fonte</th></tr></thead><tbody><tr><td>Claro</td><td>52</td><td>92%</td><td>3</td><td>Demo</td></tr><tr><td>Vivo</td><td>44</td><td>95%</td><td>1</td><td>Demo</td></tr></tbody></table></div></section>
+  <section class="section columns"><div><h2>Plano de ação ilustrativo</h2><ol class="plan"><li>Revisar links com reincidência.</li><li>Validar causa raiz com os responsáveis.</li><li>Acompanhar indicadores semanalmente.</li><li>Revisar resultado após 30 dias.</li></ol></div><div><h2>Riscos e próximos passos</h2><p class="note">Os indicadores e comparativos desta página são fictícios. Nenhuma fonte operacional foi consultada.</p></div></section>
+  <footer class="footer"><span>ARION ATACADO GEO · ARI I.A Preview</span><span>Artefato HTML demonstrativo · CMDB, OTRS e banco Arion não conectados</span></footer>
+</main>
+</body>
+</html>

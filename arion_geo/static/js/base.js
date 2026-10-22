@@ -22,6 +22,13 @@
     }
     document.querySelectorAll("[data-theme-option]").forEach((option) => {
       option.classList.toggle("is-active", option.dataset.themeOption === currentTheme());
+      if (option.matches("button")) {
+        const selected = option.dataset.themeOption === currentTheme();
+        option.setAttribute("aria-pressed", String(selected));
+        option.classList.toggle("is-selected", selected);
+        const state = option.querySelector(".theme-choice-state");
+        if (state) state.textContent = selected ? "Selecionado" : "Selecionar tema";
+      }
     });
   }
 
@@ -47,7 +54,11 @@
       if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) {
         throw new Error(`Theme preference request failed (${response.status})`);
       }
-    }).catch((error) => console.warn("Não foi possível sincronizar a preferência de tema.", error));
+      window.dispatchEvent(new CustomEvent("arion:theme-saved", { detail: { theme } }));
+    }).catch((error) => {
+      window.dispatchEvent(new CustomEvent("arion:theme-save-failed", { detail: { theme } }));
+      console.warn("Theme preference could not be saved.", error);
+    });
   }
 
   syncThemeMenu();

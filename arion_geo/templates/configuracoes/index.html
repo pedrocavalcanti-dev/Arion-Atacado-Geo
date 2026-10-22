@@ -1,0 +1,27 @@
+{% extends "configuracoes/base.html" %}
+{% block title %}Configurações · Arion{% endblock %}
+{% block settings_title %}Configurações{% endblock %}
+{% block settings_description %}Gerencie sua conta, preferências e recursos administrativos disponíveis.{% endblock %}
+{% block settings_content %}
+<section class="settings-section settings-overview-section" aria-labelledby="account-shortcuts-title">
+  <h2 id="account-shortcuts-title">Conta</h2>
+  <nav class="settings-shortcuts" aria-label="Configurações da conta">
+    <a class="settings-shortcut" href="{% url 'configuracoes:account' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20v-1.5a7 7 0 0 1 14 0V20z"/></svg><span><strong>Minha conta</strong><small>Dados pessoais e informações da sua conta.</small></span><i aria-hidden="true">→</i></a>
+    <a class="settings-shortcut" href="{% url 'configuracoes:security' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg><span><strong>Segurança</strong><small>Senha e recursos de proteção da conta.</small></span><i aria-hidden="true">→</i></a>
+    <a class="settings-shortcut" href="{% url 'configuracoes:appearance' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z"/></svg><span><strong>Aparência</strong><small>Tema e preferências visuais.</small></span><i aria-hidden="true">→</i></a>
+  </nav>
+</section>
+{% if perms.configuracoes.manage_users or perms.configuracoes.manage_groups or perms.configuracoes.manage_data_scopes or perms.configuracoes.view_audit_log or perms.configuracoes.view_integrations or perms.configuracoes.view_system_info %}
+<section class="settings-section settings-overview-section" aria-labelledby="admin-shortcuts-title">
+  <h2 id="admin-shortcuts-title">Administração</h2>
+  <nav class="settings-shortcuts" aria-label="Configurações administrativas">
+    {% if perms.configuracoes.manage_users %}<a class="settings-shortcut" href="{% url 'configuracoes:users' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20v-1.2a6 6 0 0 1 12 0V20m3-9a3 3 0 1 0 0-6m1 9a5 5 0 0 1 2 4v1"/></svg><span><strong>Usuários</strong><small>Gerencie contas, perfis e acessos.</small></span><i aria-hidden="true">→</i></a>{% endif %}
+    {% if perms.configuracoes.manage_groups %}<a class="settings-shortcut" href="{% url 'configuracoes:groups' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/></svg><span><strong>Grupos e acessos</strong><small>Configure perfis e permissões.</small></span><i aria-hidden="true">→</i></a>{% endif %}
+    {% if perms.configuracoes.manage_data_scopes %}<a class="settings-shortcut" href="{% url 'configuracoes:scopes' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M7 12h10m-7 7h4"/><circle cx="8" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg><span><strong>Escopos de dados</strong><small>Controle quais dados cada usuário pode visualizar.</small></span><i aria-hidden="true">→</i></a>{% endif %}
+    {% if perms.configuracoes.view_audit_log %}<a class="settings-shortcut" href="{% url 'configuracoes:audit' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M10.5 7v4l2.5 1.5"/></svg><span><strong>Auditoria</strong><small>Consulte ações administrativas e eventos relevantes.</small></span><i aria-hidden="true">→</i></a>{% endif %}
+    {% if perms.configuracoes.view_integrations %}<a class="settings-shortcut" href="{% url 'configuracoes:integrations' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V4m6 16v-3M7 9h10v6H7zM4 12H2m20 0h-2"/></svg><span><strong>Integrações</strong><small>Visualize as fontes e integrações utilizadas pelo Arion.</small></span><i aria-hidden="true">→</i></a>{% endif %}
+    {% if perms.configuracoes.view_system_info %}<a class="settings-shortcut" href="{% url 'configuracoes:system' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h5m-5 4h8"/></svg><span><strong>Sistema</strong><small>Consulte informações gerais da aplicação.</small></span><i aria-hidden="true">→</i></a>{% endif %}
+  </nav>
+</section>
+{% endif %}
+{% endblock %}

@@ -33,9 +33,12 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "aplicativos.autenticacao.apps.AutenticacaoConfig",
     "aplicativos.configuracoes.apps.ConfiguracoesConfig",
+    "aplicativos.auditoria.apps.AuditoriaConfig",
+    "aplicativos.ari.apps.AriConfig",
     "aplicativos.painel.apps.PainelConfig",
     "aplicativos.mapa.apps.MapaConfig",
     "aplicativos.rankings.apps.RankingsConfig",
+    "aplicativos.base_links.apps.BaseLinksConfig",
 ]
 
 MIDDLEWARE = [
@@ -80,8 +83,12 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "autenticacao:login"
-LOGIN_REDIRECT_URL = "mapa:index"
+LOGIN_REDIRECT_URL = "painel:index"
 LOGOUT_REDIRECT_URL = "autenticacao:login"
 
 MAPBOX_PUBLIC_TOKEN = os.getenv("MAPBOX_PUBLIC_TOKEN", "").strip()
+
+# ARI uploads are private and are only served through owner-checked views.
+MEDIA_ROOT = BASE_DIR / "private_media"
+ARI_MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 

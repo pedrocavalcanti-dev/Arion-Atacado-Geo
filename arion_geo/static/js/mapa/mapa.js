@@ -53,7 +53,7 @@
   };
 
   const operatorNames = { claro: "Claro", vivo: "Vivo", algar: "Algar" };
-  const modeNames = { base: "links", calls: "chamados", repeat: "reincidentes", motives: "ocorrências" };
+  const modeNames = { base: "links", projects: "links do projeto", calls: "chamados", repeat: "reincidentes", motives: "ocorrências" };
   const motiveNames = { falha_massiva: "Falha massiva", rompimento_fibra: "Rompimento de fibra", troca_drop: "Troca de drop", equipamento: "Equipamento", cabo_desconectado: "Cabo desconectado", falha_eletrica: "Falha elétrica", sem_intervencao: "Sem interven\u00e7\u00e3o", outros: "Outros" };
   const stateLabels = {
     AC: [-70.4, -9.3], AL: [-36.2, -9.6], AM: [-63.8, -4.2], AP: [-51.8, 1.1],
@@ -119,9 +119,10 @@
   }
 
   function dominantOperator(data) {
-    return ["claro", "vivo", "algar"].reduce((current, operator) => (
+    const dominant = ["claro", "vivo", "algar"].reduce((current, operator) => (
       data[operator] > data[current] ? operator : current
     ), "claro");
+    return data[dominant] > 0 ? dominant : "other";
   }
 
   function saveMapState() {
@@ -139,12 +140,12 @@
       if (!raw) return;
       const saved = JSON.parse(raw);
       if (!saved || saved.version !== 1 || typeof saved !== "object") throw new Error("Unsupported map state");
-      const operators = ["all", ...Object.keys(demoStore.projects)];
+      const operators = ["all", "claro", "vivo", "algar"];
       const periods = demoStore.history.periods.map(item => item.id);
-      const metrics = ["base", "calls", "repeat", "motives"];
+      const metrics = ["base", "projects", "calls", "repeat", "motives"];
       const reasons = demoStore.reasons.map(item => item.id);
       state.operator = operators.includes(saved.operator) ? saved.operator : "all";
-      state.project = state.operator !== "all" && (demoStore.projects[state.operator] || []).some(item => item[0] === saved.project) ? saved.project : "all";
+      state.project = (demoStore.projects[state.operator] || demoStore.projects.all || []).some(item => item[0] === saved.project) ? saved.project : "all";
       state.period = periods.includes(saved.period) ? saved.period : periods[periods.length - 1];
       state.metric = metrics.includes(saved.metric) ? saved.metric : "base";
       state.reason = ["all", ...reasons].includes(saved.reason) ? saved.reason : "all";
@@ -171,6 +172,8 @@
     const period = document.querySelector("[data-period-filter]");
     const project = document.querySelector("[data-project-filter]");
     const motive = document.querySelector("[data-motive-filter]");
+    period.disabled = ["base", "projects"].includes(state.metric);
+    [...period.options].forEach(option => { option.textContent = period.disabled && option.value === state.period ? "Atual" : (option.dataset.label || option.textContent); });
     period.value = state.period;
     project.value = state.project;
     motive.value = state.reason;
@@ -184,7 +187,7 @@
 
   function populatePeriodAndProject() {
     const periodSelect = document.querySelector("[data-period-filter]");
-    periodSelect.innerHTML = demoStore.history.periods.map(p => `<option value="${p.id}">${p.label}</option>`).join("");
+    periodSelect.innerHTML = demoStore.history.periods.map(p => `<option value="${p.id}" data-label="${p.label}">${p.label}</option>`).join("");
     updateProjectOptions();
     periodSelect.value = state.period;
     syncControlsFromState();
@@ -192,8 +195,8 @@
 
   function updateProjectOptions() {
     const select = document.querySelector("[data-project-filter]");
-    const projects = state.operator === "all" ? [] : (demoStore.projects[state.operator] || []);
-    select.innerHTML = '<option value="all">Todos</option>' + projects.map(([id,label]) => `<option value="${id}">${label}</option>`).join("");
+    const projects = state.operator === "all" ? (demoStore.projects.all || []) : (demoStore.projects[state.operator] || []);
+    select.innerHTML = '<option value="all">Todos</option>' + projects.map(([id,label]) => `<option value="${escapeTooltip(id)}">${escapeTooltip(label)}</option>`).join("");
     if (!projects.some(item => item[0] === state.project)) state.project = "all";
     select.value = state.project;
   }
@@ -210,6 +213,7 @@
   }
 
   function metricValue(data) {
+    if (state.metric === "projects") return data.total_links;
     if (state.metric === "calls") return data.chamados;
     if (state.metric === "repeat") return data.reincidentes;
     if (state.metric === "motives") return state.reason === "all"
@@ -237,7 +241,7 @@
         const metrics = demoData[code];
         const dominant = dominantOperator(metrics);
         const activeCount = state.operator === "all" ? metrics.total_links : metrics[state.operator];
-        const intensity = state.metric === "base"
+        const intensity = ["base", "projects"].includes(state.metric)
           ? state.operator === "all" ? 1 : Math.sqrt(activeCount / totals[state.operator])
           : Math.sqrt(metricValue(metrics) / metricMaximum());
         return {
@@ -259,7 +263,7 @@
 
   function colorExpression(palette = currentThemePalette()) {
     const ops = palette.operators;
-    if (state.metric !== "base") {
+    if (!["base", "projects"].includes(state.metric)) {
       const scale = palette.metrics[state.metric];
       return ["interpolate", ["linear"], ["get", "intensidade"], 0, scale.low, 0.45, scale.mid, 1, scale.high];
     }
@@ -334,7 +338,7 @@
   function updateLegend() {
     const legend = document.querySelector("[data-legend]");
     if (!legend) return;
-    if (state.metric !== "base") {
+    if (!["base", "projects"].includes(state.metric)) {
       legend.classList.add("geo-legend--scale");
       legend.innerHTML = `<span class="legend-scale-label">Menos ${modeNames[state.metric]}</span><span class="legend-scale legend-scale--${state.metric}"></span><span class="legend-scale-label">Mais</span>`;
       return;
@@ -353,6 +357,7 @@
   }
 
   function selectedMetricLabel() {
+    if (state.metric === "projects") return "Links do projeto";
     if (state.metric === "calls") return "Chamados";
     if (state.metric === "repeat") return "Reincidentes";
     if (state.metric === "motives") return state.reason === "all" ? "Ocorrencias" : motiveNames[state.reason];
@@ -374,7 +379,11 @@
       links: totalsByField("total_links"),
       calls: totalsByField("chamados"),
       repeat: totalsByField("reincidentes"),
-      states: states.features.length,
+      states: stateRows.filter(row => row.value || demoData[row.code].total_links).length,
+      operators: ["claro", "vivo", "algar"].filter(key => totalsByField(key) > 0).length,
+      projects: new Set(demoStore.history.records.filter(row => row.period === state.period && (state.operator === "all" || row.operator === state.operator) && (state.project === "all" || row.project === state.project) && row.project !== "unclassified").map(row => row.project)).size,
+      providers: new Set(Object.values(demoData).flatMap(row => Object.keys(row.providers || {}))).size,
+      unclassified: totalsByField("unclassified"),
     };
     view.setAttribute("aria-labelledby", `national-tab-${state.nationalPanelTab}`);
     document.querySelectorAll("[data-national-tab]").forEach((tab) => {
@@ -383,24 +392,24 @@
     });
 
     if (state.nationalPanelTab === "summary") {
-      view.innerHTML = `<div class="national-kpis"><div><strong>${numberFormat.format(totals.links)}</strong><span>Links</span></div><div><strong>${numberFormat.format(totals.calls)}</strong><span>Chamados</span></div><div><strong>${numberFormat.format(totals.repeat)}</strong><span>Reincidentes</span></div><div><strong>${totals.states}</strong><span>UFs</span></div></div><div class="national-leaders"><div><span>Maior base</span><strong>${byLinks[0].name}</strong><small>${numberFormat.format(demoData[byLinks[0].code].total_links)} links</small></div><div><span>Mais chamados</span><strong>${byCalls[0].name}</strong><small>${numberFormat.format(demoData[byCalls[0].code].chamados)} chamados</small></div></div>`;
+      view.innerHTML = `<div class="national-kpis"><div><strong>${numberFormat.format(totals.links)}</strong><span>Links · CMDB real</span></div><div><strong>${totals.states}</strong><span>UFs atendidas</span></div><div><strong>${totals.operators}</strong><span>Operadoras</span></div><div><strong>${totals.projects}</strong><span>Projetos</span></div><div><strong>${numberFormat.format(totals.providers)}</strong><span>Provedores</span></div><div><strong>${numberFormat.format(totals.unclassified)}</strong><span>Não classificados</span></div><div><strong>${numberFormat.format(totals.calls)}</strong><span>Chamados · demo</span></div><div><strong>${numberFormat.format(totals.repeat)}</strong><span>Reincidências · demo</span></div></div><div class="national-leaders"><div><span>Maior base</span><strong>${byLinks[0]?.name || "—"}</strong><small>${numberFormat.format(demoData[byLinks[0]?.code]?.total_links || 0)} links reais</small></div><div><span>Mais ${selectedMetricLabel().toLowerCase()}</span><strong>${[...stateRows].sort((a,b)=>b.value-a.value)[0]?.name || "—"}</strong><small>${numberFormat.format([...stateRows].sort((a,b)=>b.value-a.value)[0]?.value || 0)} · ${["base", "projects"].includes(state.metric) ? "CMDB real" : "demo"}</small></div></div>`;
       return;
     }
 
     if (state.nationalPanelTab === "ranking") {
       const label = selectedMetricLabel();
       const rows = [...stateRows].sort((a, b) => b.value - a.value).slice(0, 5);
-      view.innerHTML = `<div class="national-view-heading"><span>Top 5 por ${label.toLowerCase()}</span><span class="demo-inline">Demo</span></div><ol class="national-ranking">${rows.map((row, index) => `<li><span class="national-rank-number">${String(index + 1).padStart(2, "0")}</span><img src="${stateFlags[row.code] || ""}" alt="" width="22" height="15" loading="lazy"><span class="national-rank-name">${row.name}</span><strong>${numberFormat.format(row.value)}</strong></li>`).join("")}</ol>`;
+      view.innerHTML = `<div class="national-view-heading"><span>Top 5 por ${label.toLowerCase()}</span><span class="demo-inline">${["base", "projects"].includes(state.metric) ? "CMDB real" : "Demonstração"}</span></div><ol class="national-ranking">${rows.map((row, index) => `<li><span class="national-rank-number">${String(index + 1).padStart(2, "0")}</span><img src="${stateFlags[row.code] || ""}" alt="" width="22" height="15" loading="lazy"><span class="national-rank-name">${row.name}</span><strong>${numberFormat.format(row.value)}</strong></li>`).join("")}</ol>`;
       return;
     }
 
-    const measureRecord = record => state.metric === "base" ? record.links : state.metric === "calls" ? record.tickets : state.metric === "repeat" ? record.recurrences : state.reason === "all" ? Object.values(record.reasons).reduce((sum,value)=>sum+value,0) : (record.reasons[state.reason]||0);
+    const measureRecord = record => ["base", "projects"].includes(state.metric) ? record.links : state.metric === "calls" ? record.tickets : state.metric === "repeat" ? record.recurrences : state.reason === "all" ? Object.values(record.reasons).reduce((sum,value)=>sum+value,0) : (record.reasons[state.reason]||0);
     const scopedHistory = demoStore.history.records.filter(record => record.period===state.period && (state.operator==="all" || record.operator===state.operator) && (state.project==="all" || record.project===state.project));
     const distribution = state.operator === "all"
-      ? ["claro","vivo","algar"].map(key=>({key,name:operatorNames[key],value:scopedHistory.filter(record=>record.operator===key).reduce((sum,record)=>sum+measureRecord(record),0)}))
-      : (demoStore.projects[state.operator]||[]).map(([id,name])=>({key:id,name,value:scopedHistory.filter(record=>record.project===id).reduce((sum,record)=>sum+measureRecord(record),0)}));
+      ? ["claro","vivo","algar","other"].map(key=>({key,name:key==="other"?"Outras / não classificadas":operatorNames[key],value:scopedHistory.filter(record=>record.operator===key).reduce((sum,record)=>sum+measureRecord(record),0)})).filter(item=>item.value>0)
+      : (demoStore.projects[state.operator] || demoStore.projects.all || []).map(([id,name])=>({key:id,name,value:scopedHistory.filter(record=>record.project===id).reduce((sum,record)=>sum+measureRecord(record),0)}));
     const totalDistribution = distribution.reduce((sum,item)=>sum+item.value,0);
-    view.innerHTML = `<div class="national-view-heading"><span>${state.operator === "all" ? "Distribuicao por operadora" : `Projetos ${operatorNames[state.operator]}`}</span><span class="demo-inline">${selectedMetricLabel()} ? ${periodLabel(state.period)}</span></div><div class="national-distribution">${distribution.map((item) => `<div class="national-distribution-row"><span>${state.operator === "all" ? `<i class="operator-swatch operator-swatch--${item.key}"></i>` : ""}${item.name}</span><strong>${totalDistribution ? (item.value / totalDistribution * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "0"}%</strong><small>${numberFormat.format(item.value)}</small><i class="national-distribution-track"><b class="operator-fill--${item.key}" data-value="${item.value}" data-max="${totalDistribution}"></b></i></div>`).join("")}</div>`;
+    view.innerHTML = `<div class="national-view-heading"><span>${state.operator === "all" ? "Distribuição por operadora" : `Projetos ${operatorNames[state.operator]}`}</span><span class="demo-inline">${selectedMetricLabel()} · ${["base", "projects"].includes(state.metric) ? "CMDB real · Atual" : `${periodLabel(state.period)} · Demonstração`}</span></div><div class="national-distribution">${distribution.map((item) => `<div class="national-distribution-row"><span>${state.operator === "all" && ["claro","vivo","algar"].includes(item.key) ? `<i class="operator-swatch operator-swatch--${item.key}"></i>` : ""}${item.name}</span><strong>${totalDistribution ? (item.value / totalDistribution * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "0"}%</strong><small>${numberFormat.format(item.value)}</small><i class="national-distribution-track"><b class="operator-fill--${item.key}" data-value="${item.value}" data-max="${totalDistribution}"></b></i></div>`).join("")}</div>`;
     view.querySelectorAll("[data-value][data-max]").forEach((bar) => {
       bar.style.width = `${Math.max(0, Number(bar.dataset.value) / Number(bar.dataset.max) * 100)}%`;
     });
@@ -506,7 +515,7 @@
 
   function formatProject(project) {
     if (project === "all") return "Todos os projetos";
-    return (demoStore.projects[state.operator] || []).find(item => item[0] === project)?.[1] || "Todos os projetos";
+    return (demoStore.projects[state.operator] || demoStore.projects.all || []).find(item => item[0] === project)?.[1] || "Todos os projetos";
   }
 
   function escapeTooltip(value) {
@@ -516,18 +525,23 @@
   function buildMapContext(currentState) {
     const metric = currentState.metric === "motives" && currentState.reason !== "all"
       ? (motiveNames[currentState.reason] || "Motivos")
-      : ({ base: "Base", calls: "Chamados", repeat: "Reincid\u00eancia", motives: "Motivos" }[currentState.metric] || "Base");
+      : ({ base: "Base", projects: "Projetos", calls: "Chamados", repeat: "Reincid\u00eancia", motives: "Motivos" }[currentState.metric] || "Base");
     const operator = formatOperator(currentState.operator);
     const project = currentState.project === "all" ? "Todos os projetos" : formatProject(currentState.project);
-    return `${metric} \u2022 ${operator}${currentState.project !== "all" ? ` / ${project}` : ""} \u2022 ${formatPeriod(currentState.period)}`.toLocaleUpperCase("pt-BR");
+    const real = ["base", "projects"].includes(currentState.metric);
+    const date = real ? "Atual" : formatPeriod(currentState.period);
+    return `${metric} \u2022 ${operator}${currentState.project !== "all" ? ` / ${project}` : ""} \u2022 ${date} \u2022 ${real ? "CMDB REAL" : "DEMO"}`.toLocaleUpperCase("pt-BR");
   }
 
   function sumHistory(uf, operator, project, period, field) {
-    return demoStore.history.records.reduce((sum, record) => {
-      if (record.uf !== uf || record.period !== period) return sum;
+    // CMDB base counts are a single current snapshot; avoid rescanning the
+    // month-expanded demo history for every project shown in a tooltip.
+    const records = ["base", "projects"].includes(state.metric) ? demoStore.base.records : demoStore.history.records;
+    return records.reduce((sum, record) => {
+      if (record.uf !== uf || (records === demoStore.history.records && record.period !== period)) return sum;
       if (operator !== "all" && record.operator !== operator) return sum;
       if (project !== "all" && record.project !== project) return sum;
-      return sum + (field === "reason" ? (record.reasons[state.reason] || 0) : record[field]);
+      return sum + (field === "reason" ? (record.reasons[state.reason] || 0) : (record[field] || 0));
     }, 0);
   }
 
@@ -539,7 +553,7 @@
     const heading = `<header class="tooltip-heading"><div><span>${escapeTooltip(uf)}</span><strong>${escapeTooltip(name)}</strong></div></header><div class="tooltip-context">${escapeTooltip(context)}</div>`;
     if (!data) return `<section class="state-tooltip">${heading}<p class="tooltip-empty">Sem registros neste recorte.</p></section>`;
 
-    const metricCount = currentState.metric === "base" ? data.total_links
+    const metricCount = ["base", "projects"].includes(currentState.metric) ? data.total_links
       : currentState.metric === "calls" ? data.chamados
         : currentState.metric === "repeat" ? data.reincidentes
           : currentState.reason === "all" ? Object.values(data.motivos).reduce((sum, value) => sum + value, 0)
@@ -549,16 +563,17 @@
     const line = (label, value) => `<div class="tooltip-data-line"><span>${escapeTooltip(label)}</span><b>${escapeTooltip(value)}</b></div>`;
     let details = "";
 
-    if (currentState.metric === "base") {
+    if (["base", "projects"].includes(currentState.metric)) {
       const total = currentState.operator === "all" ? data.total_links : data[currentState.operator];
       details += main(total, "links");
       if (currentState.operator === "all") {
-        const dominant = dominantOperator(data);
-        details += `<div class="tooltip-operators">${["claro", "vivo", "algar"].map(key => `<div><i class="operator-swatch operator-swatch--${key}"></i>${operatorNames[key]}<strong>${formatNumber(data[key])}</strong></div>`).join("")}</div>`;
-        details += line("Maior presen\u00e7a", operatorNames[dominant]);
+        const operatorTotals = data.allOperators || data;
+        const dominant = dominantOperator(operatorTotals);
+        details += `<div class="tooltip-operators">${["claro", "vivo", "algar"].map(key => `<div><i class="operator-swatch operator-swatch--${key}"></i>${operatorNames[key]}<strong>${formatNumber(operatorTotals[key] || 0)}</strong></div>`).join("")}</div>`;
+        details += line("Operadora predominante", operatorNames[dominant] || "Não classificada");
       } else {
         const selectedProject = currentState.project;
-        const candidates = (demoStore.projects[currentState.operator] || []).map(([id, label]) => ({
+        const candidates = (demoStore.projects[currentState.operator] || demoStore.projects.all || []).map(([id, label]) => ({
           id, label, links: sumHistory(uf, currentState.operator, id, currentState.period, "links"),
         })).sort((left, right) => right.links - left.links);
         const denominator = sumHistory(uf, "all", "all", currentState.period, "links");
@@ -567,6 +582,7 @@
         const share = denominator ? total / denominator * 100 : 0;
         details += line("Participa\u00e7\u00e3o na base da UF", formatPercent(share));
       }
+      details += line("Fonte", "CMDB real");
     } else if (currentState.metric === "calls") {
       details += main(data.chamados, "chamados");
       details += line("Links", formatNumber(data.total_links));
@@ -709,8 +725,8 @@
   function periodLabel(period) { return demoStore.history.periods.find(item => item.id === period)?.label || period; }
   function filteredLabel() {
     const op = state.operator === "all" ? "Todas as operadoras" : operatorNames[state.operator];
-    const project = state.project === "all" ? "Todos os projetos" : (demoStore.projects[state.operator] || []).find(item => item[0] === state.project)?.[1] || state.project;
-    return `${op} / ${project} \u2022 ${periodLabel(state.period)} \u2022 ${modeNames[state.metric]}`;
+    const project = state.project === "all" ? "Todos os projetos" : (demoStore.projects[state.operator] || demoStore.projects.all || []).find(item => item[0] === state.project)?.[1] || state.project;
+    return `${op} / ${project} \u2022 ${["base", "projects"].includes(state.metric) ? "Atual · CMDB real" : `${periodLabel(state.period)} · demonstração`} \u2022 ${modeNames[state.metric]}`;
   }
 
   function restoreSelectedStateAfterMapLoad() {
@@ -731,7 +747,8 @@
     const feature = getStateFeature(code);
     const data = demoData[code];
     if (!feature || !data) return;
-    const dominant = dominantOperator(data);
+    const operatorTotals = data.allOperators || data;
+    const dominant = dominantOperator(operatorTotals);
     const stateName = feature.properties.nome;
     panel.querySelector("[data-panel-code]").textContent = code;
     panel.querySelector("[data-panel-name]").textContent = stateName;
@@ -740,16 +757,23 @@
       flag.src = stateFlags[code];
       flag.alt = `Bandeira de ${stateName}`;
     }
-    panel.querySelector("[data-panel-total]").textContent = numberFormat.format(data.total_links);
-    panel.querySelector("[data-panel-scope]").textContent = `links demonstrativos \u2022 ${periodLabel(state.period)}`;
+    panel.querySelector("[data-panel-total]").textContent = numberFormat.format(metricValue(data));
+    const panelNote = panel.querySelector("[data-panel-note]");
+    if (panelNote) panelNote.textContent = ["base", "projects"].includes(state.metric)
+      ? "Links, projetos e provedores vêm da CMDB real. Chamados, reincidências e motivos são demonstrativos."
+      : "Links vêm da CMDB real. Chamados, reincidências e motivos são demonstrativos para validação da experiência.";
+    panel.querySelector("[data-panel-scope]").textContent = ["base", "projects"].includes(state.metric)
+      ? `${state.metric === "projects" ? "Projeto / cliente" : "Links"} CMDB real \u2022 Atual`
+      : `${selectedMetricLabel()} demonstrativos \u2022 ${periodLabel(state.period)}`;
     panel.querySelector("[data-panel-context]").textContent = filteredLabel();
     panel.querySelector("[data-panel-total-small]").textContent = numberFormat.format(data.total_links);
-    panel.querySelector("[data-panel-claro]").textContent = numberFormat.format(data.claro);
-    panel.querySelector("[data-panel-vivo]").textContent = numberFormat.format(data.vivo);
-    panel.querySelector("[data-panel-algar]").textContent = numberFormat.format(data.algar);
+    panel.querySelector("[data-panel-claro]").textContent = numberFormat.format(operatorTotals.claro || 0);
+    panel.querySelector("[data-panel-vivo]").textContent = numberFormat.format(operatorTotals.vivo || 0);
+    panel.querySelector("[data-panel-algar]").textContent = numberFormat.format(operatorTotals.algar || 0);
+    const totalOperators = ["claro", "vivo", "algar"].reduce((sum, key) => sum + (operatorTotals[key] || 0), 0);
     ["claro", "vivo", "algar"].forEach((key) => {
       const meter = panel.querySelector(`[data-panel-meter="${key}"]`);
-      if (meter) meter.style.width = `${data.total_links ? Math.round((data[key] / data.total_links) * 100) : 0}%`;
+      if (meter) meter.style.width = `${totalOperators ? Math.round((operatorTotals[key] / totalOperators) * 100) : 0}%`;
     });
     panel.querySelector("[data-panel-calls]").textContent = numberFormat.format(data.chamados);
     panel.querySelector("[data-panel-repeat]").textContent = numberFormat.format(data.reincidentes);
@@ -759,12 +783,22 @@
     panel.querySelector("[data-panel-repeat-rate]").textContent = `${repeatRate.toLocaleString("pt-BR", {minimumFractionDigits:1,maximumFractionDigits:1})}%`;
     const reasons = Object.entries(data.motivos).sort((a,b)=>b[1]-a[1]).slice(0,5);
     panel.querySelector("[data-panel-reasons]").innerHTML = reasons.length ? reasons.map(([key,value])=>`<div class="panel-reason-row"><span>${motiveNames[key] || "Sem interven\u00e7\u00e3o"}</span><b>${numberFormat.format(value)}</b></div>`).join("") : '<p class="panel-empty">Sem registros para este recorte.</p>';
+    const projectList = panel.querySelector("[data-panel-projects]");
+    if (projectList) {
+      const topProjects = Object.entries(data.projects || {}).sort((a,b)=>b[1]-a[1]).slice(0,5);
+      projectList.innerHTML = topProjects.length ? topProjects.map(([name,count])=>`<div class="panel-reason-row"><span>${escapeTooltip(name)}</span><b>${numberFormat.format(count)} links</b></div>`).join("") : '<p class="panel-empty">Sem projetos classificados nesta UF.</p>';
+    }
+    const providerList = panel.querySelector("[data-panel-providers]");
+    if (providerList) {
+      const topProviders = Object.entries(data.providers || {}).sort((a,b)=>b[1]-a[1]).slice(0,5);
+      providerList.innerHTML = topProviders.length ? topProviders.map(([name,count])=>`<div class="panel-reason-row"><span>${escapeTooltip(name)}</span><b>${numberFormat.format(count)} links</b></div>`).join("") : '<p class="panel-empty">Sem provedores classificados nesta UF.</p>';
+    }
     const periods=demoStore.history.periods; const periodIndex=periods.findIndex(item=>item.id===state.period); const previous=periods[periodIndex-1];
     const historyEl=panel.querySelector("[data-panel-history]");
     if(previous){const prior=window.ArionGeoData.aggregate(demoStore,{...state,period:previous.id})[code] || {chamados:0,reincidentes:0}; const delta=prior.chamados ? (data.chamados-prior.chamados)/prior.chamados*100 : null; historyEl.innerHTML=`<div class="panel-history-line"><span>${previous.label}</span><b>${numberFormat.format(prior.chamados)} chamados</b></div><div class="panel-history-line"><span>${periodLabel(state.period)}</span><b>${numberFormat.format(data.chamados)} chamados</b></div><p class="panel-delta">${delta===null?"Sem base comparativa":`${delta>=0?"+":""}${delta.toLocaleString("pt-BR",{maximumFractionDigits:1})}% vs. m\u00eas anterior`}</p>`;} else {historyEl.innerHTML='<p class="panel-empty">Sem m\u00eas anterior para compara\u00e7\u00e3o.</p>'; }
     const dominantElement = panel.querySelector("[data-panel-dominant]");
-    dominantElement.lastChild.textContent = operatorNames[dominant];
-    dominantElement.querySelector("i").className = `operator-swatch operator-swatch--${dominant}`;
+    dominantElement.lastChild.textContent = operatorNames[dominant] || "Não classificada";
+    dominantElement.querySelector("i").className = operatorNames[dominant] ? `operator-swatch operator-swatch--${dominant}` : "";
     document.querySelector("[data-selected-name]").textContent = stateName;
   }
 
@@ -802,7 +836,7 @@
     updateStatePanel(state.selectedUF);
     openStatePanel();
     fitState(feature);
-    root.querySelector("[data-map-announcement]").textContent = `${feature.properties.nome}, ${demoData[state.selectedUF].total_links} links demonstrativos.`;
+    root.querySelector("[data-map-announcement]").textContent = `${feature.properties.nome}, ${formatNumber(demoData[state.selectedUF].total_links)} links reais do CMDB.`;
   }
 
   function clearStateSelection() {
@@ -823,7 +857,7 @@
         if (!response.ok) throw new Error(`GeoJSON HTTP ${response.status}`);
         return response.json();
       }),
-      window.ArionGeoData.load({ base: root.dataset.baseUrl, history: root.dataset.historyUrl, projects: root.dataset.projectsUrl, reasons: root.dataset.reasonsUrl }),
+      window.ArionGeoData.load({ api: root.dataset.apiUrl, base: root.dataset.baseUrl, history: root.dataset.historyUrl, projects: root.dataset.projectsUrl, reasons: root.dataset.reasonsUrl }),
     ]).then(([geojson, store]) => {
       if (!geojson || geojson.type !== "FeatureCollection" || geojson.features.length !== 27) {
         throw new Error("O GeoJSON deve conter uma FeatureCollection com 27 UFs.");
@@ -969,6 +1003,9 @@
         button.setAttribute("aria-pressed", String(active));
       });
       motiveWrap.hidden = mode !== "motives";
+      const periodSelect = document.querySelector("[data-period-filter]");
+      periodSelect.disabled = ["base", "projects"].includes(mode);
+      [...periodSelect.options].forEach(option => { option.textContent = periodSelect.disabled && option.value === state.period ? "Atual" : (option.dataset.label || option.textContent); });
       refreshGeoView();
     };
     modeButtons.forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));

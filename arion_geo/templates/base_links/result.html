@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% load static humanize %}
+{% block title %}Importação concluída · Arion Atacado Geo{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/base-links.css' %}">{% endblock %}
+{% block content %}
+<section class="links-page import-page" aria-labelledby="result-title">
+  <p class="section-kicker">NOC ATACADO <span>/</span> SINCRONIZAÇÃO</p><div class="result-card"><span class="result-check" aria-hidden="true">✓</span><h1 id="result-title">Importação concluída.</h1><p>{{ batch.filename }} · {{ batch.total_rows|intcomma }} registros processados.</p>
+    <div class="result-grid"><article><span>Novos</span><strong>{{ batch.new_count|intcomma }}</strong></article><article><span>Atualizados</span><strong>{{ batch.updated_count|intcomma }}</strong></article><article><span>Sem alteração</span><strong>{{ batch.unchanged_count|intcomma }}</strong></article><article><span>Não classificados</span><strong>{{ batch.unclassified_count|intcomma }}</strong></article><article><span>Erros</span><strong>{{ batch.error_count|intcomma }}</strong></article></div>
+    <div class="preview-statuses"><span>Operacionais <b>{{ batch.operational_count|intcomma }}</b></span><span>Cancelados <b>{{ batch.canceled_count|intcomma }}</b></span><span>Em manutenção <b>{{ batch.maintenance_count|intcomma }}</b></span><span>Incidentes <b>{{ batch.incident_count|intcomma }}</b></span></div>
+    <p class="security-note">Campos sensíveis PPOE ignorados por política de segurança.</p><a class="links-primary-button" href="{% url 'base_links:index' %}">Abrir Base <span aria-hidden="true">→</span></a>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "configuracoes/base.html" %}
+{% block title %}Auditoria · Administração · Arion{% endblock %}
+{% block settings_title %}Auditoria{% endblock %}
+{% block settings_description %}Histórico de ações administrativas e eventos relevantes do sistema.{% endblock %}
+{% block settings_content %}
+<section class="settings-section">
+  <form method="get" class="admin-toolbar audit-filters" aria-label="Filtros de auditoria">
+    <label class="visually-hidden" for="audit-search">Buscar no histórico</label>
+    <input id="audit-search" type="search" name="q" value="{{ filters.q }}" placeholder="Usuário, descrição ou objeto">
+    <label class="visually-hidden" for="audit-from">Data inicial</label><input id="audit-from" type="date" name="from" value="{{ filters.from }}" aria-label="Data inicial">
+    <label class="visually-hidden" for="audit-to">Data final</label><input id="audit-to" type="date" name="to" value="{{ filters.to }}" aria-label="Data final">
+    <select name="user" aria-label="Usuário"><option value="">Todos os usuários</option>{% for item in filters.users %}<option value="{{ item.pk }}"{% if filters.user == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.get_full_name|default:item.username }} · {{ item.username }}</option>{% endfor %}</select>
+    <select name="category" aria-label="Categoria"><option value="">Todas as categorias</option>{% for item in filters.categories %}<option value="{{ item }}"{% if filters.category == item %} selected{% endif %}>{{ item }}</option>{% endfor %}</select>
+    <select name="action" aria-label="Ação"><option value="">Todas as ações</option>{% for item in filters.actions %}<option value="{{ item }}"{% if filters.action == item %} selected{% endif %}>{{ item }}</option>{% endfor %}</select>
+    <button class="settings-button settings-button--secondary" type="submit">Filtrar</button>
+  </form>
+  <div class="admin-table-wrap">
+    <table class="admin-table audit-table"><thead><tr><th>Data/Hora</th><th>Usuário</th><th>Categoria</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>
+      {% for event in page_obj %}<tr><td>{{ event.timestamp|date:"d/m/Y H:i:s" }}</td><td>{% if event.user %}<strong>{{ event.user.get_full_name|default:event.user.username }}</strong><small>{{ event.user.username }}</small>{% else %}<span class="table-muted">Sistema / removido</span>{% endif %}</td><td>{{ event.category }}</td><td><span class="audit-action">{{ event.action }}</span></td><td><a class="settings-text-link" href="{% url 'configuracoes:audit-detail' event.pk %}">{{ event.description|default:event.object_type|default:"Ver evento" }}</a>{% if event.object_id %}<small class="table-subtext">{{ event.object_type }} · {{ event.object_id }}</small>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="5" class="table-empty">Nenhum evento corresponde aos filtros.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% if page_obj.paginator.num_pages > 1 %}<nav class="admin-pagination" aria-label="Paginação do histórico"><span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} eventos</span><div>{% if page_obj.has_previous %}<a href="?{{ page_query }}{% if page_query %}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}{% if page_obj.has_next %}<a href="?{{ page_query }}{% if page_query %}&amp;{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}</div></nav>{% endif %}
+</section>
+{% endblock %}

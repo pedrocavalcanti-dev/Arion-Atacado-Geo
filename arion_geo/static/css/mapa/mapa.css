@@ -42,6 +42,34 @@ html[data-theme="light"] .legend-scale[data-scale="algar"] { background: linear-
 .geo-map-canvas { position: absolute; inset: 0; background: #080909; transition: background-color 180ms ease; }
 html[data-theme="light"] .geo-map-stage, html[data-theme="light"] .geo-map-canvas { background: #e9ece8; }
 
+.cmdb-map-toolbar { flex-basis: 76px; }
+.cmdb-map-toolbar .geo-heading { display: flex; align-items: center; gap: 10px; min-width: 320px; }
+.cmdb-map-toolbar .geo-heading .section-kicker { position: absolute; top: 7px; left: 0; }
+.cmdb-map-toolbar .geo-heading h1 { margin-top: 13px; }
+.cmdb-map-controls { display: flex; flex-wrap: wrap; align-items: end; justify-content: flex-end; gap: 10px; }
+.cmdb-map-controls label { display: grid; gap: 4px; color: var(--text-muted); font-size: 8px; }
+.cmdb-map-controls select { min-width: 120px; height: 31px; padding: 0 9px; border: 1px solid var(--border-primary); border-radius: var(--radius-sm); background: var(--surface-primary); color: var(--text-secondary); font-size: 10px; }
+.cmdb-map-controls input { width: 132px; height: 31px; padding: 0 9px; border: 1px solid var(--border-primary); border-radius: var(--radius-sm); background: var(--surface-primary); color: var(--text-secondary); font-size: 10px; }
+.cmdb-map-total { display: grid; gap: 1px; min-width: 74px; padding: 0 3px 3px; }
+.cmdb-map-total strong { font-size: 17px; font-weight: 500; }
+.cmdb-map-total small { color: var(--text-muted); font-size: 8px; }
+.cmdb-map-notice { z-index: 1; flex: 0 0 auto; padding: 8px clamp(20px,3vw,48px); border-bottom: 1px solid var(--border-primary); background: var(--surface-primary); color: var(--text-muted); font-size: 9px; }
+.cmdb-map-summary { top: 18px; right: 18px; bottom: auto; max-height: min(62vh, 560px); }
+.cmdb-state-list { display: grid; gap: 4px; max-height: 460px; overflow: auto; padding: 12px 14px; }
+.cmdb-state-rank { display: grid; grid-template-columns: 19px 1fr 23px 48px; align-items: center; gap: 7px; padding: 5px 0; color: var(--text-secondary); font-size: 9px; }
+.cmdb-state-rank > span, .cmdb-state-rank > small { color: var(--text-muted); font-size: 8px; }
+.cmdb-state-rank > b { overflow: hidden; font-weight: 500; text-overflow: ellipsis; }
+.cmdb-state-rank > strong { color: var(--text-primary); font-size: 9px; font-weight: 500; text-align: right; }
+.cmdb-state-rank > i { grid-column: 2 / -1; height: 3px; overflow: hidden; border-radius: 5px; background: var(--track-bg); }
+.cmdb-state-rank > i em { display: block; height: 100%; border-radius: inherit; background: var(--accent-green); }
+.cmdb-state-panel .panel-title { margin: 20px 0; }
+.cmdb-state-panel[hidden] { display: none; }
+.cmdb-state-panel .operator-row { display: grid; grid-template-columns: 1fr auto; gap: 7px; margin: 12px 0; color: var(--text-secondary); font-size: 10px; }
+.cmdb-state-panel .operator-row strong { color: var(--text-primary); font-weight: 500; }
+.cmdb-state-panel .operator-meter { grid-column: 1 / -1; height: 4px; border-radius: 5px; background: var(--track-bg); }
+.cmdb-state-panel .operator-meter b { display: block; height: 100%; border-radius: inherit; background: var(--accent-green); }
+@media (max-width: 760px) { .cmdb-map-toolbar { align-items: flex-start; flex-basis: auto; flex-direction: column; gap: 9px; padding-top: 12px; padding-bottom: 10px; }.cmdb-map-toolbar .geo-heading { min-height: 44px; }.cmdb-map-controls { width: 100%; flex-wrap: wrap; }.cmdb-map-controls select { min-width: 120px; }.cmdb-map-summary { right: 8px; bottom: 8px; left: 8px; top: auto; width: auto; max-height: 33vh; }.cmdb-state-list { grid-template-columns: 1fr 1fr; max-height: 23vh; }.cmdb-state-panel { top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-height: 62vh; } }
+
 .geo-map-canvas .mapboxgl-ctrl-top-right { top: 14px; right: 16px; transition: right 220ms var(--ease-out); }
 .geo-map-stage.has-selection .mapboxgl-ctrl-top-right { right: 372px; }
 .geo-map-canvas .mapboxgl-ctrl-group { overflow: hidden; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--popover-bg); box-shadow: 0 6px 20px rgba(0, 0, 0, .24); transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }

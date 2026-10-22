@@ -19,7 +19,7 @@ from django.urls import include, path
 from django.views.generic import RedirectView
 
 from aplicativos.autenticacao.views import home
-from aplicativos.painel.views import dashboard
+from aplicativos.painel.views import cockpit, dashboard
 
 urlpatterns = [
     path('favicon.ico', RedirectView.as_view(url='/static/favicon/arion.svg', permanent=True), name='favicon'),
@@ -28,8 +28,13 @@ urlpatterns = [
     path('', include('aplicativos.autenticacao.urls')),
     path('mapa/', include('aplicativos.mapa.urls')),
     path('rankings/', include('aplicativos.rankings.urls')),
+    path('base/', include('aplicativos.base_links.urls')),
     path('dashboard/', dashboard, name='dashboard'),
-    path('api/preferences/', include('aplicativos.configuracoes.urls')),
+    path('cockpit/', cockpit, name='cockpit'),
+    path('api/analytics/', include('aplicativos.painel.analytics_urls')),
+    path('api/preferences/', include(('aplicativos.configuracoes.urls', 'preferences_api'), namespace='preferences_api')),
+    path('configuracoes/', include('aplicativos.configuracoes.web_urls')),
+    path('ari/', include('aplicativos.ari.urls')),
     path('painel/', include('aplicativos.painel.urls')),
 ]
 

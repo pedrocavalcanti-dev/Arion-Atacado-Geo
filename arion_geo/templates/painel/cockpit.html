@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Cockpit da operação · Arion Atacado Geo{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/painel/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/painel/cockpit.css' %}">
+{% endblock %}
+{% block content %}
+<section class="dashboard-page cockpit" data-cockpit data-query-url="{% url 'analytics-query' %}" data-saved-url="{% url 'analytics-saved-views' %}" data-export-url="{% url 'analytics-export' %}" aria-labelledby="cockpit-title">
+  {% csrf_token %}
+  <header class="cockpit-heading">
+    <div><p class="section-kicker">NOC ATACADO <span>/</span> COCKPIT</p><h1 id="cockpit-title">Investigue a operação</h1><p>Explore métricas e dimensões dentro do seu escopo de dados.</p></div>
+    <span class="source-badge"><i></i>CMDB real <span>·</span> Operação demonstrativa</span>
+  </header>
+
+  <section class="cockpit-query-panel" aria-label="Consulta">
+    <div class="cockpit-query-tools">
+      <div class="quick-queries" role="group" aria-label="Consultas rápidas">
+        <span>Consultas rápidas</span>
+        <button type="button" data-quick="finance">Pendência Financeira</button><button type="button" data-quick="recurrence">Reincidência</button><button type="button" data-quick="sla">SLA por ISP</button><button type="button" data-quick="backlog">Backlog por operadora</button><button type="button" data-quick="project">Chamados por projeto</button><button type="button" data-quick="reasons">Top motivos</button>
+      </div>
+      <div class="cockpit-actions">
+        {% if can_save_views %}<button type="button" class="cockpit-action" data-saved-toggle>Minhas consultas</button><button type="button" class="cockpit-action cockpit-action-primary" data-save-open>Salvar consulta</button>{% endif %}
+        <div class="cockpit-export-menu"><button type="button" class="cockpit-action" data-export-toggle aria-expanded="false">Exportar <span aria-hidden="true">⌄</span></button><div data-export-options hidden>
+          <button type="button" data-export="xlsx"><span class="cockpit-export-icon" aria-hidden="true">X</span><span><strong>Excel</strong><small>Planilha com resumo e dados</small></span></button>
+          <button type="button" data-export="csv"><span class="cockpit-export-icon" aria-hidden="true">≡</span><span><strong>CSV</strong><small>Dados tabulares completos</small></span></button>
+          <button type="button" data-export="pdf"><span class="cockpit-export-icon" aria-hidden="true">▤</span><span><strong>PDF</strong><small>Relatório visual para compartilhar</small></span></button>
+        </div></div>
+      </div>
+    </div>
+
+    <form class="cockpit-filters" data-filters>
+      <div class="cockpit-primary-filters">
+        <label>Métrica<select name="metric"><option value="tickets">Chamados</option><option value="links">Links</option><option value="open_tickets">Abertos</option><option value="closed_tickets">Fechados</option><option value="recurrences">Reincidência</option><option value="sla_met">SLA cumprido</option><option value="sla_missed">SLA perdido</option><option value="avg_resolution_time">Tempo médio</option><option value="backlog">Backlog</option></select></label>
+        <label>De<select name="period_from" data-period></select></label><label>Até<select name="period_to" data-period></select></label>
+        <label>Comparar com<select name="compare_to"><option value="">Sem comparação</option></select></label>
+        <label>Operadora<select name="operator" data-option="operator"><option value="all">Todas</option></select></label>
+        <label>Projeto<select name="project" data-option="project"><option value="all">Todos</option></select></label>
+      </div>
+      <button type="button" class="cockpit-more-toggle" data-more-toggle aria-expanded="false"><span class="cockpit-more-symbol" aria-hidden="true">+</span><span data-more-label>Mais filtros</span></button>
+      <div class="cockpit-more-filters" data-more-filters hidden>
+        <label>ISP<select name="provider" data-option="provider"><option value="all">Todos</option></select></label>
+        <label>UF<select name="uf" data-option="uf"><option value="all">Todas</option></select></label>
+        <label>Motivo<select name="reason"><option value="all">Todos</option></select></label>
+        <label>Status<select name="status"><option value="all">Todos</option></select></label>
+        <label>SLA<select name="sla_status"><option value="all">Todos</option><option value="Cumprido">Cumprido</option><option value="Perdido">Perdido</option></select></label>
+        <label>Agrupar por<select name="group_by"><option value="reason">Motivo</option><option value="operator">Operadora</option><option value="project">Projeto</option><option value="provider">ISP</option><option value="uf">UF</option><option value="month">Mês</option><option value="status">Status</option><option value="sla_status">SLA</option></select></label>
+      </div>
+      <div class="cockpit-filter-footer"><div class="cockpit-query-summary"><strong>Análise atual</strong><div data-query-summary aria-live="polite"></div></div><div><button type="button" class="cockpit-action" data-clear>Limpar filtros</button><button type="submit" class="cockpit-action cockpit-action-primary">Aplicar análise</button></div></div>
+    </form>
+  </section>
+
+  <div class="cockpit-active" data-active-filters aria-live="polite"></div>
+  <div class="cockpit-error" data-error role="alert" hidden><span>Não foi possível carregar esta análise.</span><button type="button" data-retry>Tentar novamente</button></div>
+  <p class="cockpit-status" data-status role="status" aria-live="polite"></p>
+  <div class="dashboard-kpis cockpit-kpis" data-kpis aria-live="polite"></div>
+
+  <div class="cockpit-results">
+    <article class="dash-panel dash-card cockpit-trend-panel"><header><div><span class="panel-kicker">EVOLUÇÃO</span><h2 data-trend-title>Chamados ao longo do período</h2><p data-trend-context></p><div class="cockpit-chart-legend" data-chart-legend></div></div><span data-comparison></span></header><div class="cockpit-chart" data-series aria-live="polite"></div></article>
+    <article class="dash-panel dash-card cockpit-breakdown-panel"><header><div><span class="panel-kicker">DISTRIBUIÇÃO</span><h2>Resultado por dimensão</h2></div><label><span>Dimensão</span><select aria-label="Dimensão da distribuição" data-breakdown><option value="reason">Motivo</option><option value="operator">Operadora</option><option value="project">Projeto</option><option value="provider">ISP</option><option value="uf">UF</option><option value="month">Mês</option><option value="status">Status</option><option value="sla_status">SLA</option></select></label></header><div class="cockpit-breakdown-columns" aria-hidden="true"><span>Dimensão</span><span>Resultado</span><span>Participação</span></div><div data-breakdown-list></div></article>
+  </div>
+
+  <section class="cockpit-detail dash-card" aria-labelledby="cockpit-detail-title"><header><div><span class="panel-kicker">DETALHAMENTO</span><h2 id="cockpit-detail-title">Composição do resultado</h2></div><span data-detail-total></span></header><div class="cockpit-table-wrap"><table><thead><tr><th data-detail-dimension>Dimensão</th><th data-detail-metric>Resultado</th><th>Participação</th></tr></thead><tbody data-detail-body></tbody></table></div></section>
+
+  {% if can_save_views %}
+  <section class="cockpit-saved" data-saved-panel hidden aria-labelledby="saved-title"><header><div><span class="panel-kicker">PESSOAL</span><h2 id="saved-title">Minhas consultas</h2></div><button type="button" data-saved-close aria-label="Fechar minhas consultas">Fechar</button></header><div data-saved-list></div></section>
+  <dialog class="cockpit-dialog" data-save-dialog><form data-save-form><h2>Salvar consulta</h2><label>Nome da consulta<input name="name" maxlength="80" required autocomplete="off" placeholder="Ex.: Claro SP — Reincidências"></label><footer><button type="button" data-dialog-close>Cancelar</button><button type="submit" class="cockpit-action-primary">Salvar consulta</button></footer></form></dialog>
+  <dialog class="cockpit-dialog" data-rename-dialog><form data-rename-form><h2>Renomear consulta</h2><label>Novo nome<input name="name" maxlength="80" required autocomplete="off"></label><input type="hidden" name="id"><footer><button type="button" data-rename-close>Cancelar</button><button type="submit" class="cockpit-action-primary">Salvar nome</button></footer></form></dialog>
+  {% endif %}
+</section>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/painel/cockpit.js' %}" defer></script>{% endblock %}

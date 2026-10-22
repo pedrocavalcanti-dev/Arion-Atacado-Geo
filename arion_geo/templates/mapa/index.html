@@ -12,19 +12,20 @@
     <div class="geo-heading">
       <span class="section-kicker">NOC ATACADO <span>/</span> GEOGRAFIA</span>
       <h1 id="geo-title">Vis&atilde;o geogr&aacute;fica</h1>
-      <span class="demo-badge"><i></i>Dados demonstrativos</span>
+      <span class="source-badge"><i></i>CMDB real · base atual</span>
       <nav class="geo-breadcrumb" aria-label="Localiza&ccedil;&atilde;o atual" hidden><button type="button" data-brazil-link>Brasil</button><span aria-hidden="true">/</span><span data-selected-name></span></nav>
     </div>
     <div class="geo-control-area">
       <div class="geo-control-row geo-control-row--primary">
         <div class="mode-control"><span class="control-caption">O QUE ESTOU ANALISANDO</span><div class="mode-filters" role="group" aria-label="Modo de visualiza&ccedil;&atilde;o">
           <button class="mode-chip is-selected" type="button" data-mode="base" aria-pressed="true">Base</button>
+          <button class="mode-chip" type="button" data-mode="projects" aria-pressed="false">Projetos</button>
           <button class="mode-chip" type="button" data-mode="calls" aria-pressed="false">Chamados</button>
           <button class="mode-chip" type="button" data-mode="repeat" aria-pressed="false">Reincid&ecirc;ncia</button>
           <button class="mode-chip" type="button" data-mode="motives" aria-pressed="false">Motivos</button>
         </div></div>
         <div class="geo-search-wrap"><label class="map-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg><input type="search" data-state-search placeholder="Buscar estado..." autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="state-search-results" aria-label="Buscar estado por nome ou sigla"><kbd>UF</kbd></label><div class="state-search-results" id="state-search-results" data-state-search-results role="listbox" hidden></div></div>
-        <label class="motives-select" data-motives-select hidden><span>Motivo</span><select data-motive-filter aria-label="Filtrar motivo demonstrativo"><option value="all">Todos</option><option value="falha_massiva">Falha massiva</option><option value="rompimento_fibra">Rompimento de fibra</option><option value="troca_drop">Troca de drop</option><option value="equipamento">Equipamento</option><option value="cabo_desconectado">Cabo desconectado</option><option value="falha_eletrica">Falha el&eacute;trica</option><option value="sem_intervencao">Sem interven&ccedil;&atilde;o</option><option value="outros">Outros</option></select></label>
+        <label class="motives-select" data-motives-select hidden><span>Motivo</span><select data-motive-filter aria-label="Filtrar motivo demonstrativo"><option value="all">Todos</option><option value="falha_massiva">Falha massiva</option><option value="rompimento_fibra">Rompimento de fibra</option><option value="troca_drop">Troca de drop</option><option value="equipamento">Equipamento</option><option value="falha_eletrica">Falha el&eacute;trica</option><option value="sem_intervencao">Sem interven&ccedil;&atilde;o</option><option value="outros">Outros</option></select></label>
       </div>
       <div class="geo-control-row geo-control-row--secondary">
         <div class="operator-control"><span class="control-caption">DE QUEM ESTOU ANALISANDO</span><div class="geo-filters" role="group" aria-label="Filtrar por operadora"><button class="filter-chip is-selected" type="button" data-operator="all" aria-pressed="true">Todas</button><button class="filter-chip" type="button" data-operator="claro" aria-pressed="false">Claro</button><button class="filter-chip" type="button" data-operator="vivo" aria-pressed="false">Vivo</button><button class="filter-chip" type="button" data-operator="algar" aria-pressed="false">Algar</button></div></div>
@@ -34,7 +35,7 @@
     </div>
   </div>
 
-  <div class="geo-map-stage" data-map-config data-token="{{ mapbox_token }}" data-geojson-url="{% static 'geo/brasil_estados.geojson' %}" data-base-url="{% static 'data/demo/base.json' %}" data-history-url="{% static 'data/demo/history.json' %}" data-projects-url="{% static 'data/demo/projects.json' %}" data-reasons-url="{% static 'data/demo/reasons.json' %}" data-map-label="Mapa geogr&aacute;fico do Brasil por unidade federativa">
+  <div class="geo-map-stage" data-map-config data-token="{{ mapbox_token }}" data-api-url="{% url 'base_links:map-aggregates' %}" data-geojson-url="{% static 'geo/brasil_estados.geojson' %}" data-base-url="{% static 'data/demo/base.json' %}" data-history-url="{% static 'data/demo/history.json' %}" data-projects-url="{% static 'data/demo/projects.json' %}" data-reasons-url="{% static 'data/demo/reasons.json' %}" data-map-label="Mapa geogr&aacute;fico do Brasil por unidade federativa">
     <div id="brazil-map" class="geo-map-canvas" role="application" aria-label="Mapa interativo do Brasil"></div>
     <div class="map-message" data-map-message role="status" aria-live="polite"><span class="map-message-spinner" data-map-spinner aria-hidden="true"></span><div><strong data-message-title>Preparando mapa</strong><span data-message-description>Carregando as unidades federativas.</span></div></div>
 
@@ -55,10 +56,12 @@
       <p class="panel-context" data-panel-context></p>
       <section class="panel-section" aria-labelledby="operators-title"><h3 id="operators-title">Operadoras</h3><div class="operator-row" data-operator-row="claro"><span><i class="operator-swatch operator-swatch--claro"></i>Claro</span><strong data-panel-claro>680</strong><i class="operator-meter"><b class="operator-meter-fill operator-meter-fill--claro" data-panel-meter="claro"></b></i></div><div class="operator-row" data-operator-row="vivo"><span><i class="operator-swatch operator-swatch--vivo"></i>Vivo</span><strong data-panel-vivo>430</strong><i class="operator-meter"><b class="operator-meter-fill operator-meter-fill--vivo" data-panel-meter="vivo"></b></i></div><div class="operator-row" data-operator-row="algar"><span><i class="operator-swatch operator-swatch--algar"></i>Algar</span><strong data-panel-algar>130</strong><i class="operator-meter"><b class="operator-meter-fill operator-meter-fill--algar" data-panel-meter="algar"></b></i></div></section>
       <div class="panel-dominant"><span>Maior presen&ccedil;a</span><strong data-panel-dominant><i></i>Claro</strong></div>
+      <section class="panel-section"><h3>Projetos principais &middot; CMDB real</h3><div data-panel-projects></div></section>
+      <section class="panel-section"><h3>Principais ISPs &middot; CMDB real</h3><div data-panel-providers></div></section>
       <section class="state-key-metrics" aria-labelledby="state-metrics-heading"><h3 id="state-metrics-heading">Principais indicadores</h3><div><span>Links</span><strong data-panel-total-small>1.240</strong></div><div><span>Chamados</span><strong data-panel-calls>87</strong></div><div><span>Reincidentes</span><strong data-panel-repeat>19</strong></div><div><span>Chamados / 100 links</span><strong data-panel-call-rate>7,0</strong></div><div><span>Taxa de reincid&ecirc;ncia</span><strong data-panel-repeat-rate>21,8%</strong></div></section>
       <section class="panel-section panel-reasons"><h3>Principais motivos</h3><div data-panel-reasons></div></section>
       <section class="panel-section panel-history"><h3>Compara&ccedil;&atilde;o mensal</h3><div data-panel-history></div></section>
-      <p class="panel-note">Indicadores demonstrativos para valida&ccedil;&atilde;o da experi&ecirc;ncia.</p>
+      <p class="panel-note" data-panel-note>Links da CMDB s&atilde;o reais. Indicadores de chamados e motivos s&atilde;o demonstrativos.</p>
     </aside>
     <div class="geo-map-error" data-map-error hidden><span class="error-mark" aria-hidden="true">!</span><div><strong>N&atilde;o foi poss&iacute;vel carregar a camada geogr&aacute;fica.</strong><span data-map-error-detail>Verifique a conex&atilde;o e tente novamente.</span></div><button type="button" data-map-retry>Tentar novamente</button></div>
     <div class="map-context" data-map-context aria-live="polite"></div>
@@ -69,6 +72,6 @@
 {% endblock %}
 {% block extra_js %}
   {% if mapbox_token %}<script src="https://api.mapbox.com/mapbox-gl-js/v3.33.0/mapbox-gl.js" defer></script>{% endif %}
-  <script src="{% static 'js/mapa/mapa-data.js' %}" defer></script>
-  <script src="{% static 'js/mapa/mapa.js' %}" defer></script>
+  <script src="{% static 'js/mapa/mapa-data.js' %}?v=20261022-unified" defer></script>
+  <script src="{% static 'js/mapa/mapa.js' %}?v=20261022-unified" defer></script>
 {% endblock %}

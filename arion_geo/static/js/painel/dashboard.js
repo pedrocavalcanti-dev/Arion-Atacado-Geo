@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   const page = document.querySelector(".dashboard-page");
   if (!page) return;
 

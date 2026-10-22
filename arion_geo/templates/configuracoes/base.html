@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load static %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/configuracoes/settings.css' %}">{% endblock %}
+{% block extra_js %}<script src="{% static 'js/configuracoes/settings.js' %}" defer></script>{% endblock %}
+{% block content %}
+<section class="settings-page" aria-labelledby="settings-title">
+  <aside class="settings-sidebar" aria-label="Navegação das configurações">
+    <p class="settings-kicker">CENTRAL DE CONFIGURAÇÕES</p>
+    <p class="settings-nav-heading">CONTA</p>
+    <nav class="settings-nav">
+      <a href="{% url 'configuracoes:index' %}"{% if active_section == 'index' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>Visão geral</a>
+      <a href="{% url 'configuracoes:account' %}"{% if active_section == 'account' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20v-1.5a7 7 0 0 1 14 0V20z"/></svg>Minha conta</a>
+      <a href="{% url 'configuracoes:security' %}"{% if active_section == 'security' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg>Segurança</a>
+      <a href="{% url 'configuracoes:appearance' %}"{% if active_section == 'appearance' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z"/></svg>Aparência</a>
+    </nav>
+    {% if perms.configuracoes.manage_users or perms.configuracoes.manage_groups or perms.configuracoes.manage_data_scopes or perms.configuracoes.view_audit_log or perms.configuracoes.view_integrations or perms.configuracoes.view_system_info %}
+    <p class="settings-nav-heading settings-nav-heading--admin">ADMINISTRAÇÃO</p>
+    <nav class="settings-nav">
+      {% if perms.configuracoes.manage_users %}<a href="{% url 'configuracoes:users' %}"{% if active_section == 'users' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20v-1.2a6 6 0 0 1 12 0V20m3-9a3 3 0 1 0 0-6m1 9a5 5 0 0 1 2 4v1"/></svg>Usuários</a>{% endif %}
+      {% if perms.configuracoes.manage_groups %}<a href="{% url 'configuracoes:groups' %}"{% if active_section == 'groups' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/></svg>Grupos e acessos</a>{% endif %}
+      {% if perms.configuracoes.manage_data_scopes %}<a href="{% url 'configuracoes:scopes' %}"{% if active_section == 'scopes' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M7 12h10m-7 7h4"/><circle cx="8" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>Escopos de dados</a>{% endif %}
+      {% if perms.configuracoes.view_audit_log %}<a href="{% url 'configuracoes:audit' %}">Auditoria</a>{% endif %}
+      {% if perms.configuracoes.view_integrations %}<a href="{% url 'configuracoes:integrations' %}"{% if active_section == 'integrations' %} class="is-active" aria-current="page"{% endif %}>Integrações</a>{% endif %}
+      {% if perms.configuracoes.view_system_info %}<a href="{% url 'configuracoes:system' %}"{% if active_section == 'system' %} class="is-active" aria-current="page"{% endif %}>Sistema</a>{% endif %}
+    </nav>
+    {% endif %}
+  </aside>
+  <div class="settings-content">
+    <a class="settings-back" href="{% url 'painel:index' %}"><span aria-hidden="true">←</span> Voltar ao início</a>
+    <header class="settings-heading"><p class="settings-kicker">{% if administration %}ADMINISTRAÇÃO{% else %}CONTA{% endif %}</p><h1 id="settings-title">{% block settings_title %}{% endblock %}</h1><p>{% block settings_description %}{% endblock %}</p></header>
+    {% block settings_content %}{% endblock %}
+  </div>
+</section>
+{% endblock %}

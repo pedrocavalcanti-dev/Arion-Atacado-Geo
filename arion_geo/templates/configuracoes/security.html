@@ -1,0 +1,21 @@
+{% extends "configuracoes/base.html" %}
+{% block title %}Segurança · Configurações · Arion{% endblock %}
+{% block settings_title %}Segurança{% endblock %}
+{% block settings_description %}Proteja o acesso à sua conta e mantenha suas credenciais atualizadas.{% endblock %}
+{% block settings_content %}
+<section class="settings-section">
+  <header class="settings-section-heading"><div><h2>Senha</h2><p>Altere sua senha de acesso. Sua sessão atual continuará ativa.</p></div></header>
+  <form method="post" class="settings-form password-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}<div class="settings-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label><div class="settings-field-control">{{ field }}{% if field.help_text %}<div class="field-help">{{ field.help_text|safe }}</div>{% endif %}{% if field.errors %}<div class="field-errors">{{ field.errors }}</div>{% endif %}</div></div>{% endfor %}
+    <div class="settings-form-actions"><button class="settings-button" type="submit">Alterar senha</button></div>
+  </form>
+</section>
+<section class="settings-section settings-row">
+  <div><h2>Autenticação em dois fatores</h2><p>Camada adicional de proteção para a conta.</p></div><span class="settings-badge">Ainda não configurado · Em breve</span>
+</section>
+<section class="settings-section settings-row">
+  <div><h2>Sessões</h2><p>Sessão atual protegida pelo login do Arion.</p></div><span class="settings-badge settings-badge--quiet">Sessão atual</span>
+</section>
+{% endblock %}

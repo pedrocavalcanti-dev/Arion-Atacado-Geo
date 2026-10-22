@@ -1,0 +1,24 @@
+{% extends "configuracoes/base.html" %}
+{% block title %}Minha conta · Configurações · Arion{% endblock %}
+{% block settings_title %}Minha conta{% endblock %}
+{% block settings_description %}Revise e atualize as informações básicas da sua conta.{% endblock %}
+{% block settings_content %}
+<section class="settings-section">
+  <header class="settings-section-heading"><div><h2>Dados pessoais</h2><p>Essas informações identificam você dentro do Arion.</p></div></header>
+  <form method="post" class="settings-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}<div class="settings-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label><div class="settings-field-control">{{ field }}{% if field.errors %}<div class="field-errors">{{ field.errors }}</div>{% endif %}</div></div>{% endfor %}
+    <div class="settings-form-actions"><button class="settings-button" type="submit">Salvar alterações</button></div>
+  </form>
+</section>
+<section class="settings-section account-details">
+  <header class="settings-section-heading"><div><h2>Detalhes da conta</h2><p>Informações de acesso e situação atual.</p></div></header>
+  <dl class="settings-details">
+    <div><dt>Nome de usuário</dt><dd>{{ request.user.get_username }}</dd></div>
+    <div><dt>Criada em</dt><dd>{{ request.user.date_joined|date:"d/m/Y" }}</dd></div>
+    <div><dt>Último acesso</dt><dd>{% if request.user.last_login %}{{ request.user.last_login|date:"d/m/Y · H:i" }}{% else %}Ainda não registrado{% endif %}</dd></div>
+    <div><dt>Status</dt><dd><span class="account-status{% if not request.user.is_active %} is-inactive{% endif %}">{% if request.user.is_active %}Ativa{% else %}Inativa{% endif %}</span></dd></div>
+  </dl>
+</section>
+{% endblock %}

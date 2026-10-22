@@ -1,0 +1,15 @@
+<section class="settings-section"><form method="post" class="settings-form admin-form" data-user-access-form>
+  {% csrf_token %}{% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+  <h2>Dados da conta</h2>
+  {% for field in form %}{% if field.name == "username" or field.name == "first_name" or field.name == "last_name" or field.name == "email" or field.name == "password1" or field.name == "password2" %}<div class="settings-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label><div class="settings-field-control">{{ field }}{% if field.errors %}<div class="field-errors">{{ field.errors }}</div>{% endif %}</div></div>{% endif %}{% endfor %}
+  {% if form.is_active %}<section class="user-form-block"><h2>Status da conta</h2><label class="account-switch-row" for="{{ form.is_active.id_for_label }}"><span><strong>Conta ativa</strong><small>Usuários inativos não conseguem acessar o sistema, mas seu histórico é preservado.</small></span>{{ form.is_active }}</label></section>{% endif %}
+  <section class="user-form-block"><h2>Perfil de acesso</h2><div class="choice-list visual-choice-list">{{ form.groups }}{% if form.groups.errors %}<div class="field-errors">{{ form.groups.errors }}</div>{% endif %}</div></section>
+  <section class="user-form-block"><h2>Escopo dos dados</h2><div class="settings-field"><label for="{{ form.scope_mode.id_for_label }}">{{ form.scope_mode.label }}</label>{{ form.scope_mode }}</div>
+    <p class="scope-all-hint" data-scope-all-hint>Acesso a todo o universo de dados permitido pelo perfil.</p>
+    <div class="scope-custom-fields" data-scope-custom>
+      <div class="settings-field settings-field--choices"><label>{{ form.allowed_operators.label }}</label><div class="choice-list">{{ form.allowed_operators }}{% if form.allowed_operators.errors %}<div class="field-errors">{{ form.allowed_operators.errors }}</div>{% endif %}</div></div>
+      <div class="settings-field settings-field--choices"><label>{{ form.allowed_projects.label }}</label><div class="project-picker"><input type="search" class="project-search" placeholder="Buscar projeto..." data-project-search aria-label="Buscar projeto"><div class="project-picker-tools"><span data-project-count>0 projetos selecionados</span><button type="button" data-project-select-visible>Selecionar visíveis</button><button type="button" data-project-clear>Limpar seleção</button></div><div class="project-picker-list" data-project-list>{{ form.allowed_projects }}</div></div>{% if form.allowed_projects.errors %}<div class="field-errors">{{ form.allowed_projects.errors }}</div>{% endif %}</div>
+    </div>
+  </section>
+  <div class="settings-form-actions"><a class="settings-button settings-button--secondary" href="{% if user_object %}{% url 'configuracoes:user-detail' user_object.pk %}{% else %}{% url 'configuracoes:users' %}{% endif %}">Cancelar</a><button class="settings-button" type="submit">Salvar usuário</button></div>
+</form></section>

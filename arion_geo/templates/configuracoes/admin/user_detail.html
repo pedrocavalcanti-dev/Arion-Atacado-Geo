@@ -1,0 +1,12 @@
+{% extends "configuracoes/base.html" %}
+{% block title %}{{ user_object.get_full_name|default:user_object.username }} · Usuários · Arion{% endblock %}
+{% block settings_title %}{{ user_object.get_full_name|default:user_object.username }}{% endblock %}
+{% block settings_description %}Detalhes da conta, grupo de acesso e dados disponíveis.{% endblock %}
+{% block settings_content %}
+<section class="settings-section"><div class="admin-detail-actions"><a class="settings-button settings-button--secondary" href="{% url 'configuracoes:users' %}">Voltar à lista</a><a class="settings-button" href="{% url 'configuracoes:user-edit' user_object.pk %}">Editar usuário</a></div><dl class="settings-details admin-user-details">
+  <div><dt>Nome</dt><dd>{{ user_object.get_full_name|default:"—" }}</dd></div><div><dt>Username</dt><dd>{{ user_object.username }}</dd></div><div><dt>E-mail</dt><dd>{{ user_object.email|default:"—" }}</dd></div><div><dt>Criada em</dt><dd>{{ user_object.date_joined|date:"d/m/Y" }}</dd></div><div><dt>Último acesso</dt><dd>{% if user_object.last_login %}{{ user_object.last_login|date:"d/m/Y H:i" }}{% else %}—{% endif %}</dd></div><div><dt>Status</dt><dd>{% if user_object.is_active %}Ativo{% else %}Inativo{% endif %}</dd></div>
+  <div><dt>Grupos / Perfis</dt><dd>{% for group in user_object.groups.all %}<span class="admin-chip">{{ group.name }}</span>{% empty %}Sem grupo{% endfor %}</dd></div>
+  <div><dt>Escopo</dt><dd>{% if data_scope and data_scope.mode == "custom" %}Personalizado{% elif user_object.is_superuser %}Global · Superuser{% else %}Todos os dados{% endif %}</dd></div>
+  {% if data_scope and data_scope.mode == "custom" %}<div><dt>Operadoras permitidas</dt><dd>{% for operator in data_scope.allowed_operators.all %}{{ operator.name }}{% if not forloop.last %}, {% endif %}{% empty %}Nenhuma{% endfor %}</dd></div><div><dt>Projetos permitidos</dt><dd>{% for project in data_scope.allowed_projects.all %}{{ project.name }}{% if not forloop.last %}, {% endif %}{% empty %}Nenhum{% endfor %}</dd></div>{% endif %}
+</dl><a class="settings-text-link" href="{% url 'configuracoes:scope-edit' user_object.pk %}">Editar escopo de dados</a></section>
+{% endblock %}

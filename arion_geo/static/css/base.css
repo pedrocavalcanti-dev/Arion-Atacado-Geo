@@ -111,7 +111,7 @@ button, input { font: inherit; }
 a { color: inherit; }
 :focus-visible { outline: 2px solid var(--text-primary); outline-offset: 3px; }
 
-.app-header { position: relative; z-index: 5; display: flex; align-items: center; height: 60px; padding: 0 clamp(18px, 3vw, 48px); border-bottom: 1px solid var(--border-primary); background: var(--bg-primary); }
+.app-header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; height: 60px; padding: 0 clamp(18px, 3vw, 48px); border-bottom: 1px solid var(--border-primary); background: var(--bg-primary); }
 .brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; white-space: nowrap; }
 .brand-mark { display: flex; align-items: end; gap: 2px; width: 19px; height: 19px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 6px; transform: rotate(-8deg); }
 .brand-mark i { display: block; width: 3px; border-radius: 2px; background: var(--text-secondary); }
@@ -168,12 +168,25 @@ html[data-theme="light"] .theme-switch-thumb { box-shadow: 0 1px 3px rgba(20, 28
 .user-menu-popover .logout-button { display: flex; align-items: center; justify-content: space-between; color: var(--text-secondary); }
 .user-menu-popover .logout-button:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, transparent); }
 .logout-button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
+.menu-account-copy { display:grid; min-width:0; gap:3px; }
+.menu-account-copy small { overflow:hidden; color:var(--text-muted); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.user-menu-link,.user-menu-popover .logout-button { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-height:38px; padding:9px 10px; border-radius:var(--radius-sm); color:var(--text-secondary); text-decoration:none; font-size:12px; }
+.user-menu-link svg,.user-menu-popover .logout-button svg { flex:0 0 16px; width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.user-menu-link:hover,.user-menu-popover .logout-button:hover { background:var(--surface-hover); color:var(--text-primary); }
+.theme-choice-row { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.theme-choice-row button { min-height:34px; padding:7px 9px; border:1px solid var(--border-primary); text-align:center; color:var(--text-secondary); }
+.theme-choice-row button[aria-pressed="true"] { border-color:var(--border-strong); background:var(--surface-secondary); color:var(--text-primary); }
+.user-menu form { margin:3px 0 0; }
+.user-menu-popover .logout-button { justify-content:flex-start; }
+@media (max-width:480px) { .user-menu-popover { right:0; max-width:calc(100vw - 16px); } }
 
 .main-content { min-height: calc(100vh - 60px); }
 .section-kicker { color: var(--text-muted); font-size: 9px; font-weight: 600; letter-spacing: .15em; }
 .section-kicker span { padding: 0 4px; color: var(--text-faint); }
 .demo-badge { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; padding: 5px 10px 5px 9px; border: 1px solid var(--border-primary); border-radius: 999px; color: var(--text-muted); font-size: 9px; white-space: nowrap; }
 .demo-badge i { width: 5px; height: 5px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 15%, transparent); }
+.source-badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--border-primary); border-radius: 999px; color: var(--text-secondary); font-size: 9px; white-space: nowrap; }
+.source-badge i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); }
 .user-menu summary > span:nth-child(2) { max-width: 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .theme-option { cursor: pointer; user-select: none; }
 /* Scrollbar discreta para áreas roláveis internas. */

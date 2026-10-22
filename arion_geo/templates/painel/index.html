@@ -7,16 +7,18 @@
   <div class="overview-hero">
     <p class="section-kicker overview-kicker">ARION <span>/</span> NOC ATACADO</p>
     <h1 id="overview-title">Visão geral</h1>
-    <p class="overview-lead">Uma leitura geográfica e operacional do NOC Atacado.</p>
-    <p class="overview-description">Compare provedores e acompanhe indicadores por operadora, projeto e período.</p>
-    <nav class="overview-actions" aria-label="Acessar áreas do sistema">
-      <a class="overview-link" href="{% url 'mapa:index' %}">Abrir mapa <span aria-hidden="true">↗</span></a>
-      <a class="overview-link overview-link--quiet" href="{% url 'dashboard' %}">Ver dashboard <span aria-hidden="true">↗</span></a>
-      <a class="overview-link overview-link--text" href="{% url 'rankings:index' %}">Rankings <span aria-hidden="true">↗</span></a>
-    </nav>
-    <div class="overview-meta" aria-label="Escopo: 27 unidades federativas, 3 operadoras, visão nacional">
-      <span>{{ state_count }} UFs</span><i aria-hidden="true"></i><span>3 operadoras</span><i aria-hidden="true"></i><span>20 provedores</span><i aria-hidden="true"></i><span>Visão nacional</span>
+    <p class="overview-lead">Sua central de acesso à operação do NOC Atacado.</p>
+    <div class="overview-summary" aria-label="Resumo da base CMDB">
+      <span><strong>{{ total_links|default:0 }}</strong> links</span><i aria-hidden="true">·</i>
+      <span><strong>{{ state_count|default:0 }}</strong> UFs</span><i aria-hidden="true">·</i>
+      <span><strong>{{ provider_count|default:0 }}</strong> provedor{% if provider_count != 1 %}es{% endif %}</span>
     </div>
+    <p class="overview-updated">{% if latest_import %}Última atualização CMDB: {{ latest_import.created_at|date:"d/m/Y H:i" }}{% else %}Nenhuma importação registrada{% endif %}</p>
+    <nav class="overview-actions" aria-label="Ações para explorar a operação">
+      <article class="overview-action"><h2>Pesquisar um link</h2><p>Consulte circuitos, designações, operadora, ISP e projeto.</p><a href="{% url 'base_links:index' %}">Abrir Base <span aria-hidden="true">→</span></a></article>
+      <article class="overview-action"><h2>Investigar a operação</h2><p>Cruze indicadores, filtros, períodos e dimensões.</p><a href="{% url 'cockpit' %}">Abrir Cockpit <span aria-hidden="true">→</span></a></article>
+      <article class="overview-action"><h2>Explorar geograficamente</h2><p>Visualize a distribuição da operação pelo Brasil.</p><a href="{% url 'mapa:index' %}">Abrir Mapa <span aria-hidden="true">→</span></a></article>
+    </nav>
   </div>
 </section>
 {% endblock %}

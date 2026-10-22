@@ -11,10 +11,10 @@ class AuthenticationFlowTests(TestCase):
         response = self.client.get(reverse("home"))
         self.assertRedirects(response, reverse("autenticacao:login"))
 
-    def test_root_redirects_to_map_for_authenticated_user(self):
+    def test_root_redirects_to_overview_for_authenticated_user(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse("home"))
-        self.assertRedirects(response, reverse("mapa:index"))
+        self.assertRedirects(response, reverse("painel:index"))
 
     def test_login_page_responds(self):
         response = self.client.get(reverse("autenticacao:login"))
@@ -27,9 +27,9 @@ class AuthenticationFlowTests(TestCase):
                 response = self.client.get(reverse(url_name))
                 self.assertRedirects(response, f"{reverse('autenticacao:login')}?next={reverse(url_name)}")
 
-    def test_valid_login_redirects_to_map(self):
+    def test_valid_login_redirects_to_overview(self):
         response = self.client.post(reverse("autenticacao:login"), {"username": "operador", "password": "Senha-segura-123"})
-        self.assertRedirects(response, reverse("mapa:index"))
+        self.assertRedirects(response, reverse("painel:index"))
 
     def test_logout_ends_session_and_returns_to_login(self):
         self.client.force_login(self.user)

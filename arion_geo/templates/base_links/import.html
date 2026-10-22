@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load static humanize %}
+{% block title %}Importar CMDB · Arion Atacado Geo{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/base-links.css' %}">{% endblock %}
+{% block content %}
+<section class="links-page import-page" aria-labelledby="import-title">
+  <a class="back-link" href="{% url 'base_links:index' %}">← Voltar à Base</a>
+  <header class="links-heading"><div><p class="section-kicker">NOC ATACADO <span>/</span> SINCRONIZAÇÃO</p><h1 id="import-title">Importar / Atualizar CMDB</h1><p>Analise o export antes de atualizar o espelho local.</p></div><span class="source-badge"><i></i>Fonte oficial: OTRS / CMDB</span></header>
+  {% if not filename %}
+  <form class="upload-card" method="post" enctype="multipart/form-data">
+    {% csrf_token %}<span class="upload-icon" aria-hidden="true">↥</span><h2>Selecione o export XLSX</h2><p>O arquivo é processado de forma privada e não fica disponível publicamente. Limite de 15 MB.</p>
+    <label class="file-picker"><span data-file-name>Selecionar arquivo .xlsx</span><input type="file" name="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
+    <button class="links-primary-button" type="submit">Analisar arquivo <span aria-hidden="true">→</span></button>
+    <small>Senha e usuário PPOE são ignorados por política de segurança.</small>
+  </form>
+  {% else %}
+  <div class="import-file-summary"><div><span>Arquivo</span><strong>{{ filename }}</strong></div><div><span>Tipo detectado</span><strong>Export OTRS / CMDB — Links de internet</strong></div><div><span>Linhas de dados</span><strong>{{ total_rows|intcomma }}</strong></div><div><span>Colunas</span><strong>{{ column_count }}</strong></div></div>
+  {% if duplicate_import %}<div class="import-warning"><strong>Este arquivo já foi importado em {{ duplicate_import.created_at|date:"d/m/Y H:i" }}.</strong> A confirmação irá revisar o espelho e atualizar a referência de última presença.</div>{% endif %}
+  <section class="preview-section"><header><div><p class="section-kicker">ETAPA 2 / PRÉVIA</p><h2>Resumo da análise</h2></div><a class="subtle-link" href="{% url 'base_links:import' %}">Escolher outro arquivo</a></header>
+    <div class="preview-kpis"><article><span>Total lido</span><strong>{{ total_rows|intcomma }}</strong></article><article><span>Novos</span><strong>{{ new_count|intcomma }}</strong></article><article><span>Atualizações</span><strong>{{ updated_count|intcomma }}</strong></article><article><span>Sem alteração</span><strong>{{ unchanged_count|intcomma }}</strong></article><article><span>Não classificados</span><strong>{{ unclassified_count|intcomma }}</strong></article><article><span>Erros</span><strong>{{ error_count|intcomma }}</strong></article></div>
+    <div class="preview-statuses"><span>Operacionais <b>{{ operational|intcomma }}</b></span><span>Cancelados <b>{{ canceled|intcomma }}</b></span><span>Em manutenção <b>{{ maintenance|intcomma }}</b></span><span>Incidentes <b>{{ incident|intcomma }}</b></span></div>
+    {% if error_examples %}<div class="preview-list preview-errors"><h3>Erros{% if error_count > 10 %} · primeiros 10 de {{ error_count }}{% endif %}</h3>{% for error in error_examples %}<p>Linha {{ error.row }}{% if error.config_item_id %} · CI {{ error.config_item_id }}{% endif %} — {{ error.message }}</p>{% endfor %}</div>{% endif %}
+    {% if new_examples %}<div class="preview-list"><h3>Novos{% if new_count > 10 %} · primeiros 10 de {{ new_count }}{% endif %}</h3>{% for item in new_examples %}<p>{{ item.designation|default:"Sem designação" }} <small>CI #{{ item.config_item_id }}</small></p>{% endfor %}</div>{% endif %}
+    {% if updated_examples %}<div class="preview-list"><h3>Atualizados{% if updated_count > 10 %} · primeiros 10 de {{ updated_count }}{% endif %}</h3>{% for item in updated_examples %}<div><strong>{{ item.designation|default:item.config_item_id }}</strong><small>CI #{{ item.config_item_id }}</small>{% for change in item.changes %}<p>{{ change.label|default:change.field }}: {{ change.old|default:"—" }} → {{ change.new|default:"—" }}</p>{% endfor %}</div>{% endfor %}</div>{% endif %}
+    {% if unchanged_examples %}<details class="preview-list"><summary>Sem alteração · primeiros {{ unchanged_examples|length }} de {{ unchanged_count }}</summary>{% for item in unchanged_examples %}<p>{{ item.designation|default:"Sem designação" }} <small>CI #{{ item.config_item_id }}</small></p>{% endfor %}</details>{% endif %}
+    <p class="security-note">Campos sensíveis PPOE ignorados por política de segurança. Registros ausentes do arquivo não são excluídos; serão marcados como ausentes do último export.</p>
+    {% if can_confirm %}<form method="post" action="{% url 'base_links:confirm' %}" class="confirm-form">{% csrf_token %}<button class="links-primary-button" type="submit">Confirmar atualização <span aria-hidden="true">→</span></button></form>{% else %}<p class="import-blocked">A confirmação está indisponível enquanto faltarem colunas obrigatórias ou registros válidos.</p>{% endif %}
+  </section>
+  {% endif %}
+</section>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/base-links.js' %}" defer></script>{% endblock %}

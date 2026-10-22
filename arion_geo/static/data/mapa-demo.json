@@ -1,9 +1,9 @@
 {
   "AC": {
-    "total_links": 35,
-    "claro": 10,
-    "vivo": 17,
-    "algar": 8,
+    "total_links": 13,
+    "claro": 5,
+    "vivo": 7,
+    "algar": 1,
     "chamados": 4,
     "reincidentes": 1,
     "motivos": {
@@ -17,10 +17,10 @@
     }
   },
   "AL": {
-    "total_links": 130,
-    "claro": 50,
-    "vivo": 45,
-    "algar": 35,
+    "total_links": 53,
+    "claro": 26,
+    "vivo": 20,
+    "algar": 7,
     "chamados": 12,
     "reincidentes": 3,
     "motivos": {
@@ -34,10 +34,10 @@
     }
   },
   "AM": {
-    "total_links": 125,
-    "claro": 40,
-    "vivo": 50,
-    "algar": 35,
+    "total_links": 50,
+    "claro": 21,
+    "vivo": 22,
+    "algar": 7,
     "chamados": 11,
     "reincidentes": 2,
     "motivos": {
@@ -51,10 +51,10 @@
     }
   },
   "AP": {
-    "total_links": 35,
-    "claro": 10,
-    "vivo": 12,
-    "algar": 13,
+    "total_links": 12,
+    "claro": 5,
+    "vivo": 5,
+    "algar": 2,
     "chamados": 3,
     "reincidentes": 1,
     "motivos": {
@@ -68,10 +68,10 @@
     }
   },
   "BA": {
-    "total_links": 490,
-    "claro": 200,
-    "vivo": 170,
-    "algar": 120,
+    "total_links": 202,
+    "claro": 105,
+    "vivo": 74,
+    "algar": 23,
     "chamados": 42,
     "reincidentes": 9,
     "motivos": {
@@ -85,10 +85,10 @@
     }
   },
   "CE": {
-    "total_links": 280,
-    "claro": 110,
-    "vivo": 95,
-    "algar": 75,
+    "total_links": 112,
+    "claro": 57,
+    "vivo": 41,
+    "algar": 14,
     "chamados": 25,
     "reincidentes": 6,
     "motivos": {
@@ -102,10 +102,10 @@
     }
   },
   "DF": {
-    "total_links": 180,
-    "claro": 60,
-    "vivo": 75,
-    "algar": 45,
+    "total_links": 72,
+    "claro": 31,
+    "vivo": 33,
+    "algar": 8,
     "chamados": 16,
     "reincidentes": 3,
     "motivos": {
@@ -119,10 +119,10 @@
     }
   },
   "ES": {
-    "total_links": 200,
-    "claro": 85,
-    "vivo": 75,
-    "algar": 40,
+    "total_links": 85,
+    "claro": 44,
+    "vivo": 33,
+    "algar": 8,
     "chamados": 19,
     "reincidentes": 4,
     "motivos": {
@@ -136,10 +136,10 @@
     }
   },
   "GO": {
-    "total_links": 310,
-    "claro": 120,
-    "vivo": 110,
-    "algar": 80,
+    "total_links": 126,
+    "claro": 63,
+    "vivo": 48,
+    "algar": 15,
     "chamados": 27,
     "reincidentes": 5,
     "motivos": {
@@ -153,10 +153,10 @@
     }
   },
   "MA": {
-    "total_links": 170,
-    "claro": 50,
-    "vivo": 55,
-    "algar": 65,
+    "total_links": 62,
+    "claro": 26,
+    "vivo": 24,
+    "algar": 12,
     "chamados": 14,
     "reincidentes": 3,
     "motivos": {
@@ -170,10 +170,10 @@
     }
   },
   "MG": {
-    "total_links": 760,
-    "claro": 210,
-    "vivo": 420,
-    "algar": 130,
+    "total_links": 318,
+    "claro": 110,
+    "vivo": 183,
+    "algar": 25,
     "chamados": 58,
     "reincidentes": 13,
     "motivos": {
@@ -187,10 +187,10 @@
     }
   },
   "MS": {
-    "total_links": 140,
-    "claro": 50,
-    "vivo": 45,
-    "algar": 45,
+    "total_links": 55,
+    "claro": 26,
+    "vivo": 20,
+    "algar": 9,
     "chamados": 12,
     "reincidentes": 3,
     "motivos": {
@@ -204,10 +204,10 @@
     }
   },
   "MT": {
-    "total_links": 160,
-    "claro": 55,
-    "vivo": 50,
-    "algar": 55,
+    "total_links": 61,
+    "claro": 29,
+    "vivo": 22,
+    "algar": 10,
     "chamados": 15,
     "reincidentes": 3,
     "motivos": {
@@ -221,10 +221,10 @@
     }
   },
   "PA": {
-    "total_links": 230,
-    "claro": 90,
-    "vivo": 80,
-    "algar": 60,
+    "total_links": 93,
+    "claro": 47,
+    "vivo": 35,
+    "algar": 11,
     "chamados": 19,
     "reincidentes": 4,
     "motivos": {
@@ -238,10 +238,10 @@
     }
   },
   "PB": {
-    "total_links": 140,
-    "claro": 45,
-    "vivo": 50,
-    "algar": 45,
+    "total_links": 55,
+    "claro": 24,
+    "vivo": 22,
+    "algar": 9,
     "chamados": 13,
     "reincidentes": 3,
     "motivos": {
@@ -255,10 +255,10 @@
     }
   },
   "PE": {
-    "total_links": 330,
-    "claro": 140,
-    "vivo": 110,
-    "algar": 80,
+    "total_links": 136,
+    "claro": 73,
+    "vivo": 48,
+    "algar": 15,
     "chamados": 29,
     "reincidentes": 7,
     "motivos": {
@@ -272,10 +272,10 @@
     }
   },
   "PI": {
-    "total_links": 130,
-    "claro": 45,
-    "vivo": 42,
-    "algar": 43,
+    "total_links": 50,
+    "claro": 24,
+    "vivo": 18,
+    "algar": 8,
     "chamados": 11,
     "reincidentes": 2,
     "motivos": {
@@ -289,10 +289,10 @@
     }
   },
   "PR": {
-    "total_links": 390,
-    "claro": 160,
-    "vivo": 140,
-    "algar": 90,
+    "total_links": 162,
+    "claro": 84,
+    "vivo": 61,
+    "algar": 17,
     "chamados": 34,
     "reincidentes": 8,
     "motivos": {
@@ -306,10 +306,10 @@
     }
   },
   "RJ": {
-    "total_links": 700,
-    "claro": 340,
-    "vivo": 320,
-    "algar": 40,
+    "total_links": 325,
+    "claro": 178,
+    "vivo": 139,
+    "algar": 8,
     "chamados": 63,
     "reincidentes": 16,
     "motivos": {
@@ -323,10 +323,10 @@
     }
   },
   "RN": {
-    "total_links": 125,
-    "claro": 35,
-    "vivo": 55,
-    "algar": 35,
+    "total_links": 49,
+    "claro": 18,
+    "vivo": 24,
+    "algar": 7,
     "chamados": 11,
     "reincidentes": 2,
     "motivos": {
@@ -340,10 +340,10 @@
     }
   },
   "RO": {
-    "total_links": 80,
-    "claro": 25,
-    "vivo": 35,
-    "algar": 20,
+    "total_links": 32,
+    "claro": 13,
+    "vivo": 15,
+    "algar": 4,
     "chamados": 7,
     "reincidentes": 1,
     "motivos": {
@@ -357,10 +357,10 @@
     }
   },
   "RR": {
-    "total_links": 20,
-    "claro": 6,
-    "vivo": 10,
-    "algar": 4,
+    "total_links": 8,
+    "claro": 3,
+    "vivo": 4,
+    "algar": 1,
     "chamados": 2,
     "reincidentes": 0,
     "motivos": {
@@ -374,10 +374,10 @@
     }
   },
   "RS": {
-    "total_links": 320,
-    "claro": 100,
-    "vivo": 90,
-    "algar": 130,
+    "total_links": 116,
+    "claro": 52,
+    "vivo": 39,
+    "algar": 25,
     "chamados": 28,
     "reincidentes": 6,
     "motivos": {
@@ -391,10 +391,10 @@
     }
   },
   "SC": {
-    "total_links": 290,
-    "claro": 90,
-    "vivo": 105,
-    "algar": 95,
+    "total_links": 111,
+    "claro": 47,
+    "vivo": 46,
+    "algar": 18,
     "chamados": 24,
     "reincidentes": 5,
     "motivos": {
@@ -408,10 +408,10 @@
     }
   },
   "SE": {
-    "total_links": 90,
-    "claro": 30,
-    "vivo": 30,
-    "algar": 30,
+    "total_links": 35,
+    "claro": 16,
+    "vivo": 13,
+    "algar": 6,
     "chamados": 8,
     "reincidentes": 2,
     "motivos": {
@@ -425,10 +425,10 @@
     }
   },
   "SP": {
-    "total_links": 1240,
-    "claro": 680,
-    "vivo": 430,
-    "algar": 130,
+    "total_links": 567,
+    "claro": 355,
+    "vivo": 187,
+    "algar": 25,
     "chamados": 87,
     "reincidentes": 19,
     "motivos": {
@@ -442,10 +442,10 @@
     }
   },
   "TO": {
-    "total_links": 100,
-    "claro": 35,
-    "vivo": 40,
-    "algar": 25,
+    "total_links": 40,
+    "claro": 18,
+    "vivo": 17,
+    "algar": 5,
     "chamados": 9,
     "reincidentes": 2,
     "motivos": {
