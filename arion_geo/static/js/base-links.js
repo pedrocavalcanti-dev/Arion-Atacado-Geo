@@ -2,8 +2,10 @@
   const drawer = document.querySelector("[data-link-drawer]");
   const backdrop = document.querySelector("[data-drawer-backdrop]");
   const content = document.querySelector("[data-drawer-content]");
-  const escape = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
-  const value = (label, text, wide = false) => `<div${wide ? ' class="wide"' : ""}><span>${escape(label)}</span><b>${escape(text || "Não informado")}</b></div>`;
+  const escape = value => String(value ?? "").replace(/[&<>\"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+  const value = (label, text, empty = "Não informado", wide = false) => `<div${wide ? ' class="wide"' : ""}><span>${escape(label)}</span><b>${escape(text || empty)}</b></div>`;
+  const resolutionLabel = method => ({ CONFIG_ITEM_ID: "ConfigItemID", NAME: "Nome", UNRESOLVED: "Não resolvida", EMPTY: "Sem valor na origem" }[method] || method || "Não informado");
+
   function closeDrawer() {
     if (!drawer) return;
     drawer.classList.remove("is-open");
@@ -11,16 +13,25 @@
     drawer.inert = true;
     backdrop.hidden = true;
   }
-  function renderLink(link) {
-    const changeHtml = link.changes.length ? link.changes.map(change => `<div class="drawer-change"><small>${escape(change.created_at)}</small><p><b>${escape(change.field)}</b>: ${escape(change.old || "—")} → ${escape(change.new || "—")}</p></div>`).join("") : '<p class="value-muted">Sem alterações registradas.</p>';
-    content.innerHTML = `<header class="drawer-heading"><h2>${escape(link.designation_arion || "Sem designação")}</h2><p>OTRS ConfigItem #${escape(link.config_item_id)} · Versão ${escape(link.version || "—")}</p><span class="source-badge"><i></i>${escape(link.operadora || "Não classificado")} / ${escape(link.projeto || "Não classificado")}</span><span class="state-badge">${escape(link.deployment_state || "Não informado")}</span></header>
-      <section class="drawer-section"><h3>Localização</h3><div class="drawer-fields">${value("Endereço", link.address, true)}${value("Cidade", link.city)}${value("UF", link.uf)}</div></section>
-      <section class="drawer-section"><h3>Serviço</h3><div class="drawer-fields">${value("Provedor", link.provider)}${value("ConfigItem do provedor", link.provider_cmdb_config_item_id)}${value("ISP original", link.isp_raw, true)}${value("Velocidade", link.speed_raw)}${value("Tipo", link.link_type)}${value("Range IP", link.range_ip)}${value("Circuito", link.circuit)}${value("Designação da operadora", link.operator_designation, true)}</div></section>
-      <section class="drawer-section"><h3>Cliente / contrato</h3><div class="drawer-fields">${value("Nome original", link.name, true)}${value("Cliente", link.client_raw)}${value("Contrato", link.contract_number)}${value("Identificação", link.client_identification)}${value("CNPJ ARION", link.cnpj_arion)}${value("Horário", link.business_hours)}</div></section>
-      <section class="drawer-section"><h3>Estado no CMDB</h3><div class="drawer-fields">${value("Implantação", link.deployment_state)}${value("Incidente", link.incident_state)}${value("Classificação", link.classification_status)}${value("Versão", link.version)}</div></section>
-      <section class="drawer-section"><h3>Observação</h3><div class="drawer-fields">${value("Observação do CMDB", link.notes, true)}</div></section>
-      <section class="drawer-section"><h3>Histórico</h3>${changeHtml}</section>`;
+
+  function section(title, fields) {
+    return `<section class="drawer-section"><h3>${escape(title)}</h3><div class="drawer-fields">${fields}</div></section>`;
   }
+
+  function renderLink(link) {
+    const incident = link.incident_state || "Não informado";
+    content.innerHTML = `<header class="drawer-heading">
+        <h2>${escape(link.designation_arion || "Não informado")}</h2>
+        <p>Number ${escape(link.config_item_number || "Não informado")} · ConfigItemID ${escape(link.config_item_id)} · Versão ${escape(link.version || "Não informado")}</p>
+        <div class="drawer-statuses"><span class="state-badge">Implantação: ${escape(link.deployment_state || "Não informado")}</span><span class="incident-badge${incident.toLowerCase() === "incident" ? " is-incident" : ""}">Incidente: ${escape(incident)}</span></div>
+      </header>
+      ${section("Relacionamento", value("Projeto legado", link.project_legacy, "Não classificado") + value("Operadora contratada", link.operadora, "Não classificada") + value("Provedor", link.provider, "Não classificado") + value("Number CMDB do provedor", link.provider_cmdb_number) + value("ConfigItemID do provedor", link.provider_cmdb_config_item_id, "Não classificado") + value("ISP original", link.isp_raw) + value("Método de resolução", resolutionLabel(link.provider_resolution_method)))}
+      ${section("Localização", value("Endereço", link.address, "Não informado", true) + value("Cidade", link.city) + value("UF", link.uf))}
+      ${section("Dados do Link", value("Circuito", link.circuit) + value("Tipo", link.link_type) + value("Velocidade", link.speed_raw) + value("Range IP", link.range_ip, "Não informado", true) + value("Equipamento", link.equipment) + value("MAC Address", link.mac_address) + value("Identificação", link.client_identification) + value("Número do contrato", link.contract_number) + value("CNPJ", link.cnpj_arion) + value("Nome original", link.name, "Não informado", true))}
+      ${section("Dados CMDB", value("ConfigItemID do Link", link.config_item_id) + value("Number do Link", link.config_item_number) + value("DefinitionID", link.definition_id) + value("VersionID", link.version) + value("LastVersionID", link.last_version) + value("Último sync", link.synced_at))}
+      ${link.notes ? section("Observação CMDB", value("Observação", link.notes, "Não informado", true)) : ""}`;
+  }
+
   async function openDrawer(id) {
     if (!drawer) return;
     drawer.classList.add("is-open");
@@ -30,12 +41,13 @@
     content.innerHTML = '<p class="drawer-loading">Carregando detalhes…</p>';
     try {
       const response = await fetch(`/base/api/${encodeURIComponent(id)}/`, { headers: { "X-Requested-With": "XMLHttpRequest" } });
-      if (!response.ok) throw new Error("Não foi possível carregar os detalhes do link.");
+      if (!response.ok) throw new Error("Não foi possível carregar os detalhes do Link.");
       renderLink(await response.json());
     } catch (error) {
       content.innerHTML = `<p class="drawer-loading">${escape(error.message)}</p>`;
     }
   }
+
   document.querySelectorAll("[data-link-id]").forEach(row => {
     row.addEventListener("click", () => openDrawer(row.dataset.linkId));
     row.addEventListener("keydown", event => {
@@ -61,19 +73,13 @@
     url.searchParams.delete("page");
     window.location.href = url;
   });
-  const searchInput = document.querySelector("[data-clear-search]")?.previousElementSibling;
   const clearSearch = document.querySelector("[data-clear-search]");
+  const searchInput = clearSearch?.previousElementSibling;
   searchInput?.addEventListener("input", () => { clearSearch.hidden = !searchInput.value; });
   clearSearch?.addEventListener("click", () => {
     if (!searchInput) return;
     searchInput.value = "";
     clearSearch.hidden = true;
     searchInput.form?.requestSubmit();
-  });
-
-  const fileInput = document.querySelector('.file-picker input[type="file"]');
-  fileInput?.addEventListener("change", () => {
-    const name = document.querySelector("[data-file-name]");
-    if (name && fileInput.files.length) name.textContent = fileInput.files[0].name;
   });
 })();

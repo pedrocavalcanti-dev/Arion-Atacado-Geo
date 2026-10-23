@@ -3,10 +3,10 @@
   if (!page) return;
 
   const form = page.querySelector("[data-filters]");
-  const FILTER_KEYS = ["operator", "project", "provider", "uf", "reason", "status", "sla_status"];
-  const DEFAULTS = { metric: "tickets", period_from: "2026-01", period_to: "2026-10", compare_to: "", group_by: "reason", filters: Object.fromEntries(FILTER_KEYS.map(key => [key, "all"])) };
-  const METRICS = { links: "Links", tickets: "Chamados", open_tickets: "Abertos", closed_tickets: "Fechados", recurrences: "Reincidências", sla_met: "SLA cumprido", sla_missed: "SLA perdido", avg_resolution_time: "Tempo médio", backlog: "Backlog" };
-  const DIMENSIONS = { operator: "Operadora", project: "Projeto", provider: "ISP", uf: "UF", reason: "Motivo", status: "Status", sla_status: "SLA", month: "Mês" };
+  const FILTER_KEYS = ["operator", "project", "provider", "contract_operator", "uf", "status", "sla_status", "service"];
+  const DEFAULTS = { metric: "tickets", period_from: "2026-01", period_to: "2026-10", compare_to: "", group_by: "operator", filters: Object.fromEntries(FILTER_KEYS.map(key => [key, "all"])) };
+  const METRICS = { links: "Links CMDB", tickets: "Tickets", open_tickets: "Abertos", closed_tickets: "Resolvidos/encerrados", recurrences: "Links reincidentes", backlog: "Backlog aberto" };
+  const DIMENSIONS = { operator: "Provedor", project: "Projeto (legado)", provider: "Provedor", contract_operator: "Operadora", uf: "UF", status: "Status", sla_status: "SLA", service: "Servi\u00e7o", month: "M\u00eas" };
   const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out"];
   const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
   const monthLabel = value => `${MONTHS[Number(value.slice(5)) - 1]}/2026`;
@@ -55,7 +55,7 @@
   }
   function normalizeDimension() {
     const allowed = queryState.metric === "links" ? new Set(["month", "operator", "project", "provider", "uf"]) : new Set(Object.keys(DIMENSIONS));
-    if (!allowed.has(queryState.group_by)) queryState.group_by = queryState.metric === "links" ? "operator" : "reason";
+    if (!allowed.has(queryState.group_by)) queryState.group_by = queryState.metric === "links" ? "operator" : "operator";
     for (const select of [form.elements.group_by, page.querySelector("[data-breakdown]")]) {
       [...select.options].forEach(option => { option.hidden = !allowed.has(option.value); });
       select.value = queryState.group_by;
@@ -66,7 +66,7 @@
     for (const key of ["metric", "period_from", "period_to", "compare_to", "group_by"]) form.elements.namedItem(key).value = queryState[key];
     FILTER_KEYS.forEach(key => { form.elements.namedItem(key).value = queryState.filters[key]; });
     page.querySelector("[data-breakdown]").value = queryState.group_by;
-    const advanced = FILTER_KEYS.slice(2).some(key => queryState.filters[key] !== "all") || queryState.group_by !== "reason";
+    const advanced = FILTER_KEYS.slice(2).some(key => queryState.filters[key] !== "all") || queryState.group_by !== "operator";
     setMoreOpen(advanced);
   }
   function setMoreOpen(open) {
@@ -82,7 +82,7 @@
     const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, credentials: "same-origin", body: JSON.stringify(payload), signal });
     const type = response.headers.get("content-type") || "";
     const body = type.includes("application/json") ? await response.json() : null;
-    if (!response.ok) throw new Error(body?.error || "Falha na solicitação.");
+    if (!response.ok) throw new Error(body?.error?.message || body?.error || "Falha na solicitação.");
     return body;
   }
   function renderOptions(options = {}) {
@@ -95,16 +95,6 @@
       select.replaceChildren(...optionsList);
       select.value = value;
     }
-    const staticOptions = {
-      reason: ["Pendência Financeira", "Falha Massiva", "Rompimento de Fibra", "Troca de Drop", "Equipamento", "Falha Elétrica", "Sem Intervenção", "Indisponibilidade", "Configuração", "Outros"],
-      status: ["Aberto", "Em atendimento", "Pendente", "Resolvido", "Fechado"]
-    };
-    for (const [key, values] of Object.entries(staticOptions)) {
-      const select = form.elements.namedItem(key), selected = queryState.filters[key];
-      select.replaceChildren(new Option("Todos", "all"), ...values.map(value => new Option(value, value)));
-      if (selected !== "all" && !values.includes(selected)) select.add(new Option(selected, selected));
-      select.value = selected;
-    }
     const periods = Array.from({ length: 10 }, (_, index) => `2026-${String(index + 1).padStart(2, "0")}`);
     for (const key of ["period_from", "period_to", "compare_to"]) {
       const select = form.elements.namedItem(key);
@@ -116,7 +106,7 @@
   }
   function renderKpis(items) {
     const box = page.querySelector("[data-kpis]");
-    box.innerHTML = items.map(item => `<article class="kpi-card dash-card" data-source="${item.source}"><span class="kpi-label">${escapeHTML(item.label)}</span><strong class="kpi-value">${number.format(item.value)}${escapeHTML(item.unit || "")}</strong><small class="kpi-note">${item.source === "demo" ? "Demo operacional" : "CMDB real"}</small></article>`).join("");
+    box.innerHTML = items.map(item => `<article class="kpi-card dash-card" data-source="${item.source}"><span class="kpi-label">${escapeHTML(item.label)}</span><strong class="kpi-value">${number.format(item.value)}${escapeHTML(item.unit || "")}</strong><small class="kpi-note">${"Espelho local CMDB / OTRS"}</small></article>`).join("");
   }
   function renderSeries(data) {
     const box = page.querySelector("[data-series]");
@@ -163,7 +153,7 @@
     page.querySelector("[data-detail-body]").innerHTML = detail.map(row => `<tr><td>${escapeHTML(row.dimension)}</td><td>${number.format(row.value)}</td><td>${number.format(row.share)}%</td></tr>`).join("");
   }
   function renderActive() {
-    const names = { operator: "Operadora", project: "Projeto", provider: "ISP", uf: "UF", reason: "Motivo", status: "Status", sla_status: "SLA" };
+    const names = { operator: "Provedor", project: "Projeto (legado)", provider: "Provedor", contract_operator: "Operadora", uf: "UF", status: "Status", sla_status: "SLA", service: "Servi\u00e7o" };
     const chips = FILTER_KEYS.filter(key => queryState.filters[key] !== "all").map(key => `${names[key]}: ${queryState.filters[key]}`);
     chips.unshift(`${METRICS[queryState.metric]}`, `${monthLabel(queryState.period_from)} a ${monthLabel(queryState.period_to)}`);
     if (queryState.compare_to) chips.push(`Comparado a ${queryState.compare_to}`);
@@ -222,12 +212,12 @@
   }
   function presetState(key) {
     const presets = {
-      finance: { metric: "tickets", group_by: "reason", filters: { reason: "Pendência Financeira" }, label: "Pendência Financeira" },
-      recurrence: { metric: "recurrences", group_by: "operator", label: "Reincidência" },
-      sla: { metric: "sla_missed", group_by: "provider", label: "SLA por ISP" },
+      finance: { metric: "tickets", group_by: "service", label: "Tickets por servi\u00e7o" },
+      recurrence: { metric: "recurrences", group_by: "operator", label: "Reincid\u00eancia" },
+      sla: { metric: "tickets", group_by: "sla_status", label: "Tickets por SLA" },
       backlog: { metric: "backlog", group_by: "operator", label: "Backlog por operadora" },
-      project: { metric: "tickets", group_by: "project", label: "Chamados por projeto" },
-      reasons: { metric: "tickets", group_by: "reason", label: "Top motivos" }
+      project: { metric: "tickets", group_by: "project", label: "Tickets por projeto legado" },
+      reasons: { metric: "tickets", group_by: "status", label: "Tickets por status" }
     };
     const preset = presets[key];
     queryState = cloneDefaults();
@@ -245,13 +235,13 @@
   }
   function presetStateSnapshot(key) {
     const presets = {
-      finance: ["tickets", "reason", "Pendência Financeira"], recurrence: ["recurrences", "operator", null],
-      sla: ["sla_missed", "provider", null], backlog: ["backlog", "operator", null],
-      project: ["tickets", "project", null], reasons: ["tickets", "reason", null]
+      finance: ["tickets", "service", null], recurrence: ["recurrences", "operator", null],
+      sla: ["tickets", "sla_status", null], backlog: ["backlog", "operator", null],
+      project: ["tickets", "project", null], reasons: ["tickets", "status", null]
     }[key];
     const expected = cloneDefaults();
     expected.metric = presets[0]; expected.group_by = presets[1];
-    if (presets[2]) expected.filters.reason = presets[2];
+    if (presets[2]) expected.filters.service = presets[2];
     return { metric: expected.metric, period: expected.period_to, period_from: expected.period_from, period_to: expected.period_to, compare_to: expected.compare_to || null, group_by: expected.group_by, filters: expected.filters };
   }
   async function loadSaved() {
@@ -302,7 +292,7 @@
     button.disabled = true;
     try {
       const response = await fetch(page.dataset.exportUrl, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, credentials: "same-origin", body: JSON.stringify({ ...queryPayload(), format }) });
-      if (!response.ok) { const body = await response.json(); throw new Error(body.error || "Falha na exportação."); }
+      if (!response.ok) { const body = await response.json(); throw new Error(body.error?.message || body.error || "Falha na exportação."); }
       const blob = await response.blob(), href = URL.createObjectURL(blob), link = document.createElement("a");
       link.href = href; link.download = response.headers.get("content-disposition")?.match(/filename="?([^";]+)"?/i)?.[1] || `arion-cockpit.${format}`;
       document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(href);

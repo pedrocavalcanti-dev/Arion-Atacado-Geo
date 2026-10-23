@@ -10,8 +10,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from aplicativos.configuracoes.permissions import access_required
+from config.errors import api_error, require_media_type
 
 from .models import AriArtifact, AriAttachment, AriConversation
+from .file_security import UploadValidationError
 from .services import AriConversationService
 
 
@@ -96,10 +98,15 @@ def conversation_detail(request, conversation_id):
 @access_required("view_ari")
 @require_POST
 def create_message(request, conversation_id=None):
+    media_error = require_media_type(
+        request, "application/json", "multipart/form-data", "application/x-www-form-urlencoded"
+    )
+    if media_error:
+        return media_error
     if request.content_type == "application/json":
         payload = _json_body(request)
         if payload is None:
-            return JsonResponse({"error": "Solicitação inválida."}, status=400)
+            return api_error(request, "BAD_REQUEST")
         content = payload.get("content", "")
     else:
         content = request.POST.get("content", "")
@@ -110,8 +117,10 @@ def create_message(request, conversation_id=None):
             conversation_id=conversation_id,
             uploads=request.FILES.getlist("files"),
         )
-    except ValueError as error:
-        return JsonResponse({"error": str(error)}, status=400)
+    except UploadValidationError as error:
+        return api_error(request, error.error_code)
+    except ValueError:
+        return api_error(request, "BAD_REQUEST")
     return JsonResponse({
         "conversation": _conversation_payload(conversation),
         "messages": [_message_payload(message) for message in conversation.messages.prefetch_related("attachments")],
@@ -123,15 +132,18 @@ def create_message(request, conversation_id=None):
 @access_required("view_ari")
 @require_POST
 def rename_conversation(request, conversation_id):
+    media_error = require_media_type(request, "application/json")
+    if media_error:
+        return media_error
     payload = _json_body(request)
     if payload is None:
-        return JsonResponse({"error": "Solicitação inválida."}, status=400)
+        return api_error(request, "BAD_REQUEST")
     try:
         conversation = AriConversationService.rename(
             user=request.user, conversation_id=conversation_id, title=payload.get("title", "")
         )
-    except ValueError as error:
-        return JsonResponse({"error": str(error)}, status=400)
+    except ValueError:
+        return api_error(request, "BAD_REQUEST")
     return JsonResponse({"conversation": _conversation_payload(conversation)})
 
 

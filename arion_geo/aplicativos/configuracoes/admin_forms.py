@@ -6,72 +6,46 @@ from django.core.exceptions import ValidationError
 
 from aplicativos.base_links.models import Operadora, Projeto
 from .access_control import ALL_ACCESS_PERMISSIONS, PERMISSION_LABELS
-from .models import UserDataScope
+from .models import GroupDataScope
 
 
 class ScopedUserFieldsMixin:
-    groups = forms.ModelMultipleChoiceField(queryset=Group.objects.none(), required=False, label="Grupos de acesso")
-    scope_mode = forms.ChoiceField(choices=UserDataScope.Mode.choices, label="Escopo dos dados")
-    allowed_operators = forms.ModelMultipleChoiceField(queryset=Operadora.objects.none(), required=False, label="Operadoras")
-    allowed_projects = forms.ModelMultipleChoiceField(queryset=Projeto.objects.none(), required=False, label="Projetos")
-
-    def configure_scope_fields(self, instance=None):
-        self.fields.setdefault("groups", forms.ModelMultipleChoiceField(queryset=Group.objects.none(), required=False, label="Grupos de acesso"))
-        self.fields.setdefault("scope_mode", forms.ChoiceField(choices=UserDataScope.Mode.choices, label="Escopo dos dados"))
-        self.fields.setdefault("allowed_operators", forms.ModelMultipleChoiceField(queryset=Operadora.objects.none(), required=False, label="Operadoras"))
-        self.fields.setdefault("allowed_projects", forms.ModelMultipleChoiceField(queryset=Projeto.objects.none(), required=False, label="Projetos"))
-        self.fields["groups"].queryset = Group.objects.order_by("name")
-        self.fields["groups"].widget = forms.CheckboxSelectMultiple(attrs={"class": "visual-choice-list"})
-        self.fields["allowed_operators"].queryset = Operadora.objects.filter(active=True).order_by("name")
-        self.fields["allowed_operators"].widget = forms.CheckboxSelectMultiple(attrs={"class": "visual-choice-list operator-choices"})
-        self.fields["allowed_projects"].queryset = Projeto.objects.filter(active=True).order_by("name")
-        self.fields["allowed_projects"].widget = forms.CheckboxSelectMultiple(attrs={"class": "visual-choice-list project-choices"})
+    def configure_group_field(self, instance=None):
+        self.fields.setdefault("group", forms.ModelChoiceField(queryset=Group.objects.none(), required=True, label="Perfil de acesso", empty_label="Selecione um perfil"))
+        self.fields["group"].queryset = Group.objects.order_by("name")
+        self.fields["group"].widget.attrs.update({"class": "settings-select"})
         if instance and instance.pk:
-            self.fields["groups"].initial = instance.groups.all()
-            scope = getattr(instance, "data_scope", None)
-            if scope:
-                self.fields["scope_mode"].initial = scope.mode
-                self.fields["allowed_operators"].initial = scope.allowed_operators.all()
-                self.fields["allowed_projects"].initial = scope.allowed_projects.all()
-            else:
-                self.fields["scope_mode"].initial = UserDataScope.Mode.ALL
-        else:
-            analyst = Group.objects.filter(name="Analista NOC").first()
-            if analyst:
-                self.fields["groups"].initial = [analyst.pk]
-            self.fields["scope_mode"].initial = UserDataScope.Mode.ALL
+            if instance.is_superuser:
+                self.fields["group"].required = False
+            memberships = list(instance.groups.order_by("name"))
+            if len(memberships) == 1:
+                self.fields["group"].initial = memberships[0].pk
 
     def save_access(self, user):
-        user.groups.set(self.cleaned_data["groups"])
-        scope, _ = UserDataScope.objects.get_or_create(user=user)
-        scope.mode = self.cleaned_data["scope_mode"]
-        scope.save(update_fields=("mode", "updated_at"))
-        if scope.mode == UserDataScope.Mode.CUSTOM:
-            scope.allowed_operators.set(self.cleaned_data["allowed_operators"])
-            scope.allowed_projects.set(self.cleaned_data["allowed_projects"])
-        else:
-            scope.allowed_operators.clear()
-            scope.allowed_projects.clear()
+        selected_group = self.cleaned_data.get("group")
+        user.groups.set([selected_group] if selected_group else [])
 
 
 class UserCreateForm(ScopedUserFieldsMixin, UserCreationForm):
     first_name = forms.CharField(max_length=150, required=False, label="Nome")
     last_name = forms.CharField(max_length=150, required=False, label="Sobrenome")
     email = forms.EmailField(required=False, label="E-mail")
+    is_active = forms.BooleanField(required=False, initial=True, label="Conta ativa")
 
     class Meta(UserCreationForm.Meta):
         model = get_user_model()
-        fields = ("username", "first_name", "last_name", "email")
+        fields = ("username", "first_name", "last_name", "email", "is_active")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.configure_scope_fields()
-        self.fields["scope_mode"].widget.attrs["data-scope-mode"] = ""
+        self.configure_group_field()
         self.fields["is_active"].widget.attrs.update({"class": "switch-input"}) if "is_active" in self.fields else None
 
     def save(self, commit=True):
-        user = super().save(commit=commit)
+        user = super().save(commit=False)
+        user.is_active = self.cleaned_data["is_active"]
         if commit:
+            user.save()
             self.save_access(user)
         return user
 
@@ -84,9 +58,8 @@ class UserUpdateForm(ScopedUserFieldsMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.configure_scope_fields(self.instance)
+        self.configure_group_field(self.instance)
         self.fields["is_active"].widget.attrs["class"] = "switch-input"
-        self.fields["scope_mode"].widget.attrs["data-scope-mode"] = ""
 
     def save(self, commit=True):
         user = super().save(commit=commit)
@@ -138,21 +111,25 @@ class AccessGroupForm(forms.ModelForm):
         return group
 
 
-class UserDataScopeForm(forms.ModelForm):
+class GroupDataScopeForm(forms.ModelForm):
     class Meta:
-        model = UserDataScope
+        model = GroupDataScope
         fields = ("mode", "allowed_operators", "allowed_projects")
         labels = {"mode": "Escopo dos dados", "allowed_operators": "Operadoras permitidas", "allowed_projects": "Projetos permitidos"}
-        widgets = {"allowed_operators": forms.CheckboxSelectMultiple, "allowed_projects": forms.CheckboxSelectMultiple}
+        widgets = {
+            "allowed_operators": forms.CheckboxSelectMultiple(attrs={"class": "scope-choice-list"}),
+            "allowed_projects": forms.CheckboxSelectMultiple(attrs={"class": "scope-choice-list"}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["allowed_operators"].queryset = Operadora.objects.filter(active=True).order_by("name")
         self.fields["allowed_projects"].queryset = Projeto.objects.filter(active=True).order_by("name")
+        self.fields["mode"].widget.attrs["data-scope-mode"] = ""
 
     def save(self, commit=True):
         scope = super().save(commit=commit)
-        if commit and scope.mode == UserDataScope.Mode.ALL:
+        if commit and scope.mode == GroupDataScope.Mode.ALL:
             scope.allowed_operators.clear()
             scope.allowed_projects.clear()
         return scope

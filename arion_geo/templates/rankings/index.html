@@ -1,119 +1,31 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% load static humanize %}
-{% block title %}Rankings · Arion Atacado Geo{% endblock %}
+{% block title %}Rankings operacionais · Arion Atacado Geo{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/rankings/rankings.css' %}">{% endblock %}
 {% block content %}
-<section class="ranking-page" aria-labelledby="ranking-title" data-ranking-root>
-  <header class="ranking-heading">
-    <div>
-      <p class="section-kicker">NOC ATACADO <span>/</span> RANKING GLOBAL</p>
-      <h1 id="ranking-title">Ranking global dos provedores</h1>
-      <span class="section-kicker">Ranking de provedores</span>
-      <p>Provedores e links da base CMDB real, com indicadores operacionais demonstrativos enquanto os tickets OTRS não estão integrados.</p>
-    </div>
-    <div class="heading-badges">
-      <span class="scope-badge">Escopo global da operação</span>
-      <span class="scope-badge">● Base real CMDB</span><span class="demo-badge"><i></i>Performance demonstrativa</span>
-    </div>
-  </header>
-
-  <section class="ranking-kpis" aria-label="Indicadores consolidados da operação">
-    <article class="ranking-kpi">
-      <span>Base total CMDB</span>
-      <strong data-kpi-links>{{ total_links|intcomma }}<i>links</i></strong>
-      <small><b data-kpi-providers>{{ provider_count }}</b> provedores válidos com links reais</small>
-    </article>
-    <article class="ranking-kpi">
-      <span>Maior base real</span>
-      <strong class="kpi-name" data-kpi-avg-links>{{ largest_provider.name|default:"—" }}</strong>
-      <small>{{ largest_provider.links|default:0 }} links · CMDB</small>
-    </article>
-    <article class="ranking-kpi">
-      <span>Chamados · Demonstração</span>
-      <strong data-kpi-calls>{{ total_calls|intcomma }}</strong>
-      <small>Estimativa demonstrativa · Out/26</small>
-    </article>
-    <article class="ranking-kpi">
-      <span>SLA médio · Demonstração</span>
-      <strong data-kpi-sla>{{ average_sla|floatformat:1 }}<i>%</i></strong>
-      <small>Reincidência média de <b data-kpi-repeat>{{ average_repeat|floatformat:1 }}%</b></small>
-    </article>
-    <article class="ranking-kpi">
-      <span>Maior score · Demonstração</span>
-      <strong class="kpi-name" data-kpi-leader>{{ leader.nome }}</strong>
-      <small data-kpi-leader-meta>Score {{ leader.score|floatformat:1 }} · Nota {{ leader.avaliacao|floatformat:2 }} de 5</small>
-    </article>
+<section class="ranking-page" aria-labelledby="ranking-title">
+  <header class="ranking-heading"><div class="ranking-heading-copy"><p class="section-kicker">NOC ATACADO <span>/</span> RANKINGS</p><h1 id="ranking-title">Provedores e links</h1><p>Comparacao com tickets e links dos espelhos locais CMDB e OTRS. Nao ha score composto.</p></div><span class="source-badge"><i aria-hidden="true"></i>Dados reais · fontes somente leitura</span></header>
+  <section class="ranking-kpis" aria-label="Resumo do recorte"><article class="ranking-kpi ranking-kpi--real"><span>Links CMDB</span><strong>{{ total_links|intcomma }}</strong></article><article class="ranking-kpi ranking-kpi--real"><span>Provedores</span><strong>{{ operator_count|intcomma }}</strong></article><article class="ranking-kpi ranking-kpi--real"><span>Tickets criados no período</span><strong>{{ total_tickets|intcomma }}</strong></article><article class="ranking-kpi ranking-kpi--real"><span>Business-open atual</span><strong>{{ open_tickets|intcomma }}</strong></article><article class="ranking-kpi ranking-kpi--real"><span>Links afetados</span><strong>{{ affected_links|intcomma }}</strong></article></section>
+  <form class="ranking-filter-form" method="get" aria-label="Filtros do ranking">
+    <label class="ranking-search"><span>Buscar</span><input type="search" name="q" value="{{ filters.q }}" placeholder="Provedor, Provedor, link ou ConfigItem"></label>
+    <label><span>De</span><input type="date" name="date_from" value="{{ filters.date_from }}"></label><label><span>Até</span><input type="date" name="date_to" value="{{ filters.date_to }}"></label>
+    <label><span>Provedor</span><select name="operator"><option value="">Todas</option>{% for option in operators_filter %}<option value="{{ option.pk }}"{% if filters.operator == option.pk|stringformat:"s" %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></label>
+    <label><span>Projeto (legado)</span><select name="project"><option value="">Todos</option>{% for option in projects %}<option value="{{ option }}"{% if filters.project == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
+    <input type="hidden" name="sort" value="{{ filters.sort }}"><input type="hidden" name="page_size" value="{{ filters.page_size }}"><div class="ranking-filter-actions"><button type="submit" class="ranking-button ranking-button--primary">Aplicar filtros</button><a class="ranking-button ranking-button--quiet" href="{% url 'rankings:index' %}">Limpar</a></div>
+  </form>
+  <nav class="criteria-wrap" aria-label="Ordenar ranking"><span>ORDENAR POR</span><div class="criteria-chips">{% for option in sort_options %}<a href="{{ option.url }}"{% if option.active %} class="is-selected" aria-current="page"{% endif %}>{{ option.label }}</a>{% endfor %}</div></nav>
+  <section class="podium-section" aria-labelledby="podium-title"><div class="section-title"><div><span class="section-kicker">DESTAQUES</span><h2 id="podium-title">Top 3 do recorte</h2></div><span class="podium-caption">Tickets · Links afetados · Reincidência</span></div>
+    {% if top_operators %}<div class="podium">{% for item in top_operators %}<article class="podium-card podium-card--{{ forloop.counter }}"><header class="podium-header"><div class="provider-brand"><span class="provider-logo" aria-hidden="true">{{ item.logo }}</span><div class="provider-identity"><span class="podium-position">{{ forloop.counter }}º lugar</span><h3>{{ item.name }}</h3></div></div></header><div class="podium-main-metrics"><div class="podium-real-metric"><span>Links</span><strong>{{ item.links|intcomma }}</strong><small>{{ item.share|floatformat:1 }}% do recorte</small></div></div><div class="podium-stats"><div><span>Tickets no período</span><strong>{{ item.tickets|intcomma }}</strong></div><div><span>OPEN + PENDING atuais</span><strong>{{ item.open_tickets|intcomma }}</strong></div><div><span>Links reincidentes</span><strong>{{ item.recurrence_links|intcomma }}</strong></div></div><a class="detail-link" href="{{ base_url }}?provedor={{ item.name|urlencode }}">Ver links do provedor <span aria-hidden="true">→</span></a></article>{% endfor %}</div>{% else %}<p class="empty-state">Nenhum provedor encontrado neste recorte.</p>{% endif %}
   </section>
-
-  <section class="ranking-controls" aria-label="Filtros do ranking">
-    <div class="controls-fields">
-      <label>Período<select disabled aria-label="Período"><option>Out/26</option></select></label>
-      <label>Operadora<select data-filter="operadora"><option value="">Todas</option>{% for option in operators %}<option>{{ option.name }}</option>{% endfor %}</select></label>
-      <label>Projeto<select data-filter="projeto"><option value="">Todos</option>{% for option in projects %}<option>{{ option.name }}</option>{% endfor %}</select></label>
-    </div>
-    <span class="filter-note" data-source-note>Score · Demonstração</span>
+  <section class="table-section" aria-labelledby="table-title"><header class="table-section-heading"><div><span class="section-kicker">CMDB + OTRS</span><h2 id="table-title">Ranking de operadoras <small>{{ page_obj.paginator.count|intcomma }}</small></h2></div><span class="table-hint">Métricas separadas e transparentes</span></header>
+    <div class="table-scroll thin-scroll"><table><thead><tr><th>Pos.</th><th>Provedor</th><th>Links</th><th>Tickets</th><th>Open</th><th>Links afetados</th><th>Afetados / links</th><th>Tickets / link</th><th>Links reincidentes</th></tr></thead><tbody>
+      {% for item in page_obj %}<tr><td>{{ item.ranking_position|stringformat:"02d" }}</td><td><a class="table-provider" href="{{ base_url }}?provedor={{ item.name|urlencode }}"><b>{{ item.name }}</b></a></td><td>{{ item.links|intcomma }}</td><td>{{ item.tickets|intcomma }}</td><td>{{ item.open_tickets|intcomma }}</td><td>{{ item.affected_links|intcomma }}</td><td>{{ item.affected_ratio|floatformat:1 }}%</td><td>{{ item.tickets_per_link|floatformat:3 }}</td><td>{{ item.recurrence_links|intcomma }}</td></tr>{% empty %}<tr><td colspan="9">Nenhum provedor no escopo selecionado.</td></tr>{% endfor %}
+    </tbody></table></div>
   </section>
-
-  <div class="criteria-wrap">
-    <span>ORDENAR POR</span>
-    <div class="criteria-chips" role="group" aria-label="Critério do ranking">
-      <button type="button" class="is-selected" data-sort="score">Geral</button>
-      <button type="button" data-sort="links">Mais links</button>
-      <button type="button" data-sort="sla">Melhor SLA</button>
-      <button type="button" data-sort="sla-worst">Pior SLA</button>
-      <button type="button" data-sort="chamados">Mais chamados</button>
-      <button type="button" data-sort="reincidencias">Mais reincidência</button>
-      <button type="button" data-sort="estourados">Mais estourados</button>
-      <button type="button" data-sort="avaliacao">Melhor avaliação</button>
-    </div>
-  </div>
-
-  <section class="podium-section" aria-labelledby="podium-title">
-    <div class="section-title">
-      <div>
-      <span class="section-kicker">DESTAQUES</span>
-        <h2 id="podium-title">Top 3 sobre provedores reais</h2>
-      </div>
-      <span class="podium-caption">Score demonstrativo · links reais CMDB</span>
-    </div>
-    <div class="podium" data-podium></div>
+  <section class="table-section" aria-labelledby="links-ranking-title"><header class="table-section-heading"><div><span class="section-kicker">RANKING POR LINK</span><h2 id="links-ranking-title">Links com mais tickets <small>{{ ranked_links|length }}</small></h2></div><span class="table-hint">Tickets distintos no período selecionado</span></header>
+    <div class="table-scroll thin-scroll"><table><thead><tr><th>Pos.</th><th>Link / ConfigItem</th><th>Provedor</th><th>Projeto (legado)</th><th>UF</th><th>Tickets</th><th>Open atual</th><th>Reincidência</th></tr></thead><tbody>
+      {% for item in ranked_links %}<tr><td>{{ forloop.counter|stringformat:"02d" }}</td><td><a href="{{ base_url }}?q={{ item.config_item_id }}">{{ item.name }}</a><small>CI {{ item.config_item_id }}{% if item.number %} · Number {{ item.number }}{% endif %}</small></td><td>{{ item.operator|default:"—" }}</td><td>{{ item.project|default:"—" }}</td><td>{{ item.state|default:"—" }}</td><td>{{ item.tickets|intcomma }}</td><td>{{ item.open_tickets|intcomma }}</td><td>{% if item.is_recurrent %}Sim{% else %}Não{% endif %}</td></tr>{% empty %}<tr><td colspan="8">Nenhum link associado a ticket no período.</td></tr>{% endfor %}
+    </tbody></table></div>
   </section>
-
-  <section class="table-section" aria-labelledby="table-title">
-    <header>
-      <div>
-        <span class="section-kicker">PROVEDORES CMDB</span>
-        <h2 id="table-title">Todos os provedores <small data-result-count>{{ providers|length }}</small></h2>
-      </div>
-      <span class="table-hint">Links e participação reais · performance demonstrativa</span>
-    </header>
-    <div class="table-scroll thin-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th class="col-rank">Pos.</th>
-            <th class="col-provider">Provedor</th>
-            <th class="col-num">Links ativos</th>
-            <th class="col-num">Chamados demo</th>
-            <th class="col-sla">SLA demo</th>
-            <th class="col-num">Reincid.</th>
-            <th class="col-score">Score</th>
-            <th class="col-trend">Tendência</th>
-          </tr>
-        </thead>
-        <tbody data-ranking-rows></tbody>
-      </table>
-    </div>
-    <p class="empty-state" data-empty hidden>Nenhum provedor corresponde aos filtros selecionados.</p>
-  </section>
-  <div class="provider-drawer-backdrop" data-drawer-backdrop hidden></div>
-  <aside class="provider-drawer" data-provider-drawer aria-labelledby="drawer-title" aria-modal="true" role="dialog" hidden>
-    <header class="drawer-header"><div><span class="section-kicker">ANÁLISE DO PROVEDOR</span><h2 id="drawer-title"></h2><p data-drawer-meta></p></div><button type="button" class="drawer-close" data-drawer-close aria-label="Fechar análise">×</button></header>
-    <div class="drawer-content" data-drawer-content></div>
-  </aside>
-  {{ providers|json_script:"ranking-providers" }}
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/rankings/rankings.js' %}" defer></script>{% endblock %}
-
-

@@ -839,3 +839,228 @@ body.drawer-open { overflow:hidden; }
 @media(max-width:1200px) { .podium-hero { grid-template-columns:1fr 1fr; } }
 @media(max-width:1024px) { .podium { grid-template-columns:repeat(3,minmax(0,1fr)); } .podium-card { padding:12px; } .table-section .col-trend { display:none; } table { min-width:800px; } }
 @media(max-width:760px) { .podium { grid-template-columns:1fr; } .podium-card--1 { transform:none; } }
+
+/* Ranking v2: pesquisa, fontes identificadas, tabela paginada e análise completa. */
+.ranking-page { width: min(1580px, 100%); max-width: 1580px; }
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.source-badge i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.source-badge--real { color: var(--accent-teal); border-color: color-mix(in srgb, var(--accent-teal) 25%, var(--border-primary)); }
+.source-badge--demo { color: var(--text-muted); }
+.ranking-filter-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.8fr) repeat(3, minmax(140px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+}
+.ranking-filter-form label { display: grid; gap: 6px; min-width: 0; color: var(--text-muted); font-size: 10px; }
+.ranking-filter-form input,
+.ranking-filter-form select,
+.page-size-form select {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+}
+.ranking-filter-form input:focus-visible,
+.ranking-filter-form select:focus-visible,
+.page-size-form select:focus-visible,
+.ranking-page button:focus-visible,
+.ranking-page a:focus-visible { outline: 2px solid var(--accent-teal); outline-offset: 2px; }
+.ranking-filter-actions { display: flex; gap: 8px; }
+.ranking-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 10px;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ranking-button--primary { border-color: var(--text-primary); background: var(--text-primary); color: var(--surface-primary); }
+.ranking-button--quiet { background: transparent; }
+.ranking-button:disabled { opacity: .45; cursor: not-allowed; }
+.criteria-chips a {
+  display: inline-flex;
+  padding: 6px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-decoration: none;
+}
+.criteria-chips a:hover,
+.criteria-chips a.is-selected { border-color: var(--border-strong); background: var(--surface-secondary); color: var(--text-primary); }
+.podium-section { margin-top: 28px; }
+.podium-card--1 { transform: none; }
+.podium-header { align-items: center; }
+.podium-position { display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 9px; }
+.podium-main-metrics { display: flex; align-items: center; gap: 20px; margin: 18px 0; padding: 14px 0; border-top: 1px solid var(--border-primary); border-bottom: 1px solid var(--border-primary); }
+.score-ring {
+  display: grid;
+  flex: 0 0 auto;
+  width: 74px;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent-teal) var(--score), var(--track-bg) 0);
+  position: relative;
+}
+.score-ring::before { position: absolute; inset: 5px; border-radius: inherit; background: var(--card-bg); content: ""; }
+.score-ring > span { z-index: 1; display: grid; justify-items: center; gap: 2px; }
+.score-ring strong { color: var(--text-primary); font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.score-ring small { color: var(--text-muted); font-size: 7px; letter-spacing: .08em; }
+.podium-real-metric { display: grid; gap: 3px; }
+.podium-real-metric span { color: var(--text-muted); font-size: 10px; }
+.podium-real-metric strong { color: var(--text-primary); font-size: 23px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.podium-real-metric small { color: var(--text-muted); font-size: 9px; }
+.podium-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 16px; }
+.podium-stats > div { display: grid; gap: 5px; min-width: 0; }
+.podium-stats span { color: var(--text-muted); font-size: 9px; }
+.podium-stats strong { color: var(--text-primary); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.detail-link { margin-top: auto; }
+.table-section { min-width: 0; }
+.table-section-heading { align-items: flex-end; }
+.table-hint { text-align: right; }
+.table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.table-scroll table { width: 100%; min-width: 1180px; }
+.table-scroll th, .table-scroll td { padding-right: 14px; padding-left: 14px; }
+.table-scroll .col-provider { min-width: 210px; }
+.table-scroll .col-rank { min-width: 62px; }
+.table-scroll .col-num { min-width: 105px; }
+.table-scroll .col-sla { min-width: 130px; }
+.table-scroll .col-score { min-width: 95px; }
+.table-scroll .col-trend { min-width: 108px; }
+.table-scroll .col-compare { min-width: 80px; text-align: center; }
+.table-scroll .col-action { min-width: 112px; }
+.table-provider { padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.table-provider-info b { max-width: 250px; }
+.row-sub { text-align: inherit; }
+.row-action { font-size: 10px; white-space: nowrap; }
+.compare-choice { display: inline-grid; width: 20px; height: 20px; place-items: center; cursor: pointer; }
+.compare-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.compare-choice span { width: 15px; height: 15px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface-primary); }
+.compare-choice input:checked + span { border-color: var(--accent-teal); background: var(--accent-teal); box-shadow: inset 0 0 0 3px var(--surface-primary); }
+.compare-choice input:focus-visible + span { outline: 2px solid var(--accent-teal); outline-offset: 2px; }
+.ranking-table-footer, .ranking-pagination-controls, .page-size-form, .ranking-pagination { display: flex; align-items: center; }
+.ranking-table-footer { justify-content: space-between; gap: 16px; padding: 12px 2px; color: var(--text-muted); font-size: 10px; }
+.ranking-pagination-controls { flex-wrap: wrap; justify-content: flex-end; gap: 14px; }
+.page-size-form { gap: 7px; }
+.page-size-form select { width: 70px; height: 32px; padding: 0 8px; }
+.page-size-form .ranking-button { min-height: 32px; }
+.ranking-pagination { gap: 4px; }
+.ranking-pagination a { display: grid; min-width: 30px; height: 30px; padding: 0 7px; place-items: center; border: 1px solid transparent; border-radius: 7px; color: var(--text-secondary); font-size: 10px; text-decoration: none; }
+.ranking-pagination a:hover, .ranking-pagination a.is-current { border-color: var(--border-primary); background: var(--surface-secondary); color: var(--text-primary); }
+.compare-toolbar { position: sticky; z-index: 5; bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; padding: 11px 14px; border: 1px solid var(--border-primary); border-radius: 10px; background: var(--surface-primary); box-shadow: var(--card-shadow-hover); color: var(--text-secondary); font-size: 11px; }
+.compare-toolbar[hidden] { display: none; }
+.compare-toolbar > div { display: flex; gap: 8px; }
+.compare-dialog { width: min(1000px, calc(100vw - 32px)); max-width: none; max-height: min(85vh, 850px); padding: 0; border: 1px solid var(--border-primary); border-radius: 14px; background: var(--surface-primary); color: var(--text-primary); box-shadow: 0 24px 70px rgba(0,0,0,.28); }
+.compare-dialog::backdrop { background: rgba(5,10,16,.58); backdrop-filter: blur(2px); }
+.compare-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 22px; border-bottom: 1px solid var(--border-primary); }
+.compare-dialog h2 { margin: 6px 0 0; font-size: 20px; font-weight: 500; }
+.compare-dialog-content { padding: 18px 22px 22px; }
+.compare-table-wrap { max-width: 100%; overflow-x: auto; }
+.compare-table { min-width: 620px; border-collapse: collapse; text-align: left; }
+.compare-table th, .compare-table td { min-width: 135px; padding: 11px 12px; border-bottom: 1px solid var(--border-primary); font-size: 11px; }
+.compare-table th:first-child { min-width: 150px; }
+.compare-table th small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 9px; font-weight: 400; }
+.compare-table td { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.compare-note { margin: 14px 0 0; color: var(--text-muted); font-size: 10px; }
+.provider-drawer { width: min(720px, 50vw); padding: 26px clamp(20px, 3vw, 36px); }
+.drawer-header { align-items: flex-start; }
+.drawer-header h2 { overflow-wrap: anywhere; }
+.drawer-source-badges { display: flex; gap: 7px; margin-top: 12px; }
+.drawer-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+.drawer-overview > div, .performance-metric { min-width: 0; padding: 12px; border: 1px solid var(--border-primary); border-radius: 9px; background: var(--surface-secondary); }
+.drawer-overview span, .performance-metric span { display: block; color: var(--text-muted); font-size: 9px; }
+.drawer-overview strong { display: block; overflow: hidden; margin-top: 6px; color: var(--text-primary); font-size: 17px; font-weight: 500; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.drawer-section > header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.drawer-section > header h3 { margin: 0; color: var(--text-primary); font-size: 12px; }
+.drawer-section > header small { color: var(--text-muted); font-size: 8px; letter-spacing: .05em; white-space: nowrap; }
+.drawer-cmdb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin: 0; }
+.drawer-cmdb-grid div { min-width: 0; }
+.drawer-cmdb-grid dt { color: var(--text-muted); font-size: 9px; }
+.drawer-cmdb-grid dd { overflow-wrap: anywhere; margin: 4px 0 0; color: var(--text-primary); font-size: 11px; }
+.drawer-data-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 12px; margin: 0; padding: 0; list-style: none; }
+.drawer-data-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 8px 10px; border: 1px solid var(--border-primary); border-radius: 7px; color: var(--text-secondary); font-size: 10px; }
+.drawer-data-list li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer-data-list li b { flex: 0 0 auto; color: var(--text-primary); font-size: 9px; font-weight: 500; }
+.drawer-empty-note, .drawer-loading { color: var(--text-muted); font-size: 10px; }
+.drawer-score-row { display: flex; align-items: center; gap: 15px; margin: 12px 0; }
+.drawer-score-row p { max-width: 280px; line-height: 1.6; }
+.score-ring--drawer { width: 68px; }
+.performance-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.performance-metric strong { display: block; margin: 5px 0 3px; color: var(--text-primary); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.performance-metric small { color: var(--text-muted); font-size: 8px; letter-spacing: .06em; }
+.history-title { margin: 20px 0 6px; color: var(--text-primary); font-size: 11px; font-weight: 500; }
+.history-legend { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 9px; }
+.history-legend span { display: flex; align-items: center; gap: 6px; }
+.history-legend i { width: 7px; height: 7px; border-radius: 2px; background: var(--accent-teal); }
+.history-bars { height: 142px; margin-top: 8px; border-bottom: 1px solid var(--border-primary); }
+.history-bars div { min-width: 0; }
+.history-bars b { font-size: 8px; }
+.history-bars i { max-width: 34px; }
+.history-bars small { font-size: 8px; }
+.drawer-actions { padding-top: 12px; }
+.drawer-actions a { width: 100%; }
+.drawer-error { padding: 20px 0; color: var(--text-secondary); font-size: 11px; }
+.ranking-page button, .ranking-page a { transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease; }
+
+@media (max-width: 1100px) {
+  .ranking-filter-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ranking-search { grid-column: 1 / -1; }
+  .ranking-filter-actions { grid-column: 1 / -1; }
+  .podium { grid-template-columns: 1fr; }
+  .podium-card { padding: 16px; }
+}
+@media (max-width: 760px) {
+  .ranking-filter-form { grid-template-columns: 1fr 1fr; padding: 12px; }
+  .ranking-filter-actions { justify-content: flex-start; }
+  .table-section-heading { align-items: flex-start; }
+  .table-hint { text-align: left; }
+  .ranking-table-footer { align-items: flex-start; flex-direction: column; }
+  .ranking-pagination-controls { width: 100%; justify-content: space-between; }
+  .provider-drawer { width: 100%; padding: 20px 16px; }
+  .drawer-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .compare-toolbar { align-items: flex-start; flex-direction: column; }
+  .compare-toolbar > div { width: 100%; }
+  .compare-toolbar .ranking-button { flex: 1; }
+}
+@media (max-width: 480px) {
+  .ranking-filter-form { grid-template-columns: 1fr; }
+  .ranking-search, .ranking-filter-actions { grid-column: auto; }
+  .drawer-data-list, .performance-grid { grid-template-columns: 1fr 1fr; }
+  .drawer-cmdb-grid { grid-template-columns: 1fr; }
+  .ranking-pagination-controls { align-items: flex-start; flex-direction: column; }
+  .heading-badges { gap: 6px; }
+}

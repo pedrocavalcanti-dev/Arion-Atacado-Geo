@@ -1,7 +1,17 @@
 {% extends "configuracoes/base.html" %}
 {% block title %}Escopos de dados · Administração · Arion{% endblock %}
 {% block settings_title %}Escopos de dados{% endblock %}
-{% block settings_description %}Limite os registros por operadora e projeto, sem alterar as permissões do perfil.{% endblock %}
+{% block settings_description %}Defina quais dados cada grupo de acesso pode visualizar.{% endblock %}
 {% block settings_content %}
-<section class="settings-section"><form method="get" class="admin-filters admin-filters--search"><label class="visually-hidden" for="scope-search">Buscar usuários</label><input id="scope-search" type="search" name="q" value="{{ query }}" placeholder="Nome, usuário ou e-mail"><button class="settings-button settings-button--secondary" type="submit">Buscar</button></form><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Usuário</th><th>Grupos / Perfis</th><th>Escopo atual</th><th></th></tr></thead><tbody>{% for user in page_obj %}<tr><td><strong>{{ user.get_full_name|default:user.username }}</strong><small class="table-subtext">{{ user.username }} · {{ user.email|default:"sem e-mail" }}</small></td><td>{% for group in user.groups.all %}<span class="admin-chip">{{ group.name }}</span>{% empty %}—{% endfor %}</td><td>{% if user.data_scope.mode == "custom" %}Personalizado{% else %}Todos os dados{% endif %}</td><td class="admin-actions"><a href="{% url 'configuracoes:scope-edit' user.pk %}">Editar escopo</a></td></tr>{% empty %}<tr><td colspan="4" class="table-empty">Nenhum usuário encontrado.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="settings-section">
+  <form method="get" class="admin-filters admin-filters--search"><label class="visually-hidden" for="scope-search">Buscar grupos</label><input id="scope-search" type="search" name="q" value="{{ query }}" placeholder="Nome do grupo"><button class="settings-button settings-button--secondary" type="submit">Buscar</button></form>
+  <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Grupo</th><th>Tipo</th><th>Operadoras</th><th>Projetos</th><th>Usuários</th><th></th></tr></thead><tbody>
+    {% for group in page_obj %}<tr><td><strong>{{ group.name }}</strong></td>
+      <td>{% if group.data_scope and group.data_scope.mode == "all" %}Todos os dados{% elif group.data_scope %}Personalizado{% else %}<span class="table-muted">Sem configuração</span>{% endif %}</td>
+      <td>{% if group.data_scope and group.data_scope.mode == "all" %}Todas{% elif group.data_scope %}{% for item in group.data_scope.allowed_operators.all %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="table-muted">Nenhuma</span>{% endfor %}{% else %}—{% endif %}</td>
+      <td>{% if group.data_scope and group.data_scope.mode == "all" %}Todos{% elif group.data_scope %}{% for item in group.data_scope.allowed_projects.all %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="table-muted">Nenhum</span>{% endfor %}{% else %}—{% endif %}</td>
+      <td>{{ group.member_count }} {% if group.member_count == 1 %}usuário{% else %}usuários{% endif %}</td><td class="admin-actions"><a href="{% url 'configuracoes:scope-edit' group.pk %}">Editar</a></td></tr>
+    {% empty %}<tr><td colspan="6" class="table-empty">Nenhum grupo encontrado.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
 {% endblock %}

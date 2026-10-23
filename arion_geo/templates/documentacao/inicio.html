@@ -1,0 +1,56 @@
+{% extends "documentacao/base_documentacao.html" %}
+{% block title %}Documentação · NOC ATACADO{% endblock %}
+{% block docs_content %}
+<div class="docs-home">
+  <section class="docs-hero" aria-labelledby="docs-home-title">
+    <p class="docs-eyebrow">CENTRAL DE DOCUMENTAÇÃO</p>
+    <h1 id="docs-home-title">Como podemos ajudar?</h1>
+    <p class="docs-lead">Consulte a documentação funcional e técnica do NOC ATACADO.</p>
+    <form class="docs-search docs-search--hero" action="{% url 'configuracoes:documentation-search' %}" method="get" role="search">
+      <label class="visually-hidden" for="docs-search-home">Pesquisar na documentação</label>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.2 4.2"/></svg>
+      <input id="docs-search-home" name="q" type="search" placeholder="Pesquisar módulos, fluxos, segurança...">
+      <button type="submit">Pesquisar</button>
+    </form>
+  </section>
+
+  <section class="docs-home-categories" aria-labelledby="docs-categories-title">
+    <div class="docs-section-heading"><div><p class="docs-eyebrow">EXPLORE POR ASSUNTO</p><h2 id="docs-categories-title">Encontre o que precisa</h2></div></div>
+    <div class="docs-category-cards">
+      {% for card in home_cards %}
+      <a class="docs-category-card" href="#home-docs-{{ card.anchor }}">
+        <span class="docs-card-icon" aria-hidden="true">
+          {% if card.anchor == 'inicio' %}<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M8 7h8m-8 4h8"/></svg>
+          {% elif card.anchor == 'modulos' %}<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          {% elif card.anchor == 'administracao' %}<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1m2-9 2 2 4-4"/></svg>
+          {% else %}<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg>{% endif %}
+        </span>
+        <span class="docs-card-copy"><strong>{{ card.title }}</strong><small>{{ card.description }}</small></span>
+        <span class="docs-card-meta"><small>{{ card.documents|length }} documentos</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="docs-popular" aria-labelledby="docs-popular-title">
+    <div class="docs-section-heading docs-section-heading--compact"><div><p class="docs-eyebrow">PARA COMEÇAR</p><h2 id="docs-popular-title">Acessos rápidos</h2></div></div>
+    <nav class="docs-popular-links" aria-label="Acessos rápidos">
+      {% for item in popular_documents %}<a href="{% url 'configuracoes:documentation-page' slug=item.slug %}">{{ item.title }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>{% endfor %}
+    </nav>
+  </section>
+
+  <section class="docs-home-index" aria-label="Documentos por categoria">
+    {% for card in home_cards %}
+    <div class="docs-home-group" id="home-docs-{{ card.anchor }}">
+      <div class="docs-home-group-heading"><span>{{ forloop.counter|stringformat:"02d" }}</span><div><p class="docs-eyebrow">REFERÊNCIA</p><h2>{{ card.title }}</h2><p>{{ card.description }}</p></div></div>
+      <div class="docs-home-links">
+        {% for category in card.groups %}
+          {% if card.groups|length > 1 %}<p class="docs-home-subheading">{{ category.name }}</p>{% endif %}
+          {% for item in category.documents %}<a href="{% url 'configuracoes:documentation-page' slug=item.slug %}"><span><strong>{{ item.title }}</strong><small>{{ item.description }}</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>{% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

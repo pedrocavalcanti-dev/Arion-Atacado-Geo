@@ -4,79 +4,65 @@ from datetime import datetime
 from io import BytesIO, StringIO
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
-from aplicativos.base_links.models import CMDBImport, CMDBLink
-from aplicativos.base_links.services.provider_aggregation import provider_link_queryset
+from aplicativos.integracoes.services.analytics import LinkQueryService
 from aplicativos.configuracoes.permissions import access_required
-from aplicativos.configuracoes.data_scope import DataScopeService
+from config.errors import api_error, require_media_type
 from aplicativos.auditoria.services import AuditService
 from .models import SavedAnalyticsView
-from .services.analytics import AnalyticsQueryService
-
-STATE_NAMES = {
-    "AC": "Acre", "AL": "Alagoas", "AM": "Amazonas", "AP": "Amapá", "BA": "Bahia",
-    "CE": "Ceará", "DF": "Distrito Federal", "ES": "Espírito Santo", "GO": "Goiás",
-    "MA": "Maranhão", "MG": "Minas Gerais", "MS": "Mato Grosso do Sul", "MT": "Mato Grosso",
-    "PA": "Pará", "PB": "Paraíba", "PE": "Pernambuco", "PI": "Piauí", "PR": "Paraná",
-    "RJ": "Rio de Janeiro", "RN": "Rio Grande do Norte", "RO": "Rondônia", "RR": "Roraima",
-    "RS": "Rio Grande do Sul", "SC": "Santa Catarina", "SE": "Sergipe", "SP": "São Paulo", "TO": "Tocantins",
-}
-
-
-def share(value, whole):
-    return round(value / whole * 100, 1) if whole else 0
+from .services.analytics import AnalyticsQueryService, DashboardAnalyticsService, STATE_NAMES
 
 
 @login_required
 @access_required("view_dashboard")
 def index(request):
-    latest_import = CMDBImport.objects.order_by("-created_at").first()
-    links = DataScopeService.filter_queryset(
-        request.user, CMDBLink.objects.filter(is_present_in_latest_import=True),
-    )
-    if latest_import is None:
-        links = links.none()
-    summary = links.aggregate(
-        total_links=Count("id"),
-        state_count=Count("uf", distinct=True, filter=~Q(uf="")),
-    )
-    providers = provider_link_queryset(base_queryset=links).values("provider_id").distinct().count()
+    links = LinkQueryService.base(request.user)
+    operators = links.exclude(operator__isnull=True).values("operator_id", "operator__name").annotate(value=Count("id"))
     return render(request, "painel/index.html", {
-        **summary,
-        "provider_count": providers,
-        "latest_import": latest_import,
+        "total_links": links.count(), "state_count": links.exclude(state="").values("state").distinct().count(),
+        "provider_count": links.exclude(operator__isnull=True).values("operator_id").distinct().count(),
+        "latest_import": None, "operators": operators,
     })
 
 
 @login_required
 @access_required("view_dashboard")
 def dashboard(request):
-    links = DataScopeService.filter_queryset(request.user, CMDBLink.objects.filter(is_present_in_latest_import=True))
-    total_links = links.count()
-    demo = AnalyticsQueryService().dashboard_snapshot(user=request.user)
-    by_state = {row["uf"]: row["value"] for row in links.exclude(uf="").values("uf").annotate(value=Count("id")) if row["uf"] in STATE_NAMES}
-    operators = []
-    for row in links.values("operadora__name").annotate(value=Count("id")).order_by("operadora__name"):
-        name = row["operadora__name"] or "Não classificado"
-        key = name.casefold() if name.casefold() in {"algar", "claro", "vivo"} else "unclassified"
-        operators.append({"name": name, "value": row["value"], "key": key, "share": share(row["value"], total_links)})
-    top_states = sorted(({"code": code, "name": STATE_NAMES[code], "value": value,
-                          "flag": f"imagens/bandeiras/estados/{code.lower()}.svg"}
-                         for code, value in by_state.items()), key=lambda item: item["value"], reverse=True)[:5]
-    return render(request, "painel/dashboard.html", {
-        "data_source_mode": "cmdb", "total_links": total_links, "state_count": len(by_state),
-        **demo, "repeat_share": share(demo["repeat"], demo["calls"]), "first_calls": demo["calls"] - demo["repeat"],
-        "operator_count": len(operators), "operators": operators, "top_states": top_states,
-        "provider_count": links.exclude(provider__isnull=True).values("provider_id").distinct().count(),
-        "top_providers": list(links.exclude(provider__isnull=True).values("provider_id", "provider__name").annotate(value=Count("id")).order_by("-value", "provider__name")[:5]),
-        "latest_import": CMDBImport.objects.first(),
-    })
+    from datetime import date
 
+    from django.utils import timezone
+    from aplicativos.integracoes.services.analytics import PeriodService
+
+    now = timezone.localtime()
+    try:
+        start, end = PeriodService.parse(request.GET)
+        period_error = False
+    except ValueError:
+        start, end, period_error = None, None, True
+    start_year, start_month = now.year, now.month - 11
+    while start_month <= 0:
+        start_month += 12
+        start_year -= 1
+    default_start = date(start_year, start_month, 1)
+    if not start:
+        start = default_start
+    end = end or now.date()
+    if start > end:
+        start, end, period_error = default_start, now.date(), True
+
+    context = DashboardAnalyticsService.build(user=request.user, start=start, end=end)
+    return render(request, "painel/dashboard.html", {
+        **context,
+        "data_source_mode": "cmdb",
+        "date_from": start.isoformat(),
+        "date_to": end.isoformat(),
+        "period_error": period_error,
+    })
 
 @login_required
 @access_required("view_cockpit")
@@ -89,13 +75,16 @@ def cockpit(request):
 @require_POST
 @csrf_protect
 def analytics_query(request):
+    media_error = require_media_type(request, "application/json")
+    if media_error:
+        return media_error
     try:
         payload = json.loads(request.body or b"{}")
         if not isinstance(payload, dict):
-            raise ValueError("A consulta deve ser um objeto JSON.")
+            return api_error(request, "BAD_REQUEST")
         return JsonResponse(AnalyticsQueryService().query(payload, user=request.user))
-    except (ValueError, TypeError, json.JSONDecodeError) as error:
-        return JsonResponse({"error": str(error) or "Consulta inválida."}, status=400)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return api_error(request, "VALIDATION_ERROR", status=400)
 
 
 def _pdf_report(title, generated, filters, result):
@@ -276,7 +265,7 @@ def _pdf_report(title, generated, filters, result):
     ]
     cards = []
     for item in result["kpis"]:
-        source = "DEMONSTRAÇÃO" if item.get("source") == "demo" else "CMDB REAL"
+        source = "Espelhos CMDB / OTRS"
         cards.append([Paragraph(safe(item["label"]).upper(), styles["CardLabel"]),
                       Paragraph(f"{safe(format_number(item['value']))}{safe(item.get('unit', ''))}", styles["CardValue"]),
                       Paragraph(source, styles["CardLabel"])])
@@ -337,6 +326,9 @@ def _safe_spreadsheet_text(value):
 @require_POST
 @csrf_protect
 def analytics_export(request):
+    media_error = require_media_type(request, "application/json")
+    if media_error:
+        return media_error
     try:
         payload = json.loads(request.body or b"{}")
         if not isinstance(payload, dict):
@@ -371,7 +363,7 @@ def analytics_export(request):
             summary.append([])
             summary.append(["Indicador", "Valor", "Fonte"])
             for item in result["kpis"]:
-                summary.append([item["label"], item["value"], "Demo" if item["source"] == "demo" else "CMDB real"])
+                summary.append([item["label"], item["value"], "Espelhos CMDB / OTRS"])
             summary["A1"].font = Font(bold=True, size=14)
             data = workbook.create_sheet("Dados")
             data.append([result["group_by_label"], result["metric_label"], "Participação (%)"])
@@ -391,10 +383,10 @@ def analytics_export(request):
             response = HttpResponse(_pdf_report(result["metric_label"], generated, filters, result), content_type="application/pdf")
             filename = "arion-cockpit.pdf"
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        AuditService.record(request=request, category="EXPORT", action=f"EXPORT_{export_format.upper()}", module="Cockpit", description=f"Exporta??o Cockpit {export_format.upper()}", result="SUCCESS", metadata={"format": export_format, "filters": payload.get("filters", {}), "period_from": result.get("period_from"), "period_to": result.get("period_to"), "group_by": result.get("group_by_label"), "rows": len(result.get("detail", []))})
+        AuditService.record(request=request, category="EXPORT", action=f"EXPORT_{export_format.upper()}", module="Cockpit", description=f"Cockpit export {export_format.upper()}", result="SUCCESS", metadata={"format": export_format, "filters": payload.get("filters", {}), "period_from": result.get("period_from"), "period_to": result.get("period_to"), "group_by": result.get("group_by_label"), "rows": len(result.get("detail", []))})
         return response
-    except (ValueError, TypeError, json.JSONDecodeError) as error:
-        return JsonResponse({"error": str(error) or "Consulta inválida."}, status=400)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return api_error(request, "VALIDATION_ERROR", status=400)
 
 
 @login_required
@@ -402,13 +394,16 @@ def analytics_export(request):
 @require_POST
 @csrf_protect
 def saved_views(request):
+    media_error = require_media_type(request, "application/json")
+    if media_error:
+        return media_error
     try:
         payload = json.loads(request.body or b"{}")
         if not isinstance(payload, dict):
-            raise ValueError("A solicitação deve ser um objeto JSON.")
+            return api_error(request, "BAD_REQUEST")
         action = payload.get("action", "list")
         if action in ("save", "rename", "delete") and not request.user.has_perm("configuracoes.save_analytics_views"):
-            return JsonResponse({"error": "Você não tem permissão para alterar visões salvas."}, status=403)
+            return api_error(request, "ACCESS_DENIED")
         if action == "list":
             rows = SavedAnalyticsView.objects.filter(user=request.user)
             return JsonResponse({"views": [{"id": row.pk, "name": row.name, "configuration": row.configuration, "favorite": row.favorite} for row in rows]})
@@ -435,7 +430,7 @@ def saved_views(request):
                 raise ValueError("Informe um nome de até 80 caracteres.")
             row = SavedAnalyticsView.objects.filter(user=request.user, pk=payload.get("id")).first()
             if row is None:
-                return JsonResponse({"error": "Consulta salva não encontrada."}, status=404)
+                return api_error(request, "NOT_FOUND")
             if SavedAnalyticsView.objects.filter(user=request.user, name=name).exclude(pk=row.pk).exists():
                 raise ValueError("Você já tem uma consulta com esse nome.")
             old_name = row.name
@@ -444,5 +439,5 @@ def saved_views(request):
             AuditService.record(request=request, user=request.user, category="COCKPIT", action="SAVED_VIEW_UPDATED", description="Consulta salva renomeada", obj=row, metadata={"old_name": old_name, "name": row.name})
             return JsonResponse({"id": row.pk, "name": row.name})
         raise ValueError("Ação inválida.")
-    except (ValueError, TypeError, json.JSONDecodeError) as error:
-        return JsonResponse({"error": str(error) or "Solicitação inválida."}, status=400)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return api_error(request, "VALIDATION_ERROR", status=400)

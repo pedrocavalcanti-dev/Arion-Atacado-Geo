@@ -36,6 +36,12 @@ NEUTRAL_MIME_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
 DEFAULT_MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 
+class UploadValidationError(ValidationError):
+    def __init__(self, code="ATTACHMENT_INVALID"):
+        self.error_code = code
+        super().__init__(code)
+
+
 def max_attachment_bytes():
     return int(getattr(settings, "ARI_MAX_ATTACHMENT_BYTES", DEFAULT_MAX_ATTACHMENT_BYTES))
 
@@ -105,24 +111,27 @@ def _detect_content(upload, extension):
 
 
 def validate_upload(upload):
-    original_name = _safe_name(getattr(upload, "name", ""))
+    try:
+        original_name = _safe_name(getattr(upload, "name", ""))
+    except ValidationError as error:
+        raise UploadValidationError() from error
     extension = PurePosixPath(original_name).suffix.lower()
     if extension not in ALLOWED_MIME_TYPES:
-        raise ValidationError("Formato não permitido. Use PDF, XLSX, CSV, TXT, DOCX ou imagem PNG/JPG/GIF/WEBP.")
+        raise UploadValidationError()
 
     size = int(getattr(upload, "size", 0) or 0)
     if size <= 0:
-        raise ValidationError("O arquivo está vazio.")
+        raise UploadValidationError()
     maximum = max_attachment_bytes()
     if size > maximum:
-        raise ValidationError(f"Arquivo acima do limite de {maximum // (1024 * 1024)} MB.")
+        raise UploadValidationError("FILE_TOO_LARGE")
 
     declared_mime = (getattr(upload, "content_type", "") or "").split(";", 1)[0].strip().lower()
     expected_mimes = ALLOWED_MIME_TYPES[extension]
     if declared_mime not in NEUTRAL_MIME_TYPES and declared_mime not in expected_mimes:
-        raise ValidationError("O tipo MIME não corresponde à extensão do arquivo.")
+        raise UploadValidationError()
     if not _detect_content(upload, extension):
-        raise ValidationError("O conteúdo do arquivo não corresponde a um formato permitido.")
+        raise UploadValidationError()
 
     upload.name = original_name
     detected_mime = CANONICAL_MIME_TYPES[extension]

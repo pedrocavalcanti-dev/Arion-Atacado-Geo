@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "aplicativos.autenticacao.apps.AutenticacaoConfig",
     "aplicativos.configuracoes.apps.ConfiguracoesConfig",
     "aplicativos.auditoria.apps.AuditoriaConfig",
+    "aplicativos.integracoes.apps.IntegracoesConfig",
     "aplicativos.ari.apps.AriConfig",
     "aplicativos.painel.apps.PainelConfig",
     "aplicativos.mapa.apps.MapaConfig",
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "config.middleware.RequestErrorMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -85,6 +87,39 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "autenticacao:login"
 LOGIN_REDIRECT_URL = "painel:index"
 LOGOUT_REDIRECT_URL = "autenticacao:login"
+CSRF_FAILURE_VIEW = "config.errors.csrf_failure"
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "arion_errors": {
+            "format": "{asctime} {levelname} {name} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "arion_error_console": {
+            "class": "logging.StreamHandler",
+            "level": "WARNING",
+            "formatter": "arion_errors",
+        },
+    },
+    "loggers": {
+        "django.request": {
+            # Django logs exception tracebacks here. The shared error handlers
+            # write a sanitized request record, so suppress raw exception data.
+            "handlers": [],
+            "level": "CRITICAL",
+            "propagate": False,
+        },
+        "config.errors": {
+            "handlers": ["arion_error_console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
 
 MAPBOX_PUBLIC_TOKEN = os.getenv("MAPBOX_PUBLIC_TOKEN", "").strip()
 

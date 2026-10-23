@@ -1,4 +1,4 @@
-def get_data_source_mode():
-    from .models import CMDBImport
+"""Deprecated compatibility helper: operational Base data comes from CMDB mirrors."""
 
-    return "cmdb" if CMDBImport.objects.exists() else "demo"
+def get_data_source_mode():
+    return "cmdb"

@@ -1,13 +1,13 @@
-from django.shortcuts import render
+from .errors import handler403, handler404, handler500
 
 
 def permission_denied(request, exception=None):
-    return render(request, "errors/403.html", status=403)
+    return handler403(request, exception)
 
 
 def page_not_found(request, exception=None):
-    return render(request, "errors/404.html", status=404)
+    return handler404(request, exception)
 
 
 def server_error(request):
-    return render(request, "errors/500.html", status=500)
+    return handler500(request)

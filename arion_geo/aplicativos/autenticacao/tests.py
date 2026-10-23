@@ -1,11 +1,18 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.contrib.auth.models import Group
+from aplicativos.configuracoes.models import GroupDataScope
 
 
 class AuthenticationFlowTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="operador", password="Senha-segura-123")
+        group = Group.objects.get(name="Analista NOC")
+        self.user.groups.set([group])
+        scope, _ = GroupDataScope.objects.get_or_create(group=group)
+        scope.mode = GroupDataScope.Mode.ALL
+        scope.save()
 
     def test_root_redirects_to_login_for_anonymous_user(self):
         response = self.client.get(reverse("home"))

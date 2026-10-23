@@ -1,55 +1,51 @@
 {% extends "base.html" %}
 {% load static humanize %}
 {% block title %}Base de Links · Arion Atacado Geo{% endblock %}
+{% block body_class %}base-links-module{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/base-links.css' %}">{% endblock %}
 {% block content %}
 <section class="links-page" aria-labelledby="links-title">
   <header class="links-heading">
     <div><p class="section-kicker">NOC ATACADO <span>/</span> BASE</p><h1 id="links-title">Base de Links</h1><p>Espelho operacional da base oficial do OTRS / CMDB.</p></div>
-    <div class="links-heading-actions"><span class="source-badge"><i></i>Fonte oficial: OTRS / CMDB</span><a class="links-secondary-button" href="{% url 'base_links:index' %}?view=providers"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="2"/><path d="M2.5 7h15M7 7v10m6-10v10"/></svg>Por provedor</a>{% if perms.configuracoes.import_cmdb %}<a class="links-primary-button" href="{% url 'base_links:import' %}">Importar / Atualizar CMDB <span aria-hidden="true">&#8599;</span></a>{% endif %}</div>
+    <div class="links-heading-actions"><span class="source-badge"><i></i>Espelho local CMDB</span><a class="links-secondary-button" href="{% url 'base_links:providers' %}">Ver provedores</a>{% if perms.configuracoes.export_base %}<a class="links-primary-button" href="{% url 'base_links:export' %}?{{ request.GET.urlencode }}">Exportar CSV</a>{% endif %}</div>
   </header>
-  {% if latest_import %}<p class="last-sync">Última atualização: {{ latest_import.created_at|date:"d/m/Y H:i" }} · {{ latest_import.filename }}</p>{% endif %}
   <div class="links-kpis" aria-label="Resumo da base CMDB">
-    <article><span>Total no espelho</span><strong>{{ total_links|intcomma }}</strong></article>
-    <article><span>Operacionais</span><strong>{{ operational_count|intcomma }}</strong></article>
-    <article><span>Com incidente</span><strong>{{ incident_count|intcomma }}</strong></article>
-    <article><span>Cancelados</span><strong>{{ canceled_count|intcomma }}</strong></article>
-    <article><span>Provedores</span><strong>{{ provider_count|intcomma }}</strong></article>
+    <article><span>Links presentes no espelho</span><strong>{{ total_links|intcomma }}</strong></article>
+    <article><span>Operacionais no CMDB</span><strong>{{ operational_count|intcomma }}</strong></article>
+    <article><span>Com incidente no CMDB</span><strong>{{ incident_count|intcomma }}</strong></article>
+    <article><span>Cancelados no CMDB</span><strong>{{ canceled_count|intcomma }}</strong></article>
+    <article><span>Provedores associados</span><strong>{{ provider_count|intcomma }}</strong></article>
   </div>
 
-
-  {% if not latest_import %}
-  <div class="links-empty"><span class="empty-mark" aria-hidden="true">↥</span><h2>Nenhuma base CMDB foi importada ainda.</h2><p>Envie o export XLSX do OTRS / CMDB para criar o espelho local de links.</p>{% if perms.configuracoes.import_cmdb %}<a class="links-primary-button" href="{% url 'base_links:import' %}">Importar export CMDB <span aria-hidden="true">↗</span></a>{% endif %}</div>
+  {% if total_links == 0 %}
+  <div class="links-empty"><span class="empty-mark" aria-hidden="true">&#8212;</span><h2>Nenhum Link presente no espelho CMDB.</h2><p>A sincronização CMDB ainda não encontrou Links presentes na fonte.</p></div>
   {% else %}
   <form class="links-filters" method="get" action="{% url 'base_links:index' %}">
-    <div class="links-search"><label class="sr-only" for="links-search-input">Buscar designa&ccedil;&atilde;o, ConfigItem, ISP, cidade ou contrato</label><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg><input id="links-search-input" type="search" name="q" value="{{ filters.q }}" placeholder="Buscar designa&ccedil;&atilde;o, ConfigItem, ISP, cidade, contrato..."><button type="button" data-clear-search aria-label="Limpar busca"{% if not filters.q %} hidden{% endif %}>&times;</button></div>
-    <select name="operadora" aria-label="Filtrar operadora"><option value="">Todas as operadoras</option>{% for option in operators %}<option value="{{ option.pk }}"{% if filters.operadora == option.pk|stringformat:"s" %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select>
-    <select name="projeto" aria-label="Filtrar projeto"><option value="">Todos os projetos</option>{% for option in projects %}<option value="{{ option.pk }}"{% if filters.projeto == option.pk|stringformat:"s" %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select>
+    <div class="links-search"><label class="sr-only" for="links-search-input">Buscar designação, identificador, endereço, circuito, projeto ou provedor</label><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg><input id="links-search-input" type="search" name="q" value="{{ filters.q }}" placeholder="Buscar designação, ConfigItem, endereço, cidade, circuito, provedor..."><button type="button" data-clear-search aria-label="Limpar busca"{% if not filters.q %} hidden{% endif %}>&times;</button></div>
+    <select name="projeto" aria-label="Filtrar projeto legado"><option value="">Todos os projetos legados</option>{% for option in projects %}<option value="{{ option.name }}"{% if filters.projeto == option.name %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select>
+    <select name="provedor" aria-label="Filtrar provedor"><option value="">Todos os provedores</option>{% for option in providers %}<option value="{{ option.config_item_id|default:option.name }}"{% if filters.provedor == option.config_item_id or filters.provedor == option.name %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select>
     <select name="uf" aria-label="Filtrar estado"><option value="">Todas as UFs</option>{% for option in ufs %}<option value="{{ option }}"{% if filters.uf == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
-    <select name="provedor" aria-label="Filtrar provedor"><option value="">Todos os provedores</option>{% for option in providers %}<option value="{{ option.pk }}"{% if filters.provedor == option.pk|stringformat:"s" %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select>
-    <select name="deployment_state" aria-label="Filtrar estado de implantação"><option value="">Todos os estados de implantação</option>{% for option in deployment_states %}<option value="{{ option }}"{% if filters.deployment_state == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+    <select name="deployment_state" aria-label="Filtrar estado de implantação"><option value="">Todas as implantações</option>{% for option in deployment_states %}<option value="{{ option }}"{% if filters.deployment_state == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
     <select name="incident_state" aria-label="Filtrar estado de incidente"><option value="">Todos os estados de incidente</option>{% for option in incident_states %}<option value="{{ option }}"{% if filters.incident_state == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
     <select name="link_type" aria-label="Filtrar tipo"><option value="">Todos os tipos</option>{% for option in link_types %}<option value="{{ option }}"{% if filters.link_type == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
-    <select name="classification_status" aria-label="Filtrar classificação"><option value="">Todas as classificações</option>{% for value,label in classification_options %}<option value="{{ value }}"{% if filters.classification_status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-    <select name="presence" aria-label="Filtrar presença no último export"><option value="">Todos os registros do espelho</option><option value="present"{% if filters.presence == "present" %} selected{% endif %}>Presentes no último export</option><option value="absent"{% if filters.presence == "absent" %} selected{% endif %}>Ausentes no último export</option></select>
     <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="page_size" value="{{ page_size }}"><div class="links-filter-actions"><a href="{% url 'base_links:index' %}">Limpar</a><button type="submit">Filtrar</button></div>
   </form>
 
   <div class="links-table-wrap"><table class="links-table"><thead><tr>
-    <th><a data-sort-key="designation" href="?{{ request.GET.urlencode }}&sort=designation">Designação</a></th><th>Operadora</th><th>Projeto</th><th><a data-sort-key="provider" href="?{{ request.GET.urlencode }}&sort=provider">Provedor</a></th><th><a data-sort-key="uf" href="?{{ request.GET.urlencode }}&sort=uf">Cidade / UF</a></th><th>Velocidade</th><th><a data-sort-key="deployment" href="?{{ request.GET.urlencode }}&sort=deployment">Implantação</a></th><th>Incidente</th>
+    <th><a data-sort-key="designation" href="?{{ request.GET.urlencode }}&amp;sort=designation">Designação</a></th><th>Projeto legado</th><th>Operadora contratada</th><th><a data-sort-key="provider" href="?{{ request.GET.urlencode }}&amp;sort=provider">Provedor</a></th><th><a data-sort-key="uf" href="?{{ request.GET.urlencode }}&amp;sort=uf">Cidade / UF</a></th><th>Velocidade</th><th><a data-sort-key="deployment" href="?{{ request.GET.urlencode }}&amp;sort=deployment">Implantação</a></th><th>Incidente</th>
   </tr></thead><tbody>
-    {% for link in links %}<tr class="links-row" data-link-id="{{ link.pk }}" tabindex="0" role="button" aria-label="Abrir detalhes de {{ link.designation_arion|default:link.config_item_id }}">
-      <td><strong>{{ link.designation_arion|default:"Sem designação" }}</strong><small>CI #{{ link.config_item_id }}</small>{% if not link.is_present_in_latest_import %}<small class="missing-source">Não consta no último export</small>{% endif %}</td>
-      <td>{% if link.operadora %}{{ link.operadora.name }}{% else %}<span class="unclassified">Não classificado</span>{% endif %}</td>
-      <td>{% if link.projeto %}{{ link.projeto.name }}{% else %}<span class="unclassified">Não classificado</span>{% endif %}</td>
-      <td>{% if link.provider %}{{ link.provider.name }}{% else %}<span class="value-muted">Não informado</span>{% endif %}</td>
-      <td>{{ link.city|default:"—" }}{% if link.uf %}<small>{{ link.uf }}</small>{% elif link.uf_raw %}<small>{{ link.uf_raw }}</small>{% endif %}</td>
+    {% for link in links %}<tr class="links-row" data-link-id="{{ link.pk }}" tabindex="0" role="button" aria-label="Abrir detalhes de {{ link.designation|default:link.name|default:link.source_number }}">
+      <td><strong>{{ link.display_designation|default:"Não informado" }}</strong><small>CI {{ link.source_config_item_id }} · Nº {{ link.source_number|default:"—" }}</small></td>
+      <td>{% if link.legacy_project %}{{ link.legacy_project }}{% else %}<span class="unclassified">Não classificado</span>{% endif %}</td>
+      <td><span class="unclassified">Não classificada</span></td>
+      <td>{% if link.operator %}{{ link.operator.name }}{% else %}<span class="unclassified">Não classificado</span>{% endif %}</td>
+      <td>{{ link.city|default:"—" }}{% if link.state %}<small>{{ link.state }}</small>{% endif %}</td>
       <td>{{ link.speed_raw|default:"—" }}</td>
       <td><span class="state-badge state-badge--{{ link.deployment_state|slugify }}">{{ link.deployment_state|default:"Não informado" }}</span></td>
-      <td><span class="incident-badge{% if 'incident' in link.incident_state|lower %} is-incident{% endif %}">{% if 'incident' in link.incident_state|lower %}Incidente{% else %}Normal{% endif %}</span></td>
+      <td><span class="incident-badge{% if 'incident' in link.incident_state|lower %} is-incident{% endif %}">{{ link.incident_state|default:"Não informado" }}</span></td>
     </tr>{% empty %}<tr><td colspan="8" class="table-empty"><strong>Nenhum link encontrado.</strong><span>Tente ajustar os filtros ou limpar a busca.</span><a href="{% url 'base_links:index' %}">Limpar filtros</a></td></tr>{% endfor %}
   </tbody></table></div>
-  <footer class="links-pagination"><span>{{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} links</span><label>Por página <select data-page-size><option value="25"{% if page_size == 25 %} selected{% endif %}>25</option><option value="50"{% if page_size == 50 %} selected{% endif %}>50</option><option value="100"{% if page_size == 100 %} selected{% endif %}>100</option><option value="200"{% if page_size == 200 %} selected{% endif %}>200</option><option value="500"{% if page_size == 500 %} selected{% endif %}>500</option></select></label><nav aria-label="Paginação">{% if page_obj.has_previous %}<a data-page-number="{{ page_obj.previous_page_number }}" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}" aria-label="Página anterior">&larr; Anterior</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a data-page-number="{{ page_obj.next_page_number }}" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}" aria-label="Próxima página">Pr&oacute;xima &rarr;</a>{% endif %}</nav></footer>
+  <footer class="links-pagination"><span>{{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} links</span><label>Por página <select data-page-size><option value="25"{% if page_size == 25 %} selected{% endif %}>25</option><option value="50"{% if page_size == 50 %} selected{% endif %}>50</option><option value="100"{% if page_size == 100 %} selected{% endif %}>100</option><option value="200"{% if page_size == 200 %} selected{% endif %}>200</option></select></label><nav aria-label="Paginação">{% if page_obj.has_previous %}<a data-page-number="{{ page_obj.previous_page_number }}" href="?{{ request.GET.urlencode }}&amp;page={{ page_obj.previous_page_number }}" aria-label="Página anterior">← Anterior</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a data-page-number="{{ page_obj.next_page_number }}" href="?{{ request.GET.urlencode }}&amp;page={{ page_obj.next_page_number }}" aria-label="Próxima página">Próxima →</a>{% endif %}</nav></footer>
   {% endif %}
 </section>
 <div class="links-drawer-backdrop" data-drawer-backdrop hidden></div><aside class="links-drawer thin-scroll" data-link-drawer aria-hidden="true" inert><button type="button" class="drawer-close" data-drawer-close aria-label="Fechar detalhes">×</button><div data-drawer-content><p class="drawer-loading">Carregando detalhes…</p></div></aside>

@@ -1,3 +1,7 @@
+"""Deprecated XLSX provider aggregation retained for rollback only.
+
+Operational routes do not import this module.
+"""
 """Shared CMDB-only provider aggregates used by Base and Rankings."""
 from django.db.models import Count, Q
 

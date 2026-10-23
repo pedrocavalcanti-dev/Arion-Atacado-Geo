@@ -11,9 +11,8 @@
   const projectFilter = document.querySelector("[data-cmdb-project]");
   // Keep the map usable if an older cached template has not received newer controls yet.
   const metricFilter = root.querySelector("[data-cmdb-metric]") || { value: "base", addEventListener() {} };
-  const periodFilter = root.querySelector("[data-cmdb-period]") || { value: "current", disabled: true, options: [], selectedOptions: [], querySelector: () => null, addEventListener() {} };
-  const reasonFilter = root.querySelector("[data-cmdb-reason]") || { value: "Falha massiva", addEventListener() {} };
-  const reasonWrap = root.querySelector("[data-cmdb-reason-wrap]") || { hidden: true };
+  const dateFrom = root.querySelector("[data-cmdb-date-from]");
+  const dateTo = root.querySelector("[data-cmdb-date-to]");
   const stateSearch = root.querySelector("[data-cmdb-state-search]") || { value: "", addEventListener() {}, setCustomValidity() {}, reportValidity() {} };
   const errorDetail = root.querySelector("[data-cmdb-error-detail]");
   // KPI and note live in the page header, outside the map stage.
@@ -29,7 +28,7 @@
   const stateMetricLabel = root.querySelector("[data-cmdb-state-metric-label]");
   const stateContext = root.querySelector("[data-cmdb-state-context]");
   const required = [mapElement, message, errorBox, statePanel, operatorFilter, projectFilter,
-    metricFilter, periodFilter, reasonFilter, reasonWrap, stateSearch,
+    metricFilter, dateFrom, dateTo, stateSearch,
     totalElement, ufNote,
     stateList, errorDetail, stateName, stateTotal, stateOperators, stateProjects,
     root.querySelector("[data-cmdb-panel-close]"), root.querySelector("[data-cmdb-retry]")];
@@ -41,51 +40,25 @@
   let aggregate = {};
   let viewData = {};
   let selectedCode = "";
-  const reasonNames = ["Falha massiva", "Rompimento de fibra", "Troca de drop", "Equipamento", "Falha elétrica", "Sem intervenção", "Outros"];
   try {
     const saved = JSON.parse(localStorage.getItem("arion-cmdb-map-state") || "{}");
-    if (["base", "tickets", "recurrences", "reasons"].includes(saved.metric)) metricFilter.value = saved.metric;
-    if ([...periodFilter.options].some(option => option.value === saved.period)) periodFilter.value = saved.period;
-  } catch (_error) { /* Ignore a blocked or malformed local preference. */ }
-  function stableValue(uf, period, salt) {
-    let hash = 0;
-    for (const char of `${uf}-${period}-${salt}`) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-    return hash / 4294967295;
+    if (["base", "tickets", "open_tickets", "affected_links", "recurrences"].includes(saved.metric)) metricFilter.value = saved.metric;
+  } catch (_error) { /* Map use does not depend on storage. */ }
+  function valueFor(_uf, row) {
+    return ({ base: row.total_links || 0, tickets: row.ticket_count || 0,
+      open_tickets: row.open_tickets || 0, affected_links: row.affected_links || 0,
+      recurrences: row.recurrence_links || 0 })[metricFilter.value] || 0;
   }
-  function demoMetrics(uf, links) {
-    const period = periodFilter.value === "current" ? "2026-10" : periodFilter.value;
-    const rate = .075 + stableValue(uf, period, "ticket-rate") * .085;
-    const tickets = links ? Math.max(1, Math.round(links * rate)) : 0;
-    const recurrences = Math.min(tickets, Math.round(tickets * (.16 + stableValue(uf, period, "repeat-rate") * .22)));
-    const weights = [26, 20, 15, 12, 10, 9, 8].map((weight, index) => weight + Math.round(stableValue(uf, period, `reason-${index}`) * 4));
-    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-    const reasons = Object.fromEntries(reasonNames.map((name, index) => [name, Math.floor(tickets * weights[index] / totalWeight)]));
-    let remainder = tickets - Object.values(reasons).reduce((sum, value) => sum + value, 0);
-    for (let index = 0; remainder > 0; index = (index + 1) % reasonNames.length, remainder--) reasons[reasonNames[index]]++;
-    return { tickets, recurrences, reasons };
+  function metricLabel() {
+    return ({ base: "links CMDB", tickets: "tickets criados no período", open_tickets: "tickets abertos",
+      affected_links: "links com ticket aberto", recurrences: "links com 2+ tickets no período" })[metricFilter.value];
   }
-  function valueFor(uf, row) {
-    const demo = demoMetrics(uf, row.total_links);
-    if (metricFilter.value === "tickets") return demo.tickets;
-    if (metricFilter.value === "recurrences") return demo.recurrences;
-    if (metricFilter.value === "reasons") return demo.reasons[reasonFilter.value] || 0;
-    return row.total_links;
-  }
-  function metricLabel() { return ({ base: "links CMDB real", tickets: "chamados · demonstração", recurrences: "reincidências · demonstração", reasons: "chamados por motivo · demonstração" })[metricFilter.value]; }
   function refreshMapView() {
-    const metric = metricFilter.value;
-    const period = periodFilter.value;
-    const demo = metric !== "base";
-    periodFilter.disabled = !demo;
-    reasonWrap.hidden = metric !== "reasons";
-    const currentOption = periodFilter.querySelector('option[value="current"]');
-    if (currentOption) currentOption.textContent = demo ? "Selecione" : "Atual";
-    if (demo && period === "current") periodFilter.value = "2026-10";
-    try { localStorage.setItem("arion-cmdb-map-state", JSON.stringify({ metric, period: periodFilter.value })); } catch (_error) { /* Map use does not depend on storage. */ }
-    const month = periodFilter.value;
-    const monthLabel = periodFilter.selectedOptions[0]?.textContent || "Out/26";
-    if (sourceNote) sourceNote.textContent = demo ? `${metric === "tickets" ? "Chamados" : metric === "recurrences" ? "Reincidência" : "Motivos"} · DEMONSTRAÇÃO · ${monthLabel}. Links e filtros vêm da Base CMDB real.` : "Base · CMDB real · snapshot atual.";
-    if (totalLabel) totalLabel.textContent = demo ? metricLabel() : "links CMDB";
+    try { localStorage.setItem("arion-cmdb-map-state", JSON.stringify({ metric: metricFilter.value })); } catch (_error) { /* Map use does not depend on storage. */ }
+    if (sourceNote) sourceNote.textContent = metricFilter.value === "base"
+      ? "Base: CMDB real · snapshot atual."
+      : `${metricLabel()} · OTRS local · data baseada na criação do ticket.`;
+    if (totalLabel) totalLabel.textContent = metricLabel();
     updateMap(viewData);
     if (selectedCode) selectState(selectedCode);
   }
@@ -109,21 +82,23 @@
     const max = Math.max(1, ...features.map(feature => feature.properties.links));
     if (map?.getSource("cmdb-states")) map.getSource("cmdb-states").setData({ type: "FeatureCollection", features });
     if (map?.getLayer("cmdb-fill")) map.setPaintProperty("cmdb-fill", "fill-color", fillExpression(max));
-    totalElement.textContent = number.format(metricFilter.value === "base" ? data.source_total || 0 : Object.entries(aggregate).reduce((sum, [uf, row]) => sum + valueFor(uf, row), 0));
+    const valueTotal = Object.entries(aggregate).reduce((sum, [uf, row]) => sum + valueFor(uf, row), 0);
     const filteredTotal = data.filtered_source_total ?? data.source_total ?? 0;
-    ufNote.textContent = `${number.format(filteredTotal - (data.invalid_uf_count || 0))} links com UF válida no recorte; ${number.format(data.invalid_uf_count || 0)} sem UF válida. O total geral CMDB é ${number.format(data.source_total || 0)}.`;
-    const ranked = Object.entries(aggregate).sort((a,b) => b[1].total_links - a[1].total_links);
-    const displayRanked = ranked.map(([uf, row]) => [uf, { ...row, value: valueFor(uf, row) }]).sort((a,b) => b[1].value-a[1].value);
+    totalElement.textContent = number.format(metricFilter.value === "base" ? filteredTotal : valueTotal);
+    ufNote.textContent = `${number.format(filteredTotal - (data.invalid_uf_count || 0))} links com UF válida; ${number.format(data.invalid_uf_count || 0)} sem UF válida. Tickets usam o recorte de data informado.`;
+    const displayRanked = Object.entries(aggregate).map(([uf, row]) => [uf, { ...row, value: valueFor(uf, row) }]).sort((a,b) => b[1].value-a[1].value);
     stateList.innerHTML = displayRanked.slice(0, 10).map(([uf, row], index) => `<div class="cmdb-state-rank"><span>${String(index + 1).padStart(2,"0")}</span><b>${ufNames[uf] || uf}</b><small>${uf}</small><strong>${number.format(row.value)}</strong><i><em style="width:${row.value / max * 100}%"></em></i></div>`).join("") || '<p>Nenhum link com UF válida.</p>';
   }
   function fillFilters(data) {
     operatorFilter.innerHTML = '<option value="">Todas</option>' + data.operators.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
-    projectFilter.innerHTML = '<option value="">Todos</option>' + data.projects.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
+    projectFilter.innerHTML = '<option value="">Todos</option>' + data.projects.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
   }
   async function refresh() {
     const url = new URL(root.dataset.apiUrl, window.location.origin);
     if (operatorFilter.value) url.searchParams.set("operator", operatorFilter.value);
     if (projectFilter.value) url.searchParams.set("project", projectFilter.value);
+    if (dateFrom.value) url.searchParams.set("date_from", dateFrom.value);
+    if (dateTo.value) url.searchParams.set("date_to", dateTo.value);
     const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" }, signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error(`A API da base respondeu HTTP ${response.status}.`);
     const data = await response.json();
@@ -143,13 +118,11 @@
     statePanel.hidden = false;
     stateName.textContent = `${ufNames[code] || code} · ${code}`;
     stateTotal.textContent = number.format(valueFor(code, row));
-    const demo = demoMetrics(code, row.total_links);
-    const isDemo = metricFilter.value !== "base";
     if (stateMetricLabel) stateMetricLabel.textContent = metricLabel();
-    if (stateContext) stateContext.textContent = isDemo ? `${number.format(demo.tickets)} chamados demonstrativos · ${number.format(row.total_links)} links reais · ${number.format(demo.recurrences)} reincidências demonstrativas${metricFilter.value === "reasons" ? ` · motivo principal: ${Object.entries(demo.reasons).sort((a,b)=>b[1]-a[1])[0]?.[0] || "—"}` : ""}` : "Contagem real de links presentes no último export CMDB.";
+    if (stateContext) stateContext.textContent = `${number.format(row.total_links || 0)} links CMDB ? ${number.format(row.ticket_count || 0)} tickets no período ? ${number.format(row.open_tickets || 0)} abertos agora ? ${number.format(row.affected_links || 0)} links afetados.`;
     const countsHtml = (counts, empty) => Object.entries(counts || {}).sort((a,b) => b[1] - a[1]).map(([name, count]) => `<div class="operator-row"><span>${escapeHtml(name)}</span><strong>${number.format(count)}</strong><i class="operator-meter"><b style="width:${row.total_links ? count / row.total_links * 100 : 0}%"></b></i></div>`).join("") || `<p class="value-muted">${empty}</p>`;
-    stateOperators.innerHTML = countsHtml(row.operator_counts, "Operadora não classificada.");
-    stateProjects.innerHTML = countsHtml(row.project_counts, "Projeto não classificado.");
+    stateOperators.innerHTML = countsHtml(row.operator_counts, "Provedor nao classificado.");
+    stateProjects.innerHTML = countsHtml(row.project_counts, "Projeto nao classificado.");
   }
   function searchState() {
     const query = stateSearch.value.trim().toLocaleUpperCase("pt-BR");
@@ -208,9 +181,8 @@
           const code = event.features?.[0]?.properties?.sigla;
           if (!code) return;
           const row = aggregate[code] || { total_links: 0 };
-          const demo = demoMetrics(code, row.total_links);
           const amount = valueFor(code, row);
-          popup.setLngLat(event.lngLat).setHTML(`<strong>${escapeHtml(ufNames[code] || code)}</strong><br>${number.format(amount)} ${escapeHtml(metricLabel())}<br>${number.format(row.total_links)} links reais CMDB${metricFilter.value === "base" ? "" : `<br>${number.format(demo.tickets)} chamados demonstrativos`}`).addTo(map);
+          popup.setLngLat(event.lngLat).setHTML(`<strong>${escapeHtml(ufNames[code] || code)}</strong><br>${number.format(amount)} ${escapeHtml(metricLabel())}<br>${number.format(row.total_links || 0)} links CMDB<br>${number.format(row.open_tickets || 0)} tickets abertos`).addTo(map);
         });
         map.on("mouseleave", "cmdb-fill", () => popup.remove());
         message.hidden = true;
@@ -229,8 +201,8 @@
   operatorFilter.addEventListener("change", () => refresh().catch(error => showError(error.message)));
   projectFilter.addEventListener("change", () => refresh().catch(error => showError(error.message)));
   metricFilter.addEventListener("change", refreshMapView);
-  periodFilter.addEventListener("change", refreshMapView);
-  reasonFilter.addEventListener("change", refreshMapView);
+  dateFrom.addEventListener("change", () => refresh().catch(error => showError(error.message)));
+  dateTo.addEventListener("change", () => refresh().catch(error => showError(error.message)));
   stateSearch.addEventListener("change", searchState);
   stateSearch.addEventListener("keydown", event => { if (event.key === "Enter") searchState(); });
   root.querySelector("[data-cmdb-panel-close]").addEventListener("click", () => { selectedCode = ""; statePanel.hidden = true; root.classList.remove("has-selection"); });

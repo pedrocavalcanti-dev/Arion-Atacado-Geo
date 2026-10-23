@@ -1,249 +1,269 @@
-from pathlib import Path
+from datetime import date, datetime, timezone as datetime_timezone
 import json
-from io import BytesIO
+from pathlib import Path
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.conf import settings
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-from openpyxl import load_workbook
-
-from aplicativos.base_links.models import CMDBImport, CMDBLink, Operadora, Projeto, Provider
-from aplicativos.configuracoes.models import UserDataScope
-from aplicativos.auditoria.models import AuditEvent
-from aplicativos.painel.models import SavedAnalyticsView
-from aplicativos.painel.services.analytics import AnalyticsQueryService
-from aplicativos.painel.views import STATE_NAMES
-from django.utils import timezone
+from unittest.mock import patch
+from aplicativos.configuracoes.models import GroupDataScope
+from aplicativos.base_links.models import Operadora
+from aplicativos.integracoes.models import CMDBLinkMirror, CMDBOperatorMirror, OTRSTicket, OTRSTicketConfigItem
+from aplicativos.integracoes.services.analytics import TicketQueryService
+from aplicativos.integracoes.services.semantics import LinkSemantics
+from .services.analytics import AnalyticsQueryService, DashboardAnalyticsService
 
 
-class OverviewTests(TestCase):
+class MirrorAnalyticsTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user(username="overview-user", password="Senha-segura-123")
+        self.user = get_user_model().objects.create_user(username="analytics-user", password="safe-password-1")
+        group = Group.objects.get(name="Analista NOC")
+        self.user.groups.set([group])
+        scope, _ = GroupDataScope.objects.get_or_create(group=group)
+        scope.mode = GroupDataScope.Mode.ALL
+        scope.save()
+        self.operator = CMDBOperatorMirror.objects.create(source_config_item_id="analytics-op", name="Operadora Analytics")
+        self.link = CMDBLinkMirror.objects.create(source_config_item_id="analytics-ci-1", source_number="AN-1", state="SP", city="Sao Paulo", operator=self.operator, legacy_project="Projeto A", isp_raw="ISP real")
+        self.other_link = CMDBLinkMirror.objects.create(source_config_item_id="analytics-ci-2", source_number="AN-2", state="RJ", operator=self.operator, legacy_project="Projeto A", isp_raw="ISP real")
         self.client.force_login(self.user)
 
-    def test_overview_is_a_contextual_entry_point_with_real_cmdb_summary_and_module_actions(self):
-        batch = CMDBImport.objects.create(filename="cmdb.xlsx", file_sha256="a" * 64, imported_by=self.user)
-        operator = Operadora.objects.create(name="Claro", normalized_name="claro")
-        project = Projeto.objects.create(name="Bradesco", normalized_name="bradesco")
-        provider = Provider.objects.create(name="ISP Real", normalized_name="isp-real")
-        CMDBLink.objects.create(config_item_id="home-1", uf="SP", operadora=operator, projeto=project, provider=provider, last_seen_import=batch)
-        CMDBLink.objects.create(config_item_id="home-2", uf="MG", operadora=operator, projeto=project, provider=provider, last_seen_import=batch)
-        response = self.client.get(reverse("painel:index"))
+    def _ticket(self, ext, status, open_state, day):
+        return OTRSTicket.objects.create(external_id=ext, ticket_number=f"A-{ext}", queue_external_id=107, queue_name="NOC - ATACADO", external_state_id=ext, external_state_name=status, business_status=status, is_business_open=open_state, priority_name="3 normal", service_name="Internet", sla_name="Resposta NOC", source_created_at=datetime(2026, 10, day, tzinfo=datetime_timezone.utc))
+
+    def test_dashboard_renders_real_snapshot_and_period(self):
+        ticket = self._ticket(101, "OPEN", True, 5)
+        OTRSTicketConfigItem.objects.create(ticket=ticket, config_item_id="analytics-ci-1", cmdb_link=self.link, relation_type="DependsOn", relation_state="Valid")
+        response = self.client.get(reverse("dashboard"), {"date_from": "2026-10-01", "date_to": "2026-10-31"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["total_links"], 2)
-        self.assertEqual(response.context["state_count"], 2)
-        self.assertEqual(response.context["provider_count"], 1)
-        self.assertContains(response, timezone.localtime(batch.created_at).strftime("%d/%m/%Y %H:%M"))
-        for route in ("base_links:index", "cockpit", "mapa:index"):
-            self.assertContains(response, f'href="{reverse(route)}"')
-        for label in ("Pesquisar um link", "Investigar a operação", "Explorar geograficamente"):
-            self.assertContains(response, label)
-        overview = response.content.decode().split('<section class="overview-page"', 1)[1].split("</section>", 1)[0]
-        for excluded in ("Ver dashboard", "Rankings", "Chamados", "Reincidentes", "SLA", "gráfico mensal", "Pergunte ao Arion"):
-            self.assertNotIn(excluded, overview)
+        self.assertEqual(response.context["business_open"], 1)
+        self.assertEqual(response.context["links_affected"], 1)
+        self.assertContains(response, "Situação atual dos chamados")
+        self.assertContains(response, "Em atendimento")
+        self.assertNotContains(response, "OPEN")
+        macro_counts = {item["name"]: item["value"] for item in response.context["macro_operators"]}
+        self.assertEqual(macro_counts["OUTROS"], 2)
+        self.assertEqual(response.context["macro_operator_coverage"], 0)
 
-    def test_overview_respects_operator_and_project_data_scope_intersection(self):
-        batch = CMDBImport.objects.create(filename="cmdb.xlsx", file_sha256="b" * 64, imported_by=self.user)
-        claro = Operadora.objects.create(name="Claro", normalized_name="claro")
-        vivo = Operadora.objects.create(name="Vivo", normalized_name="vivo")
-        bradesco = Projeto.objects.create(name="Bradesco", normalized_name="bradesco")
-        outro = Projeto.objects.create(name="Outro", normalized_name="outro")
-        provider = Provider.objects.create(name="ISP permitido", normalized_name="isp-permitido")
-        outside_provider = Provider.objects.create(name="ISP fora do escopo", normalized_name="isp-fora")
-        CMDBLink.objects.create(config_item_id="home-scope-1", uf="SP", operadora=claro, projeto=bradesco, provider=provider, last_seen_import=batch)
-        CMDBLink.objects.create(config_item_id="home-scope-2", uf="RJ", operadora=claro, projeto=outro, provider=outside_provider, last_seen_import=batch)
-        CMDBLink.objects.create(config_item_id="home-scope-3", uf="MG", operadora=vivo, projeto=bradesco, provider=outside_provider, last_seen_import=batch)
-        scope = UserDataScope.objects.create(user=self.user, mode=UserDataScope.Mode.CUSTOM)
-        scope.allowed_operators.set([claro])
-        scope.allowed_projects.set([bradesco])
-        response = self.client.get(reverse("painel:index"))
-        self.assertEqual(response.context["total_links"], 1)
-        self.assertEqual(response.context["state_count"], 1)
-        self.assertEqual(response.context["provider_count"], 1)
+    def test_dashboard_period_and_snapshot_metrics_are_independent_and_noc_only(self):
+        october_open = self._ticket(201, "OPEN", True, 5)
+        october_pending = self._ticket(202, "PENDING", True, 8)
+        september_resolved = self._ticket(203, "RESOLVED", False, 5)
+        september_resolved.source_created_at = datetime(2026, 9, 5, tzinfo=datetime_timezone.utc)
+        september_resolved.save()
+        self._ticket(204, "CLOSED", False, 10)
+        self._ticket(205, "CANCELED", False, 11)
+        self._ticket(206, "UNKNOWN", False, 12)
+        other_queue = self._ticket(207, "OPEN", True, 13)
+        other_queue.queue_name = "OUTRA FILA"
+        other_queue.save()
+        invalid_state_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="analytics-invalid-state", state="N/A",
+        )
 
-    def test_overview_handles_empty_cmdb_without_import(self):
-        response = self.client.get(reverse("painel:index"))
+        def relate(ticket, link, suffix):
+            OTRSTicketConfigItem.objects.create(
+                ticket=ticket, config_item_id=link.source_config_item_id,
+                cmdb_link=link, relation_type=f"DependsOn-{suffix}", relation_state="Valid",
+            )
+
+        relate(october_open, self.link, "201")
+        relate(october_pending, self.link, "202")
+        relate(october_pending, self.other_link, "202")
+        relate(september_resolved, self.other_link, "203")
+        relate(other_queue, self.link, "207")
+
+        with patch("aplicativos.integracoes.clients.cmdb.CMDBClient._post", side_effect=AssertionError("Dashboard não deve chamar ServiceUp")), patch(
+            "aplicativos.integracoes.clients.otrs.OTRSReadOnlyClient._connection", side_effect=AssertionError("Dashboard não deve conectar ao MySQL OTRS")
+        ), CaptureQueriesContext(connection) as queries:
+            october = DashboardAnalyticsService.build(
+                user=self.user, start=date(2026, 10, 1), end=date(2026, 10, 31),
+            )
+        self.assertLessEqual(len(queries), 20)
+        self.assertEqual(october["calls"], 5)  # Tickets NOC sem relação também entram no volume.
+        self.assertEqual(october["repeat"], 1)  # Somente o Link com dois Tickets distintos.
+        self.assertEqual(october["monthly"][0]["calls"], 5)
+        self.assertEqual(october["monthly"][0]["repeat"], 1)
+        self.assertEqual(october["business_open"], 2)
+        self.assertEqual(october["open_count"], 1)
+        self.assertEqual(october["pending_count"], 1)
+        self.assertEqual(october["resolved_count"], 1)
+        self.assertEqual(october["closed_count"], 1)
+        self.assertEqual(october["canceled_count"], 1)
+        self.assertEqual(october["unknown_count"], 1)
+        self.assertEqual(october["total_links"], 3)
+        self.assertEqual(october["state_count"], 2)
+        self.assertEqual([item["code"] for item in october["top_states"]], ["RJ", "SP"])
+
+        september = DashboardAnalyticsService.build(
+            user=self.user, start=date(2026, 9, 1), end=date(2026, 9, 30),
+        )
+        self.assertEqual(september["calls"], 1)
+        self.assertEqual(september["repeat"], 0)
+        self.assertEqual(september["monthly"][0]["calls"], 1)
+        self.assertEqual(september["business_open"], october["business_open"])
+        self.assertEqual(september["open_count"], october["open_count"])
+        self.assertEqual(september["pending_count"], october["pending_count"])
+        self.assertEqual(september["resolved_count"], october["resolved_count"])
+        self.assertEqual(september["closed_count"], october["closed_count"])
+        self.assertEqual(september["canceled_count"], october["canceled_count"])
+        self.assertEqual(september["total_links"], october["total_links"])
+        self.assertEqual(september["state_count"], october["state_count"])
+        rendered = self.client.get(reverse("dashboard"), {
+            "date_from": "2026-09-01", "date_to": "2026-09-30",
+        })
+        self.assertContains(rendered, "Não classificados")
+        self.assertNotContains(rendered, "UNKNOWN")
+
+    def test_unknown_ticket_status_is_hidden_when_zero(self):
+        response = self.client.get(reverse("dashboard"), {
+            "date_from": "2026-10-01", "date_to": "2026-10-31",
+        })
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["total_links"], 0)
-        self.assertEqual(response.context["state_count"], 0)
-        self.assertEqual(response.context["provider_count"], 0)
-        self.assertContains(response, "Nenhuma importação registrada")
+        self.assertEqual(response.context["unknown_count"], 0)
+        self.assertContains(response, "Chamados abertos agora")
+        self.assertContains(response, "Em atendimento + pendentes")
+        self.assertNotContains(response, "Não classificados")
+        self.assertNotContains(response, "Prioridade, serviço e SLA")
+        self.assertNotContains(response, "Tickets por data de criação")
+        self.assertNotContains(response, "Distribuição por provedor")
 
+    def test_dashboard_macro_operator_uses_persisted_legacy_mapping_not_local_isp(self):
+        self.link.legacy_operator_classification = CMDBLinkMirror.LegacyOperator.VIVO
+        self.link.save(update_fields=("legacy_operator_classification",))
+        self.other_link.legacy_operator_classification = CMDBLinkMirror.LegacyOperator.CLARO
+        self.other_link.save(update_fields=("legacy_operator_classification",))
+        self.operator.name = "FIERCE TELECOM"
+        self.operator.save()
 
-class DashboardAndFlagsTests(TestCase):
-    def setUp(self):
-        self.user = get_user_model().objects.create_user(username="noc-exec", password="Senha-segura-123")
-        self.client.force_login(self.user)
+        result = DashboardAnalyticsService.build(
+            user=self.user, start=date(2026, 10, 1), end=date(2026, 10, 31),
+        )
+        counts = {item["name"]: item["value"] for item in result["macro_operators"]}
+        self.assertEqual(counts, {"VIVO": 1, "CLARO": 1, "ALGAR": 0, "OUTROS": 0})
+        self.assertEqual(result["macro_operator_coverage"], 100)
 
-    def test_all_state_flags_exist_locally(self):
-        flags_dir = Path(settings.BASE_DIR) / "static" / "imagens" / "bandeiras" / "estados"
-        self.assertEqual(len(STATE_NAMES), 27)
-        for code in STATE_NAMES:
-            self.assertGreater((flags_dir / f"{code.lower()}.svg").stat().st_size, 150)
+    def test_link_semantics_resolve_provider_name_and_keep_ids_technical(self):
+        self.operator.source_config_item_id = "6804"
+        self.operator.name = "CLARO"
+        self.operator.save()
+        self.link.isp_raw = "6804"
+        self.link.save()
+        semantic = LinkSemantics.from_link(self.link)
+        self.assertEqual(semantic.provider_name, "CLARO")
+        self.assertNotEqual(semantic.provider_name, "6804")
+        self.assertEqual(semantic.provider_config_item_id, "6804")
+        self.assertIsNone(semantic.project_name)
+        self.assertIsNone(semantic.contract_operator_name)
 
-    def test_dashboard_renders_executive_reading(self):
-        response = self.client.get(reverse("dashboard"))
+    def test_unresolved_numeric_isp_is_never_a_provider_label(self):
+        self.link.operator = None
+        self.link.isp_raw = "10097"
+        self.link.save()
+        semantic = LinkSemantics.from_link(self.link)
+        self.assertEqual(semantic.provider_name, "Não classificado")
+        self.assertEqual(semantic.provider_config_item_id, "10097")
+        self.assertEqual(semantic.isp_raw, "10097")
+
+    def test_cockpit_provider_options_use_names_not_raw_config_item_ids(self):
+        self.operator.source_config_item_id = "6804"
+        self.operator.name = "CLARO"
+        self.operator.save()
+        self.link.isp_raw = "6804"
+        self.link.save()
+        result = AnalyticsQueryService().query({
+            "metric": "links", "group_by": "provider", "period_from": "2026-10",
+            "period_to": "2026-10", "period": "2026-10", "filters": {},
+        }, user=self.user)
+        self.assertEqual(result["options"]["provider"], ["CLARO"])
+        self.assertEqual(result["breakdown"][0]["key"], "CLARO")
+        self.assertNotIn("6804", result["options"]["provider"])
+
+    def test_noc_period_and_current_backlog_have_separate_date_semantics(self):
+        september = self._ticket(111, "CLOSED", False, 5)
+        september.source_created_at = datetime(2026, 9, 5, tzinfo=datetime_timezone.utc)
+        september.save()
+        october_open = self._ticket(112, "OPEN", True, 5)
+        october_pending = self._ticket(113, "PENDING", True, 8)
+        october_resolved = self._ticket(114, "RESOLVED", False, 9)
+        other_queue = self._ticket(115, "OPEN", True, 9)
+        other_queue.queue_name = "OUTRA FILA"
+        other_queue.save()
+        october_closed = self._ticket(116, "CLOSED", False, 10)
+        october_canceled = self._ticket(117, "CANCELED", False, 11)
+        for ticket in (september, october_open, october_pending, october_resolved, other_queue, october_closed, october_canceled):
+            OTRSTicketConfigItem.objects.create(ticket=ticket, config_item_id=self.link.source_config_item_id, cmdb_link=self.link, relation_type="DependsOn", relation_state="Valid")
+        self.assertFalse(TicketQueryService.noc_tickets().filter(pk=other_queue.pk).exists())
+        payload = {"period_from": "2026-09", "period_to": "2026-10", "period": "2026-09", "filters": {}, "group_by": "status"}
+        service = AnalyticsQueryService()
+        created = service.query({**payload, "metric": "tickets"}, user=self.user)
+        backlog = service.query({**payload, "metric": "backlog"}, user=self.user)
+        self.assertEqual(created["value"], 1)
+        self.assertEqual(backlog["value"], 2)
+        self.assertTrue(backlog["meta"]["backlog_is_current_snapshot"])
+
+    def test_main_pages_render_without_known_encoding_damage(self):
+        routes = ("dashboard", "cockpit", "mapa:index", "base_links:index", "rankings:index")
+        damaged = ("per?odo", "cria??o", "Servi?o", "n?o", "reconstr?i", "hist?rico", "m?trica", "integra??o", "\ufffd", "Ãƒ")
+        admin = get_user_model().objects.create_superuser(username="encoding-smoke", email="", password="safe-password-123")
+        self.client.force_login(admin)
+        for route in routes:
+            response = self.client.get(reverse(route))
+            self.assertEqual(response.status_code, 200, route)
+            body = response.content.decode("utf-8")
+            for token in damaged:
+                self.assertNotIn(token, body, f"{route}: {token}")
+        cockpit_script = (Path(settings.BASE_DIR) / "static" / "js" / "painel" / "cockpit.js").read_text(encoding="utf-8")
+        for token in ("servi?o", "per?odo", "Reincid?ncia", "\ufffd", "Ãƒ"):
+            self.assertNotIn(token, cockpit_script)
+
+    def test_analytics_uses_real_distinct_tickets_and_supported_dimensions(self):
+        ticket = self._ticket(102, "OPEN", True, 5)
+        for link in (self.link, self.other_link):
+            OTRSTicketConfigItem.objects.create(ticket=ticket, config_item_id=link.source_config_item_id, cmdb_link=link, relation_type="DependsOn", relation_state="Valid")
+        base = {"period_from": "2026-10", "period_to": "2026-10", "period": "2026-10", "filters": {}}
+        service = AnalyticsQueryService()
+        result = service.query({**base, "metric": "tickets", "group_by": "operator"}, user=self.user)
+        self.assertEqual(result["source"], "real")
+        self.assertEqual(result["value"], 1)
+        self.assertEqual(result["meta"]["demo"], False)
+        self.assertEqual(result["breakdown"][0]["value"], 1)
+
+    def test_analytics_rejects_unsupported_synthetic_sla_metrics(self):
+        service = AnalyticsQueryService()
+        with self.assertRaises(ValueError):
+            service.query({"metric": "sla_met", "group_by": "operator", "period_from": "2026-10", "period_to": "2026-10", "period": "2026-10", "filters": {}}, user=self.user)
+
+    def test_custom_scope_excludes_unlinked_tickets(self):
+        unlinked = self._ticket(103, "OPEN", True, 5)
+        group = self.user.groups.get(name="Analista NOC")
+        scope = group.data_scope
+        scope.mode = GroupDataScope.Mode.CUSTOM
+        scope.save()
+        scope.allowed_operators.set([Operadora.objects.create(name=self.operator.name, normalized_name=self.operator.name.casefold())])
+        scope.allowed_projects.set([])
+        from aplicativos.integracoes.services.analytics import TicketQueryService
+        self.assertFalse(TicketQueryService.base(self.user).filter(pk=unlinked.pk).exists())
+
+    def test_cockpit_export_uses_the_same_real_mirror_query(self):
+        ticket = self._ticket(105, "OPEN", True, 5)
+        OTRSTicketConfigItem.objects.create(ticket=ticket, config_item_id="analytics-ci-1", cmdb_link=self.link, relation_type="DependsOn", relation_state="Valid")
+        payload = {"format": "csv", "metric": "tickets", "group_by": "operator", "period_from": "2026-10", "period_to": "2026-10", "period": "2026-10", "filters": {}}
+        response = self.client.post(reverse("analytics-export"), data=json.dumps(payload), content_type="application/json")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Visão da operação")
-        self.assertContains(response, "Chamados demonstrativos")
-        self.assertContains(response, "Demo")
-        self.assertNotContains(response, "Minhas visões")
+        self.assertIn("text/csv", response["Content-Type"])
+        self.assertIn("Operadora Analytics", response.content.decode("utf-8-sig"))
+        self.assertNotIn("Demo", response.content.decode("utf-8-sig"))
 
-    def test_dashboard_and_cockpit_routes_are_separate(self):
-        dashboard = self.client.get(reverse("dashboard"))
-        cockpit = self.client.get(reverse("cockpit"))
-        self.assertEqual(dashboard.status_code, 200)
-        self.assertEqual(cockpit.status_code, 200)
-        self.assertContains(cockpit, 'data-cockpit')
-        self.assertContains(cockpit, 'data-query-url="/api/analytics/query/"')
-
-    def test_dashboard_uses_real_facets_and_the_cockpit_demo_series(self):
-        claro = Operadora.objects.create(name="Claro", normalized_name="claro")
-        provider = Provider.objects.create(name="ISP Real", normalized_name="isp-real")
-        CMDBLink.objects.create(config_item_id="db-1", uf="SP", operadora=claro, provider=provider)
-        CMDBLink.objects.create(config_item_id="db-2", uf="MG")
-        response = self.client.get(reverse("dashboard"))
-        self.assertEqual(response.context["total_links"], 2)
-        self.assertEqual(response.context["state_count"], 2)
-        self.assertEqual(response.context["provider_count"], 1)
-        self.assertEqual(sum(item["value"] for item in response.context["operators"]), 2)
-        self.assertIn("Não classificado", [item["name"] for item in response.context["operators"]])
-        self.assertContains(response, "ISP Real")
-        api_result = AnalyticsQueryService().query({"metric": "tickets", "group_by": "reason", "period": "2026-10", "filters": {}})
-        self.assertEqual(response.context["calls"], api_result["value"])
-        self.assertEqual(response.context["monthly"][-1]["calls"], api_result["value"])
-
-
-class AnalyticsTests(TestCase):
-    def setUp(self):
-        self.user = get_user_model().objects.create_user(username="analytics", password="Senha-segura-123")
-        self.client.force_login(self.user)
-        operator = Operadora.objects.create(name="Claro", normalized_name="claro")
-        project = Projeto.objects.create(name="Bradesco", normalized_name="bradesco")
-        provider = Provider.objects.create(name="ISP Norte", normalized_name="isp-norte")
-        CMDBLink.objects.create(config_item_id="AN-1", uf="SP", operadora=operator, projeto=project, provider=provider)
-
-    def test_demo_is_deterministic_and_filters(self):
-        query = {"metric": "tickets", "group_by": "reason", "period": "2026-10", "compare_to": "2026-01", "filters": {"operator": "Claro", "project": "Bradesco", "provider": "ISP Norte", "uf": "SP", "reason": "Pendência Financeira"}}
-        service = AnalyticsQueryService()
-        self.assertEqual(service.query(query), service.query(query))
-
-    def test_operational_metric_invariants_and_group_totals(self):
-        service = AnalyticsQueryService()
-        base = {"period": "2026-10", "filters": {}}
-        values = {metric: service.query({**base, "metric": metric, "group_by": "operator"}) for metric in ("tickets", "open_tickets", "closed_tickets", "recurrences", "sla_met", "sla_missed", "backlog")}
-        tickets = values["tickets"]["value"]
-        self.assertLessEqual(values["open_tickets"]["value"], tickets)
-        self.assertLessEqual(values["closed_tickets"]["value"], tickets)
-        self.assertEqual(values["open_tickets"]["value"] + values["closed_tickets"]["value"], tickets)
-        self.assertLessEqual(values["recurrences"]["value"], tickets)
-        self.assertLessEqual(values["sla_met"]["value"] + values["sla_missed"]["value"], tickets)
-        self.assertTrue(all(item["value"] >= 0 for item in values.values()))
-        links = service.query({**base, "metric": "links", "group_by": "operator"})
-        self.assertLessEqual(sum(row["value"] for row in links["breakdown"]), links["value"])
-        zero = service.query({**base, "metric": "tickets", "period": "2026-01", "compare_to": "2026-01", "filters": {"uf": "XX"}})
-        self.assertNotIn(float("inf"), [zero["comparison"]["percent"] or 0])
-        ranged = service.query({"metric": "tickets", "period": "2026-10", "period_from": "2026-01", "period_to": "2026-10"})
-        self.assertEqual([row["key"] for row in ranged["series"]][0], "2026-01")
-        self.assertEqual(len(ranged["series"]), 10)
-
-    def test_metric_dimension_and_filter_whitelists(self):
-        service = AnalyticsQueryService()
-        with self.assertRaises(ValueError): service.query({"metric": "__import__", "group_by": "month"})
-        with self.assertRaises(ValueError): service.query({"metric": "tickets", "group_by": "source_payload"})
-        with self.assertRaises(ValueError): service.query({"metric": "links", "group_by": "reason"})
-        with self.assertRaises(ValueError): service.query({"metric": "links", "filters": {"sql": "DROP TABLE"}})
-
-    def test_endpoint_requires_login_and_returns_real_links(self):
-        self.client.logout()
-        response = self.client.post(reverse("analytics-query"), data="{}", content_type="application/json")
-        self.assertEqual(response.status_code, 302)
-        self.client.force_login(self.user)
-        response = self.client.post(reverse("analytics-query"), data='{"metric":"links","group_by":"uf","period":"2026-10"}', content_type="application/json")
+    def test_cockpit_api_uses_real_query_and_rejects_bad_payload(self):
+        ticket = self._ticket(104, "OPEN", True, 5)
+        OTRSTicketConfigItem.objects.create(ticket=ticket, config_item_id="analytics-ci-1", cmdb_link=self.link, relation_type="DependsOn", relation_state="Valid")
+        response = self.client.post(reverse("analytics-query"), data=json.dumps({"metric":"tickets", "group_by":"status", "period_from":"2026-10", "period_to":"2026-10", "period":"2026-10", "filters":{}}), content_type="application/json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["value"], 1)
-
-    def test_saved_views_are_private(self):
-        SavedAnalyticsView.objects.create(user=self.user, name="SP", configuration={"metric": "links"})
-        other = get_user_model().objects.create_user(username="other", password="Senha-segura-123")
-        self.client.force_login(other)
-        response = self.client.post(reverse("analytics-saved-views"), data='{"action":"list"}', content_type="application/json")
-        self.assertEqual(response.json()["views"], [])
-
-    def test_quick_query_manual_filter_and_clear_sequence_uses_consistent_query_state(self):
-        service = AnalyticsQueryService()
-        sequence = [
-            {"metric": "tickets", "group_by": "reason", "filters": {"reason": "Pendência Financeira"}},
-            {"metric": "recurrences", "group_by": "operator", "filters": {}},
-            {"metric": "backlog", "group_by": "operator", "filters": {}},
-            {"metric": "tickets", "group_by": "reason", "filters": {}},
-            {"metric": "links", "group_by": "uf", "filters": {"uf": "SP"}},
-            {"metric": "tickets", "group_by": "reason", "filters": {}},
-            {"metric": "sla_missed", "group_by": "provider", "filters": {}},
-        ]
-        results = [service.query({"period": "2026-10", "period_from": "2026-01", "period_to": "2026-10", **state}, user=self.user) for state in sequence]
-        self.assertEqual(results[1]["metric"], "recurrences")
-        self.assertEqual(results[2]["metric"], "backlog")
-        self.assertEqual(results[3]["value"], results[5]["value"])
-        self.assertEqual(results[3]["breakdown"], results[5]["breakdown"])
-        self.assertEqual(results[4]["group_by"], "uf")
-        self.assertEqual(results[6]["group_by"], "provider")
-        self.assertTrue(all(result["kpis"] and "detail" in result for result in results))
-
-    def test_saved_view_can_be_renamed_only_by_its_owner(self):
-        saved = SavedAnalyticsView.objects.create(user=self.user, name="Original", configuration={"metric": "tickets"})
-        SavedAnalyticsView.objects.create(user=self.user, name="Nome ocupado", configuration={"metric": "links"})
-        response = self.client.post(reverse("analytics-saved-views"), data='{"action":"rename","id":%d,"name":"Nova consulta"}' % saved.pk, content_type="application/json")
-        self.assertEqual(response.status_code, 200)
-        saved.refresh_from_db()
-        self.assertEqual(saved.name, "Nova consulta")
-        response = self.client.post(reverse("analytics-saved-views"), data='{"action":"rename","id":%d,"name":"Nome ocupado"}' % saved.pk, content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        response = self.client.post(reverse("analytics-saved-views"), data="[]", content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        other = get_user_model().objects.create_user(username="rename-other", password="Senha-segura-123")
-        self.client.force_login(other)
-        response = self.client.post(reverse("analytics-saved-views"), data='{"action":"rename","id":%d,"name":"Invadida"}' % saved.pk, content_type="application/json")
-        self.assertEqual(response.status_code, 404)
-        saved.refresh_from_db()
-        self.assertEqual(saved.name, "Nova consulta")
-
-    def test_exports_use_query_state_and_current_data_scope(self):
-        outside_operator = Operadora.objects.create(name="Fora do escopo", normalized_name="fora")
-        outside_project = Projeto.objects.create(name="Projeto privado", normalized_name="privado")
-        CMDBLink.objects.create(config_item_id="AN-OUT", uf="RJ", operadora=outside_operator, projeto=outside_project)
-        scope = UserDataScope.objects.create(user=self.user, mode=UserDataScope.Mode.CUSTOM)
-        scope.allowed_operators.set([Operadora.objects.get(name="Claro")])
-        scope.allowed_projects.set([Projeto.objects.get(name="Bradesco")])
-        payload = {"metric": "links", "group_by": "uf", "period": "2026-10", "period_from": "2026-01", "period_to": "2026-10", "filters": {}, "format": "csv"}
-        expected = {
-            "csv": ("text/csv", "arion-cockpit.csv"),
-            "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "arion-cockpit.xlsx"),
-            "pdf": ("application/pdf", "arion-cockpit.pdf"),
-        }
-        for file_format, (content_type, filename) in expected.items():
-            payload["format"] = file_format
-            response = self.client.post(reverse("analytics-export"), data=json.dumps(payload), content_type="application/json")
-            self.assertEqual(response.status_code, 200)
-            self.assertTrue(response["Content-Type"].startswith(content_type))
-            self.assertIn(filename, response["Content-Disposition"])
-            self.assertTrue(AuditEvent.objects.filter(action=f"EXPORT_{file_format.upper()}", module="Cockpit", user=self.user).exists())
-            if file_format == "csv":
-                content = response.content.decode("utf-8-sig")
-                self.assertIn("SP", content)
-                self.assertNotIn("RJ", content)
-                self.assertNotIn("Projeto privado", content)
-            elif file_format == "xlsx":
-                workbook = load_workbook(BytesIO(response.content), read_only=True)
-                values = [cell for row in workbook["Dados"].iter_rows(values_only=True) for cell in row]
-                self.assertIn("SP", values)
-                self.assertNotIn("RJ", values)
-            else:
-                self.assertTrue(response.content.startswith(b"%PDF-1.4"))
-                self.assertTrue(response.content.rstrip().endswith(b"%%EOF"))
-                self.assertGreater(len(response.content), 2500)
-                self.assertIn(b"ARION ATACADO GEO", response.content)
-                self.assertIn(b"DETALHAMENTO", response.content)
-                self.assertIn(b"SP", response.content)
-                self.assertNotIn(b"RJ", response.content)
+        invalid = self.client.post(reverse("analytics-query"), data="[]", content_type="application/json")
+        self.assertEqual(invalid.status_code, 400)

@@ -1,0 +1,320 @@
+from django.conf import settings
+from django.db import models
+
+
+class Integration(models.Model):
+    class Key(models.TextChoices):
+        CMDB = "cmdb", "CMDB ServiceUp"
+        OTRS = "otrs", "OTRS MySQL"
+
+    class Status(models.TextChoices):
+        NOT_CONFIGURED = "not_configured", "Não configurado"
+        CONNECTED = "connected", "Conectado"
+        UNAVAILABLE = "unavailable", "Indisponível"
+        ATTENTION = "attention", "Atenção"
+
+    key = models.CharField(max_length=20, choices=Key.choices, unique=True)
+    name = models.CharField(max_length=100)
+    kind = models.CharField(max_length=80)
+    enabled = models.BooleanField(default=False)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.NOT_CONFIGURED)
+    # This JSON is written only by typed, validated forms. Passwords are never stored here.
+    config = models.JSONField(default=dict, blank=True)
+    accessible_databases = models.JSONField(default=list, blank=True)
+    username = models.CharField(max_length=255, blank=True)
+    secret_ciphertext = models.TextField(blank=True, editable=False)
+    last_test_at = models.DateTimeField(null=True, blank=True)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    last_read_at = models.DateTimeField(null=True, blank=True)
+    last_error_at = models.DateTimeField(null=True, blank=True)
+    last_latency_ms = models.PositiveIntegerField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("key",)
+        verbose_name = "integração"
+        verbose_name_plural = "integrações"
+
+    def __str__(self):
+        return self.get_key_display()
+
+    @property
+    def credentials_configured(self):
+        return bool(self.username and self.secret_ciphertext)
+
+
+class IntegrationRun(models.Model):
+    class Operation(models.TextChoices):
+        TEST = "test", "Teste de conexão"
+        INSPECTION = "inspection", "Inspeção"
+        READ = "read", "Leitura"
+        SYNC = "sync", "Sincronização"
+        COMPARE = "compare", "Comparação"
+        CMDB_SYNC = "CMDB_SYNC", "Sincronização CMDB"
+        OTRS_SYNC = "OTRS_SYNC", "Sincronização OTRS"
+        OTRS_FAST_SYNC = "OTRS_FAST_SYNC", "Sincronização rápida OTRS"
+        OTRS_FULL_SYNC = "OTRS_FULL_SYNC", "Reconciliação completa OTRS"
+        OTRS_RELATION_SYNC = "OTRS_RELATION_SYNC", "Relações OTRS"
+        RECONCILE = "RECONCILE", "Reconciliação"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendente"
+        RUNNING = "running", "Em execução"
+        SUCCESS = "success", "Sucesso"
+        PARTIAL = "partial", "Parcial"
+        FAILED = "failed", "Falha"
+
+    integration = models.ForeignKey(Integration, on_delete=models.CASCADE, related_name="runs")
+    operation = models.CharField(max_length=20, choices=Operation.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    started_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    records_found = models.PositiveIntegerField(null=True, blank=True)
+    records_processed = models.PositiveIntegerField(default=0)
+    records_created = models.PositiveIntegerField(default=0)
+    records_updated = models.PositiveIntegerField(default=0)
+    records_unchanged = models.PositiveIntegerField(default=0)
+    records_stale = models.PositiveIntegerField(default=0)
+    records_failed = models.PositiveIntegerField(default=0)
+    progress_total = models.PositiveIntegerField(null=True, blank=True)
+    message = models.CharField(max_length=240, blank=True)
+    request_id = models.CharField(max_length=80, blank=True, db_index=True)
+    triggered_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="integration_runs")
+
+    class Meta:
+        ordering = ("-started_at", "-pk")
+        verbose_name = "execução de integração"
+        verbose_name_plural = "execuções de integração"
+
+    def __str__(self):
+        return f"{self.integration} · {self.get_operation_display()} · {self.get_status_display()}"
+
+
+class IntegrationSyncState(models.Model):
+    key = models.CharField(max_length=32, unique=True)
+    last_started_at = models.DateTimeField(null=True, blank=True)
+    last_success_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_error_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+    last_duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    records_count = models.PositiveIntegerField(null=True, blank=True)
+    change_cursor = models.DateTimeField(null=True, blank=True)
+    last_full_success_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("key",)
+
+
+class IntegrationLease(models.Model):
+    key = models.CharField(max_length=32, unique=True)
+    owner_token = models.CharField(max_length=64, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering = ("key",)
+
+
+class CMDBOperatorMirror(models.Model):
+    source_config_item_id = models.CharField(max_length=40, unique=True)
+    source_number = models.CharField(max_length=40, unique=True, null=True, blank=True)
+    name = models.CharField(max_length=300)
+    category = models.CharField(max_length=160, blank=True)
+    cnpj = models.CharField(max_length=80, blank=True)
+    business_hours = models.CharField(max_length=300, blank=True)
+    phone = models.CharField(max_length=300, blank=True)
+    whatsapp = models.CharField(max_length=300, blank=True)
+    opening_email = models.CharField(max_length=300, blank=True)
+    followup_email = models.CharField(max_length=300, blank=True)
+    portal_url = models.CharField(max_length=500, blank=True)
+    portal_username = models.CharField(max_length=300, blank=True)
+    escalation_1 = models.CharField(max_length=500, blank=True)
+    escalation_2 = models.CharField(max_length=500, blank=True)
+    escalation_3 = models.CharField(max_length=500, blank=True)
+    escalation_4 = models.CharField(max_length=500, blank=True)
+    escalation_5 = models.CharField(max_length=500, blank=True)
+    deployment_state = models.CharField(max_length=160, blank=True)
+    deployment_state_type = models.CharField(max_length=100, blank=True)
+    incident_state = models.CharField(max_length=160, blank=True)
+    incident_state_type = models.CharField(max_length=100, blank=True)
+    definition_id = models.CharField(max_length=40, blank=True)
+    version_id = models.CharField(max_length=40, blank=True)
+    last_version_id = models.CharField(max_length=40, blank=True)
+    source_created_at = models.DateTimeField(null=True, blank=True)
+    source_last_seen_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    source_synced_at = models.DateTimeField(null=True, blank=True)
+    is_present_in_source = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ("name", "source_config_item_id")
+        indexes = [models.Index(fields=("name", "is_present_in_source"), name="opmirror_name_present_idx")]
+        verbose_name = "espelho de operadora CMDB"
+        verbose_name_plural = "espelhos de operadoras CMDB"
+
+    def __str__(self):
+        return self.name or self.source_config_item_id
+
+
+class CMDBLinkMirror(models.Model):
+    class OperatorResolution(models.TextChoices):
+        CONFIG_ITEM_ID = "CONFIG_ITEM_ID", "ConfigItemID"
+        NAME = "NAME", "Nome exato"
+        UNRESOLVED = "UNRESOLVED", "Não resolvido"
+        EMPTY = "EMPTY", "Vazio"
+
+    class ProjectSource(models.TextChoices):
+        LEGACY_XLSX = "LEGACY_XLSX", "Base XLSX legada"
+
+    class LegacyOperator(models.TextChoices):
+        VIVO = "VIVO", "VIVO"
+        CLARO = "CLARO", "CLARO"
+        ALGAR = "ALGAR", "ALGAR"
+
+    source_config_item_id = models.CharField(max_length=40, unique=True)
+    source_number = models.CharField(max_length=40, unique=True, null=True, blank=True)
+    name = models.CharField(max_length=500, blank=True)
+    city = models.CharField(max_length=200, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    address = models.CharField(max_length=500, blank=True)
+    circuit = models.CharField(max_length=300, blank=True)
+    designation = models.CharField(max_length=300, blank=True)
+    operator_designation = models.CharField(max_length=300, blank=True)
+    identification = models.CharField(max_length=300, blank=True)
+    link_type = models.CharField(max_length=160, blank=True)
+    speed_raw = models.CharField(max_length=160, blank=True)
+    ip_range = models.CharField(max_length=300, blank=True)
+    equipment = models.CharField(max_length=300, blank=True)
+    mac_address = models.CharField(max_length=160, blank=True)
+    cnpj = models.CharField(max_length=100, blank=True)
+    operator_cnpj = models.CharField(max_length=100, blank=True)
+    contract_number = models.CharField(max_length=200, blank=True)
+    business_hours = models.CharField(max_length=300, blank=True)
+    isp_notes = models.TextField(blank=True)
+    customer_id = models.CharField(max_length=200, blank=True)
+    isp_raw = models.CharField(max_length=300, blank=True)
+    operator = models.ForeignKey(CMDBOperatorMirror, null=True, blank=True, on_delete=models.SET_NULL, related_name="links")
+    operator_resolution_method = models.CharField(max_length=20, choices=OperatorResolution.choices, default=OperatorResolution.EMPTY, db_index=True)
+    legacy_project = models.CharField(max_length=300, blank=True)
+    project_source = models.CharField(max_length=20, choices=ProjectSource.choices, blank=True)
+    legacy_operator_classification = models.CharField(max_length=16, choices=LegacyOperator.choices, blank=True)
+    deployment_state = models.CharField(max_length=160, blank=True, db_index=True)
+    deployment_state_type = models.CharField(max_length=100, blank=True)
+    incident_state = models.CharField(max_length=160, blank=True, db_index=True)
+    incident_state_type = models.CharField(max_length=100, blank=True)
+    definition_id = models.CharField(max_length=40, blank=True)
+    version_id = models.CharField(max_length=40, blank=True)
+    last_version_id = models.CharField(max_length=40, blank=True)
+    source_created_at = models.DateTimeField(null=True, blank=True)
+    source_last_seen_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    source_synced_at = models.DateTimeField(null=True, blank=True)
+    is_present_in_source = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ("source_number", "source_config_item_id")
+        indexes = [
+            models.Index(fields=("operator", "is_present_in_source"), name="linkmirror_operator_idx"),
+            models.Index(fields=("state", "city"), name="linkmirror_state_city_idx"),
+            models.Index(fields=("legacy_project", "is_present_in_source"), name="linkmirror_project_idx"),
+        ]
+        verbose_name = "espelho de link CMDB"
+        verbose_name_plural = "espelhos de links CMDB"
+
+    def __str__(self):
+        return self.name or self.source_number or self.source_config_item_id
+
+
+class OTRSStateMapping(models.Model):
+    class BusinessStatus(models.TextChoices):
+        OPEN = "OPEN", "Aberto"
+        PENDING = "PENDING", "Pendente"
+        RESOLVED = "RESOLVED", "Resolvido"
+        CLOSED = "CLOSED", "Fechado"
+        CANCELED = "CANCELED", "Cancelado"
+        UNKNOWN = "UNKNOWN", "Desconhecido"
+
+    external_state_id = models.PositiveIntegerField(unique=True)
+    external_name = models.CharField(max_length=250)
+    external_type = models.CharField(max_length=120, blank=True)
+    business_status = models.CharField(max_length=16, choices=BusinessStatus.choices, default=BusinessStatus.UNKNOWN, db_index=True)
+    is_configured = models.BooleanField(default=False, db_index=True)
+    source_last_seen_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("external_name", "external_state_id")
+        verbose_name = "mapeamento de estado OTRS"
+        verbose_name_plural = "mapeamentos de estados OTRS"
+
+    def __str__(self):
+        return f"{self.external_name} → {self.business_status}"
+
+
+class OTRSTicket(models.Model):
+    external_id = models.PositiveBigIntegerField(unique=True)
+    ticket_number = models.CharField(max_length=80, unique=True)
+    title = models.CharField(max_length=500, blank=True)
+    queue_external_id = models.PositiveIntegerField(db_index=True)
+    queue_name = models.CharField(max_length=250)
+    external_state_id = models.PositiveIntegerField(db_index=True)
+    external_state_name = models.CharField(max_length=250)
+    external_state_type = models.CharField(max_length=120, blank=True)
+    business_status = models.CharField(max_length=16, choices=OTRSStateMapping.BusinessStatus.choices, default=OTRSStateMapping.BusinessStatus.UNKNOWN, db_index=True)
+    is_business_open = models.BooleanField(default=False, db_index=True)
+    external_priority_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    priority_name = models.CharField(max_length=160, blank=True)
+    external_type_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    type_name = models.CharField(max_length=160, blank=True)
+    external_service_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    service_name = models.CharField(max_length=250, blank=True)
+    external_sla_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    sla_name = models.CharField(max_length=250, blank=True)
+    responsible_user_id = models.PositiveIntegerField(null=True, blank=True)
+    customer_id = models.CharField(max_length=250, blank=True)
+    timeout = models.PositiveBigIntegerField(null=True, blank=True)
+    until_time = models.BigIntegerField(null=True, blank=True)
+    escalation_time = models.BigIntegerField(null=True, blank=True)
+    escalation_update_time = models.BigIntegerField(null=True, blank=True)
+    escalation_response_time = models.BigIntegerField(null=True, blank=True)
+    escalation_solution_time = models.BigIntegerField(null=True, blank=True)
+    source_created_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    source_changed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    source_last_seen_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    source_synced_at = models.DateTimeField(null=True, blank=True)
+    is_present_in_queue = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ("-source_created_at", "-external_id")
+        indexes = [
+            models.Index(fields=("queue_external_id", "is_present_in_queue"), name="otrsticket_queue_present_idx"),
+            models.Index(fields=("business_status", "source_created_at"), name="otrsticket_status_date_idx"),
+        ]
+        verbose_name = "ticket espelhado OTRS"
+        verbose_name_plural = "tickets espelhados OTRS"
+
+    def __str__(self):
+        return self.ticket_number
+
+
+class OTRSTicketConfigItem(models.Model):
+    ticket = models.ForeignKey(OTRSTicket, on_delete=models.CASCADE, related_name="config_items")
+    config_item_id = models.CharField(max_length=40, db_index=True)
+    cmdb_link = models.ForeignKey(CMDBLinkMirror, null=True, blank=True, on_delete=models.SET_NULL, related_name="ticket_relations")
+    relation_type = models.CharField(max_length=100, db_index=True)
+    relation_state = models.CharField(max_length=100, db_index=True)
+    source_created_at = models.DateTimeField(null=True, blank=True)
+    source_last_seen_at = models.DateTimeField(null=True, blank=True)
+    source_synced_at = models.DateTimeField(null=True, blank=True)
+    is_present_in_source = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("ticket", "config_item_id", "relation_type"), name="uniq_ticket_ci_relation_type")]
+        indexes = [
+            models.Index(fields=("ticket", "is_present_in_source"), name="ticketci_ticket_seen_idx"),
+            models.Index(fields=("cmdb_link", "is_present_in_source"), name="ticketci_link_seen_idx"),
+        ]
+        verbose_name = "relação OTRS Ticket–ConfigItem"
+        verbose_name_plural = "relações OTRS Ticket–ConfigItem"

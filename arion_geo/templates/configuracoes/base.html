@@ -3,7 +3,7 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/configuracoes/settings.css' %}">{% endblock %}
 {% block extra_js %}<script src="{% static 'js/configuracoes/settings.js' %}" defer></script>{% endblock %}
 {% block content %}
-<section class="settings-page" aria-labelledby="settings-title">
+<section class="settings-page{% if active_section == 'integrations' %} settings-page--integrations{% endif %}" aria-labelledby="settings-title">
   <aside class="settings-sidebar" aria-label="Navegação das configurações">
     <p class="settings-kicker">CENTRAL DE CONFIGURAÇÕES</p>
     <p class="settings-nav-heading">CONTA</p>
@@ -20,6 +20,7 @@
       {% if perms.configuracoes.manage_groups %}<a href="{% url 'configuracoes:groups' %}"{% if active_section == 'groups' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/></svg>Grupos e acessos</a>{% endif %}
       {% if perms.configuracoes.manage_data_scopes %}<a href="{% url 'configuracoes:scopes' %}"{% if active_section == 'scopes' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M7 12h10m-7 7h4"/><circle cx="8" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>Escopos de dados</a>{% endif %}
       {% if perms.configuracoes.view_audit_log %}<a href="{% url 'configuracoes:audit' %}">Auditoria</a>{% endif %}
+      {% if perms.configuracoes.manage_groups %}<a href="{% url 'configuracoes:documentation' %}"{% if active_section == 'documentation' %} class="is-active" aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v17H7.5A2.5 2.5 0 0 0 5 21.5zM5 4.5v17M8 6h8m-8 4h8m-8 4h5"/></svg>Documentação</a>{% endif %}
       {% if perms.configuracoes.view_integrations %}<a href="{% url 'configuracoes:integrations' %}"{% if active_section == 'integrations' %} class="is-active" aria-current="page"{% endif %}>Integrações</a>{% endif %}
       {% if perms.configuracoes.view_system_info %}<a href="{% url 'configuracoes:system' %}"{% if active_section == 'system' %} class="is-active" aria-current="page"{% endif %}>Sistema</a>{% endif %}
     </nav>

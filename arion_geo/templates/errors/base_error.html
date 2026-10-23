@@ -1,0 +1,22 @@
+{% load static %}<!doctype html>
+<html lang="pt-br" data-user-theme="">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>{% block title %}Arion Atacado Geo{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/arion.svg' %}">
+  <link rel="stylesheet" href="{% static 'css/errors.css' %}">
+  <script src="{% static 'js/theme.js' %}"></script>
+  <script src="{% static 'js/errors.js' %}" defer></script>
+</head>
+<body>
+  <header class="error-brand-header">
+    <a class="error-brand" href="{{ home_url|default:'/' }}" aria-label="Arion Atacado Geo, início">
+      <span class="error-brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>ARION <b>ATACADO GEO</b></span>
+    </a>
+  </header>
+  <main class="error-main" id="main-content">{% block error_content %}{% endblock %}</main>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{% extends "documentacao/base_documentacao.html" %}
+{% block title %}Busca · Documentação NOC ATACADO{% endblock %}
+{% block docs_content %}
+<section class="docs-results">
+  <p class="docs-eyebrow">NOC ATACADO · DOCUMENTAÇÃO</p>
+  <h1>Resultados da pesquisa</h1>
+  <p class="docs-lead">{% if query %}Resultados para “{{ query }}”{% else %}Pesquise por um tema, módulo ou termo técnico.{% endif %}</p>
+  {% if query %}
+    {% if results %}<p class="docs-result-count">{{ results|length }} documento{{ results|length|pluralize:"s" }} encontrado{{ results|length|pluralize:"s" }}</p>
+      <div class="docs-result-list">{% for result in results %}<article><p class="docs-eyebrow">{{ result.category }}</p><h2><a href="{% url 'configuracoes:documentation-page' slug=result.slug %}{% if result.anchor %}#{{ result.anchor }}{% endif %}">{{ result.title }}</a></h2><p>{{ result.excerpt }}</p></article>{% endfor %}</div>
+    {% else %}<p class="docs-empty">Nenhum documento correspondeu à pesquisa. Tente outros termos.</p>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}

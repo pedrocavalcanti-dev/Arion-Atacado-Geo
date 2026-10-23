@@ -1,0 +1,16 @@
+{% extends "documentacao/base_documentacao.html" %}
+{% block title %}{{ document.title }} · NOC ATACADO{% endblock %}
+{% block docs_content %}
+<div class="docs-reading-layout">
+  <article class="docs-article">
+    <nav class="docs-breadcrumb" aria-label="Breadcrumb"><a href="{% url 'configuracoes:documentation' %}">Documentação</a><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg><span>{{ document.category }}</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg><span aria-current="page">{{ document.title }}</span></nav>
+    <header class="docs-document-heading"><p class="docs-eyebrow">{{ document.category|upper }}</p><h1>{{ document.title }}</h1><p>{{ document.description }}</p></header>
+    <div class="docs-markdown">{{ document.body|safe }}</div>
+    <nav class="docs-sequence" aria-label="Navegação entre documentos">
+      {% if previous_document %}<a class="docs-sequence-link" href="{% url 'configuracoes:documentation-page' slug=previous_document.slug %}"><span class="docs-sequence-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M19 12H5m7 7-7-7 7-7"/></svg></span><span><small>ANTERIOR</small><strong>{{ previous_document.title }}</strong></span></a>{% else %}<span></span>{% endif %}
+      {% if next_document %}<a class="docs-sequence-link docs-sequence-link--next" href="{% url 'configuracoes:documentation-page' slug=next_document.slug %}"><span><small>PRÓXIMO</small><strong>{{ next_document.title }}</strong></span><span class="docs-sequence-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg></span></a>{% endif %}
+    </nav>
+  </article>
+  {% if document.headings %}<aside class="docs-toc" aria-label="Índice deste documento"><details data-docs-toc><summary aria-controls="docs-page-index"><span>Nesta página</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary><nav id="docs-page-index">{% for title, anchor, level in document.headings %}<a class="docs-toc-level-{{ level }}" href="#{{ anchor }}" data-toc-link="{{ anchor }}">{{ title }}</a>{% endfor %}</nav></details></aside>{% endif %}
+</div>
+{% endblock %}

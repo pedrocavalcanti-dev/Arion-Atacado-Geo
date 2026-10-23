@@ -6,16 +6,18 @@ from django.contrib.auth.models import Permission
 from django.core.management import call_command
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import UserPreference
 from .access_control import GROUP_ANALYST, GROUP_MANAGER, GROUP_SYSTEM_ADMIN, is_system_admin
-from .models import UserDataScope
+from .models import GroupDataScope
 from aplicativos.base_links.models import CMDBLink, Operadora, Projeto, Provider
 
 
 class UserPreferenceTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="theme-user", password="Senha-segura-123")
+        self.user.groups.set([Group.objects.get(name=GROUP_ANALYST)])
         self.get_url = reverse("preferences_api:preferences")
         self.theme_url = reverse("preferences_api:theme")
 
@@ -43,11 +45,22 @@ class UserPreferenceTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.post(self.theme_url, data=json.dumps({"theme": "blue"}), content_type="application/json")
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(response.json()["error"]["code"], "VALIDATION_ERROR")
+
+    def test_theme_api_rejects_unsupported_media_type_as_json(self):
+        self.client.force_login(self.user)
+        response = self.client.post(self.theme_url, data="theme=light", content_type="text/plain")
+        self.assertEqual(response.status_code, 415)
+        self.assertEqual(response.json()["error"]["code"], "UNSUPPORTED_MEDIA_TYPE")
 
     def test_unauthenticated_user_cannot_read_or_change_preferences(self):
-        self.assertEqual(self.client.get(self.get_url).status_code, 302)
+        response = self.client.get(self.get_url)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(response.json()["error"]["code"], "AUTHENTICATION_REQUIRED")
         response = self.client.post(self.theme_url, data=json.dumps({"theme": "light"}), content_type="application/json")
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 401)
         self.assertFalse(UserPreference.objects.exists())
 
     def test_authenticated_template_receives_saved_theme(self):
@@ -61,6 +74,8 @@ class UserPreferenceTests(TestCase):
         csrf_client.force_login(self.user)
         response = csrf_client.post(self.theme_url, data=json.dumps({"theme": "light"}), content_type="application/json")
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(response.json()["error"]["code"], "CSRF_FAILED")
 
 
 class AccountSettingsTests(TestCase):
@@ -68,6 +83,8 @@ class AccountSettingsTests(TestCase):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username="account-user", password="Senha-segura-123", first_name="Ana", last_name="Silva", email="ana@example.com")
         self.other = user_model.objects.create_user(username="other-user", password="Senha-segura-123", first_name="Bia", email="bia@example.com")
+        self.user.groups.set([Group.objects.get(name=GROUP_ANALYST)])
+        self.other.groups.set([Group.objects.get(name=GROUP_ANALYST)])
 
     def test_settings_pages_require_login(self):
         for name in ("index", "account", "security", "appearance"):
@@ -172,6 +189,7 @@ class AccessControlTests(TestCase):
         self.admin = self.User.objects.create_user(username="access-admin", password="Senha-segura-123")
         self.admin.groups.set([Group.objects.get(name=GROUP_SYSTEM_ADMIN)])
         self.analyst = self.User.objects.create_user(username="access-analyst", password="Senha-segura-123")
+        self.analyst.groups.set([Group.objects.get(name=GROUP_ANALYST)])
 
     def test_system_admin_sees_administration_shortcuts_on_settings_landing(self):
         self.client.force_login(self.admin)
@@ -190,6 +208,23 @@ class AccessControlTests(TestCase):
                 response = self.client.get(reverse(f"configuracoes:{name}"))
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, "ADMINISTRAÇÃO")
+
+    def test_scope_administration_is_group_based_and_user_edit_only_shows_inherited_scope(self):
+        self.client.force_login(self.admin)
+        analyst_group = Group.objects.get(name=GROUP_ANALYST)
+        scopes = self.client.get(reverse("configuracoes:scopes"))
+        self.assertContains(scopes, "Defina quais dados cada grupo de acesso pode visualizar.")
+        self.assertContains(scopes, analyst_group.name)
+        scope_edit = self.client.get(reverse("configuracoes:scope-edit", args=(analyst_group.pk,)))
+        self.assertEqual(scope_edit.status_code, 200)
+        self.assertContains(scope_edit, "Usuários que herdam este escopo")
+        self.assertContains(scope_edit, "Buscar operadora")
+        self.assertContains(scope_edit, "Buscar projeto")
+        self.assertContains(scope_edit, "Selecionar todas")
+        edit = self.client.get(reverse("configuracoes:user-edit", args=(self.analyst.pk,)))
+        self.assertContains(edit, "Escopo herdado")
+        self.assertNotContains(edit, "Operadoras permitidas")
+        self.assertNotContains(edit, "Projetos permitidos")
 
     def test_analyst_has_no_administration_navigation_and_gets_403(self):
         self.client.force_login(self.analyst)
@@ -219,12 +254,12 @@ class AccessControlTests(TestCase):
             with self.subTest(route=name):
                 self.assertEqual(self.client.get(reverse(f"configuracoes:{name}")).status_code, 403)
 
-    def test_bootstrap_is_idempotent_and_restores_access_for_unassigned_users(self):
+    def test_bootstrap_is_idempotent_and_leaves_unassigned_users_unassigned(self):
         self.analyst.groups.clear()
         call_command("bootstrap_access", verbosity=0)
         call_command("bootstrap_access", verbosity=0)
         self.analyst.refresh_from_db()
-        self.assertEqual(self.analyst.groups.filter(name=GROUP_ANALYST).count(), 1)
+        self.assertFalse(self.analyst.groups.exists())
         self.assertEqual(Group.objects.filter(name__in=(GROUP_SYSTEM_ADMIN, GROUP_MANAGER, GROUP_ANALYST, "Consulta / Auditoria")).count(), 4)
 
     def test_admin_can_create_user_with_django_validated_initial_password(self):
@@ -233,13 +268,36 @@ class AccessControlTests(TestCase):
         response = self.client.post(reverse("configuracoes:user-create"), {
             "username": "new-operator", "first_name": "Nina", "last_name": "Costa", "email": "nina@example.com",
             "password1": "XyZ!2026_SenhaForte", "password2": "XyZ!2026_SenhaForte",
-            "groups": [analyst_group.pk], "scope_mode": "all",
+            "group": analyst_group.pk,
         })
         self.assertEqual(response.status_code, 302)
         created = self.User.objects.get(username="new-operator")
         self.assertTrue(created.check_password("XyZ!2026_SenhaForte"))
         self.assertEqual(list(created.groups.all()), [analyst_group])
-        self.assertEqual(created.data_scope.mode, UserDataScope.Mode.ALL)
+        self.assertEqual(created.groups.count(), 1)
+
+    def test_new_user_requires_one_access_profile_and_does_not_offer_user_scope(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("configuracoes:user-create"), {
+            "username": "missing-profile", "password1": "XyZ!2026_SenhaForte", "password2": "XyZ!2026_SenhaForte",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(self.User.objects.filter(username="missing-profile").exists())
+        self.assertContains(response, "Perfil de acesso")
+        self.assertNotContains(response, "Operadoras permitidas")
+        self.assertNotContains(response, "scope_mode")
+
+    def test_editing_user_replaces_previous_profile(self):
+        self.client.force_login(self.admin)
+        previous = Group.objects.get(name=GROUP_ANALYST)
+        target = self.User.objects.create_user(username="profile-switch", password="Senha-segura-123")
+        target.groups.set([previous])
+        next_group = Group.objects.get(name=GROUP_MANAGER)
+        response = self.client.post(reverse("configuracoes:user-edit", args=(target.pk,)), {
+            "first_name": "", "last_name": "", "email": "", "is_active": "on", "group": next_group.pk,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(list(target.groups.all()), [next_group])
 
     def test_group_permissions_are_presented_with_friendly_module_labels(self):
         self.client.force_login(self.admin)
@@ -264,7 +322,7 @@ class AccessControlTests(TestCase):
         self.client.force_login(self.admin)
         response = self.client.post(reverse("configuracoes:user-edit", args=(self.admin.pk,)), {
             "first_name": "", "last_name": "", "email": "", "is_active": "",
-            "groups": [Group.objects.get(name=GROUP_ANALYST).pk], "scope_mode": "all",
+            "group": Group.objects.get(name=GROUP_ANALYST).pk,
         })
         self.assertEqual(response.status_code, 200)
         self.admin.refresh_from_db()
@@ -276,17 +334,26 @@ class DataScopeIntegrationTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="scope-claro", password="Senha-segura-123")
         self.client.force_login(self.user)
+        from aplicativos.integracoes.models import CMDBLinkMirror, CMDBOperatorMirror
+
         self.claro = Operadora.objects.create(name="Claro", normalized_name="claro")
         self.vivo = Operadora.objects.create(name="Vivo", normalized_name="vivo")
         self.bradesco = Projeto.objects.create(name="Bradesco", normalized_name="bradesco")
         self.fust = Projeto.objects.create(name="FUST", normalized_name="fust")
         self.claro_provider = Provider.objects.create(name="ISP Claro", normalized_name="isp-claro")
         self.vivo_provider = Provider.objects.create(name="ISP Vivo", normalized_name="isp-vivo")
-        CMDBLink.objects.create(config_item_id="scope-1", uf="SP", operadora=self.claro, projeto=self.bradesco, provider=self.claro_provider)
-        CMDBLink.objects.create(config_item_id="scope-2", uf="RJ", operadora=self.claro, projeto=self.fust, provider=self.claro_provider)
-        CMDBLink.objects.create(config_item_id="scope-3", uf="MG", operadora=self.vivo, projeto=self.bradesco, provider=self.vivo_provider)
-        self.scope, _ = UserDataScope.objects.get_or_create(user=self.user)
-        self.scope.mode = UserDataScope.Mode.CUSTOM
+        self.claro_mirror = CMDBOperatorMirror.objects.create(source_config_item_id="op-claro", name="Claro")
+        self.vivo_mirror = CMDBOperatorMirror.objects.create(source_config_item_id="op-vivo", name="Vivo")
+        created = timezone.now()
+        self.links = [
+            CMDBLinkMirror.objects.create(source_config_item_id="scope-1", state="SP", operator=self.claro_mirror, legacy_project="Bradesco", isp_raw="ISP Claro", source_created_at=created),
+            CMDBLinkMirror.objects.create(source_config_item_id="scope-2", state="RJ", operator=self.claro_mirror, legacy_project="FUST", isp_raw="ISP Claro", source_created_at=created),
+            CMDBLinkMirror.objects.create(source_config_item_id="scope-3", state="MG", operator=self.vivo_mirror, legacy_project="Bradesco", isp_raw="ISP Vivo", source_created_at=created),
+        ]
+        self.group = Group.objects.get(name=GROUP_ANALYST)
+        self.user.groups.set([self.group])
+        self.scope, _ = GroupDataScope.objects.get_or_create(group=self.group)
+        self.scope.mode = GroupDataScope.Mode.CUSTOM
         self.scope.save()
         self.scope.allowed_operators.set([self.claro])
         self.scope.allowed_projects.set([self.bradesco])
@@ -295,22 +362,24 @@ class DataScopeIntegrationTests(TestCase):
         base = self.client.get(reverse("base_links:index"))
         self.assertEqual(base.status_code, 200)
         self.assertEqual(base.context["page_obj"].paginator.count, 1)
-        self.assertEqual(list(base.context["operators"]), [self.claro])
-        self.assertEqual(list(base.context["projects"]), [self.bradesco])
-        outside_detail = self.client.get(reverse("base_links:detail", args=(CMDBLink.objects.get(config_item_id="scope-3").pk,)))
+        self.assertEqual(list(base.context["operators"]), [self.claro_mirror])
+        self.assertEqual(list(base.context["projects"]), [{"name": "Bradesco"}])
+        outside_detail = self.client.get(reverse("base_links:detail", args=(self.links[2].pk,)))
         self.assertEqual(outside_detail.status_code, 404)
         dashboard = self.client.get(reverse("dashboard"))
         self.assertEqual(dashboard.context["total_links"], 1)
-        self.assertEqual(dashboard.context["top_providers"][0]["provider__name"], "ISP Claro")
+        macro_counts = {item["name"]: item["value"] for item in dashboard.context["macro_operators"]}
+        self.assertEqual(macro_counts["OUTROS"], 1)
+        self.assertEqual(sum(macro_counts.values()), dashboard.context["total_links"])
         ranking = self.client.get(reverse("rankings:index"))
-        self.assertEqual([row["name"] for row in ranking.context["providers"]], ["ISP Claro"])
+        self.assertEqual([row["name"] for row in ranking.context["operators"]], ["Claro"])
 
     def test_scope_is_applied_before_cockpit_filters_and_options(self):
-        response = self.client.post(reverse("analytics-query"), data=json.dumps({"metric": "links", "group_by": "operator", "period": "2026-10", "filters": {}}), content_type="application/json")
+        response = self.client.post(reverse("analytics-query"), data=json.dumps({"metric": "links", "group_by": "operator", "period_from": "2026-10", "period_to": "2026-10", "period": "2026-10", "filters": {}}), content_type="application/json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["value"], 1)
         self.assertEqual(response.json()["options"]["operator"], ["Claro"])
-        outside = self.client.post(reverse("analytics-query"), data=json.dumps({"metric": "links", "group_by": "operator", "period": "2026-10", "filters": {"operator": "Vivo"}}), content_type="application/json")
+        outside = self.client.post(reverse("analytics-query"), data=json.dumps({"metric": "links", "group_by": "operator", "period_from": "2026-10", "period_to": "2026-10", "period": "2026-10", "filters": {"operator": "Vivo"}}), content_type="application/json")
         self.assertEqual(outside.status_code, 200)
         self.assertEqual(outside.json()["value"], 0)
 
@@ -319,6 +388,25 @@ class DataScopeIntegrationTests(TestCase):
         self.assertEqual(all_data.status_code, 200)
         self.assertEqual(all_data.json()["total_links"], 1)
         self.assertEqual([row["name"] for row in all_data.json()["operators"]], ["Claro"])
-        outside = self.client.get(reverse("base_links:map-aggregates"), {"operator": self.vivo.pk})
+        outside = self.client.get(reverse("base_links:map-aggregates"), {"operator": self.vivo_mirror.pk})
         self.assertEqual(outside.status_code, 200)
         self.assertEqual(outside.json()["total_links"], 0)
+
+    def test_custom_scope_with_empty_lists_and_user_without_group_return_no_data(self):
+        self.scope.allowed_operators.clear()
+        self.assertEqual(self.client.get(reverse("base_links:index")).context["page_obj"].paginator.count, 0)
+        self.scope.allowed_operators.set([self.claro])
+        self.scope.allowed_projects.clear()
+        self.assertEqual(self.client.get(reverse("base_links:index")).context["page_obj"].paginator.count, 0)
+        self.user.groups.clear()
+        self.assertEqual(self.client.get(reverse("base_links:index")).status_code, 403)
+
+    def test_all_scope_and_superuser_bypass(self):
+        self.scope.mode = GroupDataScope.Mode.ALL
+        self.scope.save()
+        self.assertEqual(self.client.get(reverse("base_links:index")).context["page_obj"].paginator.count, 3)
+        self.user.groups.clear()
+        self.assertEqual(self.client.get(reverse("base_links:index")).status_code, 403)
+        self.user.is_superuser = True
+        self.user.save()
+        self.assertEqual(self.client.get(reverse("base_links:index")).context["page_obj"].paginator.count, 3)

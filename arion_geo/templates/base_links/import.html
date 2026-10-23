@@ -5,8 +5,8 @@
 {% block content %}
 <section class="links-page import-page" aria-labelledby="import-title">
   <a class="back-link" href="{% url 'base_links:index' %}">← Voltar à Base</a>
-  <header class="links-heading"><div><p class="section-kicker">NOC ATACADO <span>/</span> SINCRONIZAÇÃO</p><h1 id="import-title">Importar / Atualizar CMDB</h1><p>Analise o export antes de atualizar o espelho local.</p></div><span class="source-badge"><i></i>Fonte oficial: OTRS / CMDB</span></header>
-  {% if not filename %}
+  <header class="links-heading"><div><p class="section-kicker">NOC ATACADO <span>/</span> SINCRONIZAÇÃO</p><h1 id="import-title">Importa&#231;&#227;o XLSX desativada</h1><p>Analise o export antes de atualizar o espelho local.</p></div><span class="source-badge"><i></i>Fonte oficial: OTRS / CMDB</span></header>
+  {% if legacy_disabled %}<div class="links-empty"><h2>Importacao XLSX desativada</h2><p>A Base operacional e alimentada pela sincronizacao automatica CMDB.</p></div>{% elif not filename %}
   <form class="upload-card" method="post" enctype="multipart/form-data">
     {% csrf_token %}<span class="upload-icon" aria-hidden="true">↥</span><h2>Selecione o export XLSX</h2><p>O arquivo é processado de forma privada e não fica disponível publicamente. Limite de 15 MB.</p>
     <label class="file-picker"><span data-file-name>Selecionar arquivo .xlsx</span><input type="file" name="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>

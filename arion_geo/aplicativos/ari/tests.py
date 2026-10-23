@@ -4,12 +4,13 @@ from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.contrib.auth.models import Group
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from aplicativos.configuracoes.models import UserDataScope
+from aplicativos.configuracoes.models import GroupDataScope
 from .models import AriArtifact, AriAttachment, AriConversation, AriMessage
 from .services import AriSimulationService
 
@@ -21,7 +22,7 @@ class AriAccessTests(TestCase):
         )
         self.user.groups.clear()
         permission = Permission.objects.get(
-            content_type=ContentType.objects.get_for_model(UserDataScope), codename="view_ari"
+            content_type=ContentType.objects.get_for_model(GroupDataScope), codename="view_ari"
         )
         self.user.user_permissions.add(permission)
         self.client.force_login(self.user)
@@ -84,6 +85,7 @@ class AriAccessTests(TestCase):
     def test_history_search_filters_titles_for_current_user(self):
         AriConversation.objects.create(user=self.user, title="Plano da operadora")
         other = get_user_model().objects.create_user(username="ari-other", password="Senha-segura-123")
+        other.groups.set([Group.objects.get(name="Analista NOC")])
         AriConversation.objects.create(user=other, title="Plano confidencial")
         response = self.client.get(reverse("ari:index"), {"q": "operadora"})
         self.assertEqual(response.status_code, 200)
@@ -185,7 +187,9 @@ class AriAccessTests(TestCase):
         with override_settings(ARI_MAX_ATTACHMENT_BYTES=4):
             too_large = SimpleUploadedFile("large.txt", b"12345", content_type="text/plain")
             response = self.client.post(reverse("ari:create-message"), {"content": "arquivo", "files": [too_large]})
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(response.json()["error"]["code"], "FILE_TOO_LARGE")
 
     def test_attachment_and_artifact_are_private_and_artifact_is_controlled(self):
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
@@ -193,6 +197,7 @@ class AriAccessTests(TestCase):
             response = self.client.post(reverse("ari:create-message"), {"content": "", "files": [upload]})
             attachment = AriAttachment.objects.get()
             other = get_user_model().objects.create_user(username="ari-outsider", password="Senha-segura-123")
+            other.groups.set([Group.objects.get(name="Analista NOC")])
             self.client.force_login(other)
             self.assertEqual(self.client.get(reverse("ari:attachment-download", kwargs={"attachment_id": attachment.pk})).status_code, 404)
 

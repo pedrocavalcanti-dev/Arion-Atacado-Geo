@@ -4,8 +4,8 @@ from aplicativos.configuracoes.access_control import bootstrap_access
 
 
 class Command(BaseCommand):
-    help = "Create/update the initial Arion access profiles and preserve access for existing users."
+    help = "Create/update access profiles and default group data scopes without assigning users."
 
     def handle(self, *args, **options):
-        bootstrap_access(assign_existing=True)
+        bootstrap_access()
         self.stdout.write(self.style.SUCCESS("Perfis de acesso atualizados."))

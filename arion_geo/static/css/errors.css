@@ -1,0 +1,59 @@
+:root {
+  color-scheme: dark;
+  --error-bg: #090a0a;
+  --error-surface: #101212;
+  --error-border: rgba(255, 255, 255, .09);
+  --error-text: #f2f3f2;
+  --error-muted: #929895;
+  --error-accent: #74b5aa;
+  --error-button-bg: #e7e9e7;
+  --error-button-text: #171a18;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+html[data-theme="light"] {
+  color-scheme: light;
+  --error-bg: #f1f2ef;
+  --error-surface: #fff;
+  --error-border: rgba(15, 20, 18, .1);
+  --error-text: #171a18;
+  --error-muted: #69716b;
+  --error-accent: #2f8579;
+  --error-button-bg: #171a18;
+  --error-button-text: #fff;
+}
+* { box-sizing: border-box; }
+html, body { min-width: 320px; min-height: 100%; margin: 0; }
+body { min-height: 100vh; background: var(--error-bg); color: var(--error-text); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--error-accent); outline-offset: 3px; }
+.error-brand-header { display: flex; align-items: center; min-height: 64px; padding: 0 clamp(18px, 4vw, 56px); border-bottom: 1px solid var(--error-border); }
+.error-brand { display: inline-flex; align-items: center; gap: 11px; color: var(--error-text); font-size: 11px; font-weight: 600; letter-spacing: .12em; text-decoration: none; white-space: nowrap; }
+.error-brand b { color: var(--error-muted); font-weight: 400; }
+.error-brand-mark { display: flex; align-items: end; gap: 2px; width: 19px; height: 19px; padding: 3px; border: 1px solid var(--error-border); border-radius: 6px; transform: rotate(-8deg); }
+.error-brand-mark i { display: block; width: 3px; border-radius: 2px; background: var(--error-muted); }
+.error-brand-mark i:nth-child(1) { height: 6px; }
+.error-brand-mark i:nth-child(2) { height: 10px; }
+.error-brand-mark i:nth-child(3) { height: 7px; }
+.error-main { display: grid; min-height: calc(100vh - 65px); place-items: center; padding: 32px 20px 56px; }
+.error-card { width: min(620px, 100%); padding: clamp(26px, 5vw, 48px); border: 1px solid var(--error-border); border-radius: 16px; background: var(--error-surface); box-shadow: 0 18px 56px rgba(0, 0, 0, .12); }
+.error-status { margin: 0 0 17px; color: var(--error-accent); font-size: 10px; font-weight: 600; letter-spacing: .12em; }
+.error-status span { color: var(--error-muted); font-weight: 500; }
+.error-card h1 { max-width: 500px; margin: 0; font-size: clamp(25px, 4vw, 36px); font-weight: 500; letter-spacing: -.045em; line-height: 1.14; }
+.error-message { max-width: 470px; margin: 14px 0 0; color: var(--error-muted); font-size: 14px; line-height: 1.7; }
+.error-reference { margin: 16px 0 0; color: var(--error-muted); font-size: 11px; }
+.error-reference code { color: var(--error-text); font: inherit; font-variant-numeric: tabular-nums; }
+.error-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 28px; }
+.error-button { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; padding: 0 15px; border: 1px solid var(--error-border); border-radius: 8px; font-size: 12px; text-decoration: none; transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease; }
+.error-button:hover, .error-home-link:hover { border-color: var(--error-accent); }
+.error-button--quiet { color: var(--error-text); }
+.error-button--primary { border-color: var(--error-button-bg); background: var(--error-button-bg); color: var(--error-button-text); }
+.error-home-link { margin-left: 6px; padding: 8px 4px; border-bottom: 1px solid transparent; color: var(--error-muted); font-size: 11px; text-decoration: none; }
+@media (max-width: 480px) {
+  .error-brand-header { min-height: 56px; padding-inline: 16px; }
+  .error-brand { gap: 8px; font-size: 9px; letter-spacing: .08em; }
+  .error-main { min-height: calc(100vh - 57px); padding: 22px 14px 32px; }
+  .error-card { padding: 25px 21px; border-radius: 12px; }
+  .error-actions { align-items: stretch; flex-direction: column; }
+  .error-home-link { margin: 2px 0 0; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }

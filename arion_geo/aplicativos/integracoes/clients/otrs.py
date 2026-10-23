@@ -1,0 +1,296 @@
+"""Read-only metadata and sample client for a separately configured OTRS MySQL database."""
+import re
+from contextlib import contextmanager
+from datetime import date, datetime
+from decimal import Decimal
+
+from aplicativos.integracoes.services.errors import (
+    IntegrationNotConfigured,
+    OTRSAuthenticationError,
+    OTRSDatabaseError,
+    OTRSTimeoutError,
+    OTRSUnavailableError,
+)
+
+
+SENSITIVE_PARTS = ("password", "passwd", "token", "secret", "session", "cookie", "auth", "credential", "apikey", "privatekey")
+_IDENTIFIER = re.compile(r"^[A-Za-z0-9_$]+$")
+_WRITE_OR_SIDE_EFFECT = re.compile(
+    r"\b(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE|REPLACE|RENAME|GRANT|REVOKE|CALL|LOAD|INTO|OUTFILE|DUMPFILE|LOCK|UNLOCK|SLEEP|GET_LOCK|RELEASE_LOCK)\b|\bFOR\s+UPDATE\b",
+    re.IGNORECASE,
+)
+_FORBIDDEN_DATA = re.compile(
+    r"\b(pw|password|passwd|pwd|secret|token|credential|session|cookie|auth|body|html_body|mime_content|attachment_content)\b",
+    re.IGNORECASE,
+)
+
+
+class OTRSReadOnlyClient:
+    MAX_PAGE_SIZE = 50
+
+    def __init__(self, *, host, port=3306, database="", username, password, timeout=10, connection_factory=None):
+        if not host or not username or not password:
+            raise IntegrationNotConfigured()
+        self.host = host
+        self.port = int(port)
+        self.database = (database or "").strip()
+        self.username = username
+        self.password = password
+        self.timeout = max(1, min(int(timeout), 60))
+        self.connection_factory = connection_factory
+        self._active_connection = None
+        self.select_queries_count = 0
+
+    def test_connection(self):
+        with self._connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1 AS connection_ok")
+                row = cursor.fetchone()
+                if not row:
+                    raise OTRSDatabaseError()
+        return True
+
+    def list_databases(self):
+        with self._connection() as connection:
+            with connection.cursor() as cursor:
+                try:
+                    cursor.execute("SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME")
+                    rows = cursor.fetchall()
+                except Exception as exc:
+                    if self._error_code(exc) in {1044, 1142, 1227}:
+                        return []
+                    raise self._mapped_error(exc) from None
+        return [self._row_value(row, "SCHEMA_NAME") for row in rows if self._row_value(row, "SCHEMA_NAME")]
+
+    def list_tables(self, database=None):
+        selected = self._validated_database(database)
+        with self._connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT TABLE_NAME, TABLE_TYPE, TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s ORDER BY TABLE_NAME", (selected,))
+                rows = cursor.fetchall()
+        return [{"name": self._row_value(row, "TABLE_NAME"), "type": self._row_value(row, "TABLE_TYPE"), "estimated_rows": self._row_value(row, "TABLE_ROWS")} for row in rows]
+
+    def get_table_schema(self, table_name, database=None):
+        selected = self._validated_database(database)
+        table = self._validated_table(table_name, selected)
+        with self._connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s ORDER BY ORDINAL_POSITION", (selected, table))
+                rows = cursor.fetchall()
+        return [{"column": self._row_value(row, "COLUMN_NAME"), "type": self._row_value(row, "COLUMN_TYPE"), "nullable": self._row_value(row, "IS_NULLABLE"), "key": self._row_value(row, "COLUMN_KEY"), "default": self._display_value(self._row_value(row, "COLUMN_DEFAULT")), "extra": self._row_value(row, "EXTRA")} for row in rows]
+
+    def get_table_indexes(self, table_name, database=None):
+        selected = self._validated_database(database)
+        table = self._validated_table(table_name, selected)
+        with self._connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s ORDER BY INDEX_NAME, SEQ_IN_INDEX", (selected, table))
+                rows = cursor.fetchall()
+        return [{"name": self._row_value(row, "INDEX_NAME"), "unique": not bool(self._row_value(row, "NON_UNIQUE")), "sequence": self._row_value(row, "SEQ_IN_INDEX"), "column": self._row_value(row, "COLUMN_NAME"), "type": self._row_value(row, "INDEX_TYPE")} for row in rows]
+
+    def get_foreign_keys(self, table_name, database=None):
+        selected = self._validated_database(database)
+        table = self._validated_table(table_name, selected)
+        sql = "SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION"
+        with self._connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(sql, (selected, table))
+                rows = cursor.fetchall()
+        return [{"constraint": self._row_value(row, "CONSTRAINT_NAME"), "column": self._row_value(row, "COLUMN_NAME"), "referenced_schema": self._row_value(row, "REFERENCED_TABLE_SCHEMA"), "referenced_table": self._row_value(row, "REFERENCED_TABLE_NAME"), "referenced_column": self._row_value(row, "REFERENCED_COLUMN_NAME")} for row in rows]
+
+    def get_server_metadata(self):
+        """Return non-secret server/database metadata for a read-only study."""
+        sql = (
+            "SELECT DATABASE() AS database_name, VERSION() AS server_version, "
+            "@@character_set_database AS character_set, @@collation_database AS collation"
+        )
+        rows = self.execute_select(sql)
+        return rows[0] if rows else {}
+
+    def get_all_columns(self, database=None):
+        """Fetch schema metadata in one bounded metadata query (no table contents)."""
+        selected = self._validated_database(database)
+        sql = (
+            "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, "
+            "ORDINAL_POSITION FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = %s ORDER BY TABLE_NAME, ORDINAL_POSITION"
+        )
+        return self.execute_select(sql, (selected,))
+
+    def execute_select(self, sql, params=()):
+        """Execute one SELECT only; deny sensitive columns and side-effect SQL."""
+        statement = str(sql or "").strip()
+        if not statement or not re.match(r"^SELECT\b", statement, re.IGNORECASE):
+            raise OTRSDatabaseError()
+        if ";" in statement or _WRITE_OR_SIDE_EFFECT.search(statement) or _FORBIDDEN_DATA.search(statement):
+            raise OTRSDatabaseError()
+        if re.search(r"\bSELECT\s+\*", statement, re.IGNORECASE):
+            raise OTRSDatabaseError()
+        self.select_queries_count += 1
+        with self._connection() as connection:
+            with connection.cursor() as cursor:
+                try:
+                    cursor.execute(statement, tuple(params or ()))
+                    rows = cursor.fetchall()
+                except Exception as exc:
+                    raise self._mapped_error(exc) from None
+        return [dict(row) if isinstance(row, dict) else row for row in rows]
+
+    @contextmanager
+    def read_only_session(self):
+        """Reuse one read-only connection across a sequential study run."""
+        if self._active_connection is not None:
+            yield self
+            return
+        with self._connection() as connection:
+            self._active_connection = connection
+            try:
+                yield self
+            finally:
+                self._active_connection = None
+
+    def quote_table(self, table_name, database=None):
+        table = self._validated_table(table_name, self._validated_database(database))
+        return f"`{table}`"
+
+    def quote_column(self, table_name, column_name, database=None):
+        table = self._validated_table(table_name, self._validated_database(database))
+        columns = {row["column"] for row in self.get_table_schema(table, database)}
+        column = str(column_name or "")
+        if column not in columns or not _IDENTIFIER.fullmatch(column):
+            raise OTRSDatabaseError()
+        return f"`{column}`"
+
+    def get_sample_rows(self, table_name, *, database=None, page=1, page_size=25):
+        selected = self._validated_database(database)
+        table = self._validated_table(table_name, selected)
+        try:
+            page = max(1, min(int(page), 10000))
+            page_size = max(1, min(int(page_size), self.MAX_PAGE_SIZE))
+        except (TypeError, ValueError):
+            raise OTRSDatabaseError() from None
+        offset = (page - 1) * page_size
+        # Table names are accepted only after discovery and escaped as MySQL identifiers.
+        quoted = "`" + table.replace("`", "``") + "`"
+        with self._connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(f"SELECT * FROM {quoted} LIMIT %s OFFSET %s", (page_size, offset))
+                rows = cursor.fetchall()
+        return [self._sanitize_row(row) for row in rows]
+
+    @contextmanager
+    def _connection(self):
+        if self._active_connection is not None:
+            try:
+                yield self._active_connection
+            except (OTRSAuthenticationError, OTRSTimeoutError, OTRSUnavailableError, OTRSDatabaseError, IntegrationNotConfigured):
+                raise
+            except Exception as exc:
+                raise self._mapped_error(exc) from None
+            return
+        connection = None
+        try:
+            factory = self.connection_factory or self._default_connection_factory
+            connection = factory()
+            # Set the session default to read-only before any metadata/sample query.
+            with connection.cursor() as cursor:
+                cursor.execute("SET SESSION TRANSACTION READ ONLY")
+            yield connection
+        except (OTRSAuthenticationError, OTRSTimeoutError, OTRSUnavailableError, OTRSDatabaseError, IntegrationNotConfigured):
+            raise
+        except Exception as exc:
+            raise self._mapped_error(exc) from None
+        finally:
+            if connection is not None:
+                try:
+                    connection.close()
+                except Exception:
+                    pass
+
+    def _default_connection_factory(self):
+        try:
+            import pymysql
+        except ImportError:
+            raise OTRSUnavailableError() from None
+        options = {
+            "host": self.host, "port": self.port, "user": self.username,
+            "password": self.password, "connect_timeout": self.timeout,
+            "read_timeout": self.timeout, "write_timeout": self.timeout,
+            "charset": "utf8mb4", "autocommit": True,
+            "cursorclass": pymysql.cursors.DictCursor,
+        }
+        if self.database:
+            options["database"] = self.database
+        try:
+            return pymysql.connect(**options)
+        except Exception as exc:
+            raise self._mapped_error(exc) from None
+
+    def _validated_database(self, requested):
+        database = (requested if requested is not None else self.database) or ""
+        database = str(database).strip()
+        if not database:
+            raise OTRSDatabaseError()
+        available = self.list_databases()
+        # If metadata visibility is restricted, allow an explicitly configured name;
+        # all schema lookups still pass it as a parameter and MySQL enforces grants.
+        if available and database not in available:
+            raise OTRSDatabaseError()
+        return database
+
+    def _validated_table(self, table_name, database):
+        table = str(table_name or "")
+        available = {row["name"] for row in self.list_tables(database)}
+        if table not in available or not _IDENTIFIER.fullmatch(table):
+            raise OTRSDatabaseError()
+        return table
+
+    @staticmethod
+    def _row_value(row, key):
+        if isinstance(row, dict):
+            return row.get(key, row.get(key.lower()))
+        try:
+            return row[0]
+        except (TypeError, IndexError, KeyError):
+            return None
+
+    @classmethod
+    def _sanitize_row(cls, row):
+        if not isinstance(row, dict):
+            return {}
+        sanitized = {}
+        for key, value in row.items():
+            normalized = "".join(char.lower() for char in str(key) if char.isalnum())
+            sensitive = normalized == "pw" or normalized.endswith("pw") or any(part in normalized for part in SENSITIVE_PARTS)
+            sanitized[str(key)] = "••••••" if sensitive else cls._display_value(value)
+        return sanitized
+
+    @staticmethod
+    def _display_value(value):
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, (date, datetime)):
+            return value.isoformat()
+        if isinstance(value, Decimal):
+            return str(value)
+        if isinstance(value, bytes):
+            return "[binário]"
+        return str(value)[:500]
+
+    @staticmethod
+    def _error_code(exc):
+        args = getattr(exc, "args", ())
+        return args[0] if args and isinstance(args[0], int) else None
+
+    @classmethod
+    def _mapped_error(cls, exc):
+        code = cls._error_code(exc)
+        if code in {1045, 1698}:
+            return OTRSAuthenticationError()
+        if code in {2003, 2005, 2006, 2013}:
+            return OTRSUnavailableError()
+        if code in {3024, 1969}:
+            return OTRSTimeoutError()
+        if isinstance(exc, (TimeoutError,)) or "timeout" in exc.__class__.__name__.casefold():
+            return OTRSTimeoutError()
+        return OTRSDatabaseError()

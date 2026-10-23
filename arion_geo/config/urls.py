@@ -38,6 +38,7 @@ urlpatterns = [
     path('painel/', include('aplicativos.painel.urls')),
 ]
 
-handler403 = "config.views.permission_denied"
-handler404 = "config.views.page_not_found"
-handler500 = "config.views.server_error"
+handler400 = "config.errors.handler400"
+handler403 = "config.errors.handler403"
+handler404 = "config.errors.handler404"
+handler500 = "config.errors.handler500"

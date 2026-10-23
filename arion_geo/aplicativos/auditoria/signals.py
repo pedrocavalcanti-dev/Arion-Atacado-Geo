@@ -5,7 +5,7 @@ from .services import AuditService
 
 @receiver(user_logged_in)
 def login_success(sender, request, user, **kwargs):
-    AuditService.record(request=request, user=user, category="AUTHENTICATION", action="LOGIN_SUCCESS", module="Autentica??o", description="Login realizado")
+    AuditService.record(request=request, user=user, category="AUTHENTICATION", action="LOGIN_SUCCESS", module="Autentica\u00e7\u00e3o", description="Login realizado")
 
 
 @receiver(user_logged_out)
@@ -15,4 +15,4 @@ def logout_event(sender, request, user, **kwargs):
 
 @receiver(user_login_failed)
 def login_failed(sender, credentials, request, **kwargs):
-    AuditService.record(request=request, category="AUTHENTICATION", action="LOGIN_FAILED", result="FAILED", module="Autentica??o", description="Tentativa de login recusada", metadata={"username": (credentials or {}).get("username", "")[:150]})
+    AuditService.record(request=request, category="AUTHENTICATION", action="LOGIN_FAILED", result="FAILED", module="Autentica\u00e7\u00e3o", description="Tentativa de login recusada", metadata={"username": (credentials or {}).get("username", "")[:150]})

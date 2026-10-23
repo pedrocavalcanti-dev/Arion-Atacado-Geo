@@ -1,9 +1,8 @@
-from django.contrib.auth import get_user_model
 from django.contrib.auth.management import create_permissions
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 
-from .models import UserDataScope
+from .models import GroupDataScope
 
 
 GROUP_SYSTEM_ADMIN = "Administrador do Sistema"
@@ -15,7 +14,7 @@ MODULE_PERMISSIONS = (
     "view_dashboard", "view_cockpit", "save_analytics_views", "view_map",
     "view_rankings", "view_base", "view_ari", "import_cmdb", "export_base",
 )
-ADMIN_PERMISSIONS = ("manage_users", "manage_groups", "manage_data_scopes", "view_audit_log", "view_integrations", "view_system_info")
+ADMIN_PERMISSIONS = ("manage_users", "manage_groups", "manage_data_scopes", "view_audit_log", "view_integrations", "manage_integrations", "run_integrations", "inspect_integrations", "view_system_info")
 ALL_ACCESS_PERMISSIONS = MODULE_PERMISSIONS + ADMIN_PERMISSIONS
 
 ROLE_PERMISSIONS = {
@@ -39,35 +38,33 @@ PERMISSION_LABELS = {
     "manage_data_scopes": ("Administração", "Gerenciar escopos de dados"),
     "view_audit_log": ("Administração", "Visualizar auditoria"),
     "view_integrations": ("Administração", "Visualizar integrações"),
+    "manage_integrations": ("Administração", "Configurar integrações"),
+    "run_integrations": ("Administração", "Testar integrações"),
+    "inspect_integrations": ("Administração", "Inspecionar fontes externas"),
     "view_system_info": ("Administração", "Visualizar informações do sistema"),
     "view_ari": ("ARI I.A", "Acessar a experiência em modo Preview"),
 }
 
 
 def managed_permissions(using="default"):
-    content_type = ContentType.objects.db_manager(using).get_for_model(UserDataScope)
+    content_type = ContentType.objects.db_manager(using).get_for_model(GroupDataScope)
     return Permission.objects.using(using).filter(content_type=content_type, codename__in=ALL_ACCESS_PERMISSIONS)
 
 
-def bootstrap_access(*, using="default", assign_existing=True):
-    """Provision the access profiles idempotently and preserve existing access."""
-    app_config = UserDataScope._meta.apps.get_app_config("configuracoes")
+def bootstrap_access(*, using="default"):
+    """Provision access profiles and restrictive default group scopes idempotently."""
+    app_config = GroupDataScope._meta.apps.get_app_config("configuracoes")
     create_permissions(app_config, verbosity=0, interactive=False, using=using)
     available = {permission.codename: permission for permission in managed_permissions(using)}
     for name, codenames in ROLE_PERMISSIONS.items():
         group, _ = Group.objects.using(using).get_or_create(name=name)
         group.permissions.remove(*managed_permissions(using))
         group.permissions.add(*(available[codename] for codename in codenames if codename in available))
-    if assign_existing:
-        analyst = Group.objects.using(using).get(name=GROUP_ANALYST)
-        users = get_user_model()._default_manager.using(using).filter(is_active=True, is_superuser=False, groups__isnull=True)
-        for user in users.iterator():
-            user.groups.add(analyst)
-
-
+        default_mode = GroupDataScope.Mode.ALL if name == GROUP_SYSTEM_ADMIN else GroupDataScope.Mode.CUSTOM
+        GroupDataScope.objects.using(using).get_or_create(group=group, defaults={"mode": default_mode})
 def is_system_admin(user):
     return user.is_superuser or all(user.has_perm(f"configuracoes.{codename}") for codename in ADMIN_PERMISSIONS)
 
 
 def after_migrate(sender, using="default", **kwargs):
-    bootstrap_access(using=using, assign_existing=True)
+    bootstrap_access(using=using)

@@ -1,10 +1,13 @@
-from django.urls import path
+from django.urls import include, path
 
 from . import views
 
 app_name = "configuracoes"
 
 urlpatterns = [
+    path("documentacao/", views.documentation_home, name="documentation"),
+    path("documentacao/busca/", views.documentation_search, name="documentation-search"),
+    path("documentacao/<slug:slug>/", views.documentation_page, name="documentation-page"),
     path("", views.index, name="index"),
     path("conta/", views.account, name="account"),
     path("seguranca/", views.security, name="security"),
@@ -21,5 +24,6 @@ urlpatterns = [
     path("administracao/auditoria/", views.audit_list, name="audit"),
     path("administracao/auditoria/<int:pk>/", views.audit_detail, name="audit-detail"),
     path("administracao/integracoes/", views.integrations, name="integrations"),
+    path("administracao/integracoes/", include(("aplicativos.integracoes.urls", "integracoes"), namespace="integracoes")),
     path("administracao/sistema/", views.system_info, name="system"),
 ]

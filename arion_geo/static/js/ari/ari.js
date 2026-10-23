@@ -39,7 +39,7 @@
       },
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Não foi possível concluir a solicitação.');
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Não foi possível concluir a solicitação.');
     return data;
   };
 

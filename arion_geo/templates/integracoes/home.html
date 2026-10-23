@@ -1,0 +1,38 @@
+{% extends "integracoes/base_integracoes.html" %}
+{% load static %}
+{% block title %}Central de Integrações · NOC Atacado{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'js/integracoes/busca.js' %}" defer></script>{% endblock %}
+{% block integration_content %}
+<section class="integration-home-heading">
+  <div><p class="integration-eyebrow">FONTES DE DADOS E INFRAESTRUTURA</p><h1>Central de Integrações</h1><p>Gerencie, teste e acompanhe as fontes de dados conectadas ao NOC Atacado.</p></div>
+  <label class="integration-home-search"><span aria-hidden="true">⌕</span><input type="search" data-integration-search placeholder="Pesquisar integração..." aria-label="Pesquisar integração"></label>
+</section>
+<section class="integration-home-section integration-primary-section"><h2>Fontes e infraestrutura</h2><div class="integration-cards integration-cards--portal" data-integration-grid>
+  <a class="integration-card integration-card--portal" data-integration-card href="{% url 'configuracoes:integracoes:cmdb' %}"><div class="integration-card-top"><span class="integration-icon" aria-hidden="true">◈</span><span class="integration-source-badge">FONTE EXTERNA</span><span class="integration-status integration-status--{{ cmdb.status }}"><i></i>{{ cmdb.get_status_display }}</span></div><h3>CMDB ServiceUp</h3><p class="integration-kind">API REST · OTRS GenericInterface</p><dl class="integration-facts"><div><dt>Último teste</dt><dd>{% if cmdb.last_test_at %}{{ cmdb.last_test_at|date:"d/m/Y H:i" }}{% else %}Ainda não testado{% endif %}</dd></div><div><dt>Latência</dt><dd>{% if cmdb.last_latency_ms != None %}{{ cmdb.last_latency_ms }} ms{% else %}—{% endif %}</dd></div><div><dt>Última leitura</dt><dd>{% if cmdb.last_read_at %}{{ cmdb.last_read_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</dd></div><div><dt>Uso operacional</dt><dd>{% if cmdb.enabled %}Ativo{% else %}Inativo{% endif %}</dd></div></dl><span class="integration-link">Abrir integração <span aria-hidden="true">→</span></span></a>
+  <a class="integration-card integration-card--portal" data-integration-card href="{% url 'configuracoes:integracoes:otrs' %}"><div class="integration-card-top"><span class="integration-icon" aria-hidden="true">▤</span><span class="integration-source-badge">FONTE EXTERNA</span><span class="integration-status integration-status--{{ otrs.status }}"><i></i>{{ otrs.get_status_display }}</span></div><h3>OTRS</h3><p class="integration-kind">MySQL · conexão somente leitura</p><dl class="integration-facts"><div><dt>Host</dt><dd>{{ otrs.config.host|default:"Não configurado" }}</dd></div><div><dt>Banco</dt><dd>{{ otrs.config.database|default:"A selecionar" }}</dd></div><div><dt>Último teste</dt><dd>{% if otrs.last_test_at %}{{ otrs.last_test_at|date:"d/m/Y H:i" }} · {{ otrs.last_latency_ms }} ms{% else %}Ainda não testado{% endif %}</dd></div><div><dt>Permissão</dt><dd>Somente leitura</dd></div></dl><span class="integration-link">Abrir integração <span aria-hidden="true">→</span></span></a>
+<a class="integration-card integration-card--portal" data-integration-card href="{% url 'configuracoes:integracoes:arion' %}"><div class="integration-card-top"><span class="integration-icon" aria-hidden="true">▦</span><span class="integration-source-badge">BANCO LOCAL</span><span class="integration-status{% if database_health.online %} integration-status--connected{% else %} integration-status--unavailable{% endif %}"><i></i>{{ database_health.status }}</span></div><h3>Banco Arion</h3><p class="integration-kind">Banco operacional · diagnóstico</p><dl class="integration-facts"><div><dt>Engine</dt><dd>{{ database_health.engine }}</dd></div><div><dt>Latência</dt><dd>{% if database_health.latency_ms != None %}{{ database_health.latency_ms }} ms{% else %}—{% endif %}</dd></div><div><dt>Ambiente</dt><dd>{{ database_health.environment }}</dd></div></dl><span class="integration-link">Ver saúde <span aria-hidden="true">→</span></span></a></div></section>
+<section class="integration-home-section integration-legacy-section">
+  <h2>Espelhos operacionais locais</h2>
+  <article class="integration-legacy-card" data-integration-card>
+    <div><span class="integration-legacy-badge">ARION DB</span><h3>CMDB</h3><p>Links e operadoras consumidos pelas telas vêm do espelho local.</p></div>
+    <dl class="integration-facts">
+      <div><dt>Links presentes</dt><dd>{{ cmdb_links }}</dd></div><div><dt>Operadoras presentes</dt><dd>{{ cmdb_operators }}</dd></div>
+      <div><dt>Último sync bem-sucedido</dt><dd>{% if cmdb_sync.last_success_at %}{{ cmdb_sync.last_success_at|date:"d/m/Y H:i:s" }}{% else %}Ainda não sincronizado{% endif %}</dd></div>
+      <div><dt>Duração / registros</dt><dd>{% if cmdb_sync %}{{ cmdb_sync.last_duration_ms|default:"—" }} ms / {{ cmdb_sync.records_count|default:"—" }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Freshness</dt><dd>{{ freshness.cmdb }}</dd></div>
+    </dl>
+  </article>
+  <article class="integration-legacy-card" data-integration-card>
+    <div><span class="integration-legacy-badge">ARION DB</span><h3>Tickets OTRS · NOC - ATACADO</h3><p>O último snapshot disponível continua em uso se a origem estiver indisponível.</p></div>
+    <dl class="integration-facts">
+      <div><dt>Tickets na fila</dt><dd>{{ otrs_tickets }}</dd></div><div><dt>Business-open</dt><dd>{{ otrs_open }}</dd></div>
+      <div><dt>Último sync rápido</dt><dd>{% if otrs_fast %}{{ otrs_fast.finished_at|date:"d/m/Y H:i:s" }}{% else %}Ainda não executado{% endif %}</dd></div>
+      <div><dt>Última reconciliação completa</dt><dd>{% if otrs_full %}{{ otrs_full.finished_at|date:"d/m/Y H:i:s" }}{% else %}Ainda não executada{% endif %}</dd></div>
+      <div><dt>Freshness / worker</dt><dd>{{ freshness.otrs }} / {% if worker_alive %}ativo{% else %}inativo{% endif %}</dd></div>
+      <div><dt>Duração / registros</dt><dd>{% if otrs_sync %}{{ otrs_sync.last_duration_ms|default:"—" }} ms / {{ otrs_sync.records_count|default:"—" }}{% else %}—{% endif %}</dd></div>
+    </dl>
+  </article>
+</section>
+<section class="integration-footer"><div><h2>Histórico de operações</h2><p>Testes, leituras e inspeções recentes.</p></div><a class="integration-link" href="{% url 'configuracoes:integracoes:runs' %}">Ver histórico <span aria-hidden="true">→</span></a></section>
+<p class="integration-search-empty" hidden>Nenhuma integração corresponde à busca.</p>
+{% endblock %}

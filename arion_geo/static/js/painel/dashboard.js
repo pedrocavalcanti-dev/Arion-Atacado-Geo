@@ -71,7 +71,7 @@
   function buildTrendChart() {
     const chart = page.querySelector("[data-monthly-chart]");
     if (!chart || !monthly.length) return;
-    const scale = niceMax(Math.max(...monthly.map((row) => row.calls)) * 1.04);
+    const scale = niceMax(Math.max(1, ...monthly.map((row) => row.calls)) * 1.04);
     const pct = (value) => (value / scale.top) * 100;
     chart.style.setProperty("--cols", monthly.length);
 
@@ -119,7 +119,7 @@
       const column = document.createElement("div");
       column.className = "trend-col";
       column.tabIndex = 0;
-      column.setAttribute("aria-label", `${row.label}: ${numberFormat.format(row.calls)} chamados, ${numberFormat.format(row.repeat)} reincidentes`);
+      column.setAttribute("aria-label", `${row.label}: ${numberFormat.format(row.calls)} tickets criados, ${numberFormat.format(row.repeat)} links com dois ou mais tickets no mês`);
       const bar = document.createElement("i");
       bar.className = "trend-bar";
       bar.style.height = `${Math.max(1.5, pct(row.calls))}%`;
@@ -143,7 +143,7 @@
         column.classList.add("is-active");
         dot.classList.add("is-active");
         label.classList.add("is-active");
-        const html = `<span class="tip-title">${row.label}</span>${tipRow("calls", "Chamados", numberFormat.format(row.calls))}${tipRow("repeat", "Reincidentes", numberFormat.format(row.repeat))}`;
+        const html = `<span class="tip-title">${row.label}</span>${tipRow("calls", "Tickets criados", numberFormat.format(row.calls))}${tipRow("repeat", "Links com 2+ tickets", numberFormat.format(row.repeat))}`;
         const barRect = bar.getBoundingClientRect();
         showTooltip(column, html, { y: barRect.top });
       };

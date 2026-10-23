@@ -1,0 +1,63 @@
+{% load static %}<!doctype html>
+<html lang="pt-br" data-user-theme="{{ user_theme|default:'' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090a0a">
+  <title>{% block title %}Documentação · NOC ATACADO{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/arion.svg' %}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <script src="{% static 'js/theme.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'css/documentacao.css' %}">
+</head>
+<body class="docs-app">
+  <form class="docs-csrf" aria-hidden="true">{% csrf_token %}</form>
+  <header class="docs-header">
+    <button class="docs-menu-toggle" type="button" aria-label="Abrir navegação documental" aria-controls="docs-sidebar" aria-expanded="true" data-docs-sidebar-toggle>
+      <svg class="docs-icon-mobile" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      <svg class="docs-icon-desktop" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 2.5 12 9 19M13 5l-6.5 7L13 19M20 5v14"/></svg>
+    </button>
+    <a class="docs-brand" href="{% url 'configuracoes:documentation' %}" aria-label="NOC Atacado, início da documentação">
+      <span class="docs-brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19h16M6 16v-5m6 5V6m6 10v-8"/></svg></span>
+      <span><strong>NOC ATACADO</strong><small>DOCUMENTAÇÃO</small></span>
+    </a>
+    <form class="docs-search docs-search--header" action="{% url 'configuracoes:documentation-search' %}" method="get" role="search">
+      <label class="visually-hidden" for="docs-search-header">Pesquisar na documentação</label>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.2 4.2"/></svg>
+      <input id="docs-search-header" name="q" type="search" placeholder="Pesquisar documentação..." value="{{ query|default:'' }}">
+      <kbd>Enter</kbd>
+    </form>
+    <button class="docs-theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Alternar tema" data-theme-toggle>
+      <svg class="docs-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+      <svg class="docs-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.4A8.5 8.5 0 0 1 8.6 4 8.5 8.5 0 1 0 20 15.4Z"/></svg>
+    </button>
+    <a class="docs-return" href="{% url 'painel:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7"/></svg><span>Voltar ao Arion</span></a>
+  </header>
+  <div class="docs-shell" data-docs-shell>
+    <div class="docs-scrim" data-docs-scrim></div>
+    <aside class="docs-sidebar" id="docs-sidebar" aria-label="Navegação documental" data-docs-sidebar>
+      <a class="docs-home-link" href="{% url 'configuracoes:documentation' %}"{% if not document %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z"/></svg><span>Central de documentação</span></a>
+      <div class="docs-sidebar-caption">NAVEGAÇÃO</div>
+      {% for category in categories %}{% if category.documents %}
+      <details class="docs-nav-group" data-docs-category open>
+        <summary aria-controls="docs-nav-{{ category.name|slugify }}"><span>{{ category.name }}</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
+        <nav id="docs-nav-{{ category.name|slugify }}" aria-label="{{ category.name }}">
+          {% for item in category.documents %}
+          <a href="{% url 'configuracoes:documentation-page' slug=item.slug %}"{% if document.slug == item.slug %} class="is-active" aria-current="page"{% endif %}><span class="docs-nav-dot" aria-hidden="true"></span><span class="docs-nav-label">{{ item.title }}</span></a>
+          {% endfor %}
+        </nav>
+      </details>
+      {% endif %}{% endfor %}
+      <a class="docs-sidebar-return" href="{% url 'painel:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7"/></svg><span>Voltar ao Arion</span></a>
+    </aside>
+    <main class="docs-main" id="main-content">
+      {% block docs_content %}{% endblock %}
+    </main>
+  </div>
+  <script src="{% static 'js/base.js' %}" defer></script>
+  <script src="{% static 'js/documentacao.js' %}" defer></script>
+</body>
+</html>

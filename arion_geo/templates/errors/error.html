@@ -1,0 +1,16 @@
+{% extends "errors/base_error.html" %}
+{% block title %}{{ error.title|default:"Não foi possível concluir a solicitação" }} · Arion Atacado Geo{% endblock %}
+{% block error_content %}
+<section class="error-card" role="alert" aria-labelledby="error-title">
+  <p class="error-status">{{ error.status_code|default:"400" }} <span>· {{ error.code|default:"BAD_REQUEST" }}</span></p>
+  <h1 id="error-title">{{ error.title|default:"Não foi possível concluir a solicitação" }}</h1>
+  <p class="error-message">{{ error.message|default:"Não foi possível concluir a solicitação." }}</p>
+  {% if request_id_short %}<p class="error-reference">Referência do erro: <code>{{ request_id_short }}</code></p>{% endif %}
+  <nav class="error-actions" aria-label="Ações disponíveis">
+    <a class="error-button error-button--quiet" href="{{ home_url|default:'/' }}" data-history-back>Voltar</a>
+    {% if error.show_retry %}<a class="error-button error-button--primary" href="{{ home_url|default:'/' }}" data-error-retry data-error-code="{{ error.code }}">{% if error.code == "CSRF_FAILED" %}Atualizar{% else %}Tentar novamente{% endif %}</a>{% endif %}
+    {% if error.show_login %}<a class="error-button error-button--primary" href="{{ login_url|default:'/login/' }}">Entrar novamente</a>{% endif %}
+    {% if error.show_home %}<a class="error-home-link" href="{{ home_url|default:'/' }}">Ir para o início</a>{% endif %}
+  </nav>
+</section>
+{% endblock %}

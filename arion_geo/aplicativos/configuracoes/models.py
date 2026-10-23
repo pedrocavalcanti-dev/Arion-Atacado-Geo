@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.db import models
 
 
@@ -20,21 +21,21 @@ class UserPreference(models.Model):
         return f"{self.user} · {self.get_theme_display()}"
 
 
-class UserDataScope(models.Model):
+class GroupDataScope(models.Model):
     class Mode(models.TextChoices):
         ALL = "all", "Todos os dados"
         CUSTOM = "custom", "Personalizado"
 
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="data_scope")
-    mode = models.CharField(max_length=8, choices=Mode.choices, default=Mode.ALL)
-    allowed_operators = models.ManyToManyField("base_links.Operadora", blank=True, related_name="scoped_users")
-    allowed_projects = models.ManyToManyField("base_links.Projeto", blank=True, related_name="scoped_users")
+    group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name="data_scope")
+    mode = models.CharField(max_length=8, choices=Mode.choices, default=Mode.CUSTOM)
+    allowed_operators = models.ManyToManyField("base_links.Operadora", blank=True, related_name="scoped_groups")
+    allowed_projects = models.ManyToManyField("base_links.Projeto", blank=True, related_name="scoped_groups")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "escopo de dados"
-        verbose_name_plural = "escopos de dados"
+        verbose_name = "escopo de dados do grupo"
+        verbose_name_plural = "escopos de dados dos grupos"
         permissions = [
             ("view_dashboard", "Can view the executive dashboard"),
             ("view_cockpit", "Can view the analytics cockpit"),
@@ -46,12 +47,38 @@ class UserDataScope(models.Model):
             ("export_base", "Can export CMDB data"),
             ("manage_users", "Can manage user accounts"),
             ("manage_groups", "Can manage access groups and permissions"),
-            ("manage_data_scopes", "Can manage user data scopes"),
+            ("manage_data_scopes", "Can manage group data scopes"),
             ("view_audit_log", "Can view audit log"),
             ("view_integrations", "Can view configured integrations"),
+            ("manage_integrations", "Can manage integration settings and credentials"),
+            ("run_integrations", "Can test and run integration diagnostics"),
+            ("inspect_integrations", "Can inspect external integration schemas and samples"),
             ("view_system_info", "Can view system information"),
             ("view_ari", "Can access the ARI I.A preview"),
         ]
 
     def __str__(self):
-        return f"{self.user} · {self.get_mode_display()}"
+        return f"{self.group} · {self.get_mode_display()}"
+
+
+class LegacyUserDataScope(models.Model):
+    """Archived per-user scopes retained for migration traceability only."""
+
+    class Mode(models.TextChoices):
+        ALL = "all", "Todos os dados"
+        CUSTOM = "custom", "Personalizado"
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="legacy_data_scope")
+    mode = models.CharField(max_length=8, choices=Mode.choices, default=Mode.ALL)
+    allowed_operators = models.ManyToManyField("base_links.Operadora", blank=True, related_name="legacy_scoped_users", db_table="configuracoes_userdatascope_allowed_operators")
+    allowed_projects = models.ManyToManyField("base_links.Projeto", blank=True, related_name="legacy_scoped_users", db_table="configuracoes_userdatascope_allowed_projects")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "configuracoes_userdatascope"
+        verbose_name = "escopo legado de usuário"
+        verbose_name_plural = "escopos legados de usuários"
+
+    def __str__(self):
+        return f"{self.user} · {self.get_mode_display()} (legado)"

@@ -804,10 +804,10 @@ NÃO leia toda a pasta automaticamente.
 
 Principais documentos:
 
-- `docs/CURRENT-STATE.md`
-- `docs/ARCHITECTURE.md`
-- `docs/DATA-SOURCES.md`
-- `docs/UI-GUIDELINES.md`
+- `docs/ESTADO-ATUAL.md`
+- `docs/ARQUITETURA.md`
+- `docs/FONTES-DE-DADOS.md`
+- `docs/DIRETRIZES-DE-INTERFACE.md`
 - arquivos específicos da feature em questão
 
 Atualize documentação apenas quando a implementação mudar:
@@ -823,7 +823,7 @@ Não transformar documentação em changelog de cada pequena alteração.
 
 # 38. CURRENT-STATE
 
-`docs/CURRENT-STATE.md` deve representar o estado ATUAL do projeto.
+`docs/ESTADO-ATUAL.md` deve representar o estado ATUAL do projeto.
 
 Atualize informação antiga em vez de apenas acumular histórico.
 

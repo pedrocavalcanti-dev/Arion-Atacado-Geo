@@ -1,0 +1,8 @@
+{% extends "integracoes/base_integracoes.html" %}
+{% block title %}Banco Arion · Integrações{% endblock %}
+{% block integration_content %}
+<a class="integration-back" href="{% url 'configuracoes:integrations' %}">← Todas as integrações</a>
+<p class="integration-eyebrow">INTEGRAÇÕES / BANCO ARION</p><h1>Banco Arion</h1><p class="integration-page-description">Saúde do banco operacional. Esta conexão é gerenciada pelo ambiente e não pode ser editada aqui.</p>
+<nav class="integration-tabs" aria-label="Seções do Banco Arion"><a href="#overview" aria-current="page">Visão geral</a><a href="#overview">Saúde</a></nav>
+<section class="integration-overview-panel" id="overview"><div class="integration-card-top"><h2>Estado da conexão</h2><span class="integration-status{% if database_health.online %} integration-status--connected{% else %} integration-status--unavailable{% endif %}"><i></i>{{ database_health.status }}</span></div><dl class="integration-overview-facts"><div><dt>Engine</dt><dd>{{ database_health.engine }}</dd></div><div><dt>Ambiente</dt><dd>{{ database_health.environment }}</dd></div><div><dt>Latência</dt><dd>{% if database_health.latency_ms != None %}{{ database_health.latency_ms }} ms{% else %}—{% endif %}</dd></div><div><dt>Identificação</dt><dd>{{ database_health.name|default:"Banco operacional" }}</dd></div></dl><p class="integration-readonly">Somente diagnóstico · conexão não editável</p></section>
+{% endblock %}

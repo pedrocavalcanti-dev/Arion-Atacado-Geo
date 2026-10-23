@@ -1,0 +1,93 @@
+{% extends "integracoes/base_integracoes.html" %}
+{% load static %}
+{% block title %}{{ integration.name }} · Integrações · Arion{% endblock %}
+{% block integration_title %}{{ integration.name }}{% endblock %}
+{% block integration_description %}{{ integration.kind }} · configuração, saúde e diagnóstico da fonte.{% endblock %}
+{% block integration_content %}
+<div class="integration-detail-top"><a class="integration-back" href="{% url 'configuracoes:integrations' %}">← Todas as integrações</a><span class="integration-status integration-status--{{ integration.status }}"><i></i>{{ integration.get_status_display }}</span></div>
+<nav class="integration-tabs" aria-label="Seções da integração">
+  <a href="?tab=overview"{% if active_tab == "overview" %} aria-current="page"{% endif %}>Visão geral</a>
+  {% if perms.configuracoes.manage_integrations %}<a href="?tab=configuration"{% if active_tab == "configuration" %} aria-current="page"{% endif %}>Configuração</a>{% endif %}
+  {% if integration.key == "cmdb" and perms.configuracoes.run_integrations %}<a href="?tab=diagnostics"{% if active_tab == "diagnostics" %} aria-current="page"{% endif %}>Consulta de itens</a>{% endif %}
+  {% if integration.key == "otrs" and perms.configuracoes.inspect_integrations %}<a href="{% url 'configuracoes:integracoes:otrs-schema' %}"{% if active_tab == "schema" %} aria-current="page"{% endif %}>Estrutura do banco</a>{% endif %}
+  <a href="{% url 'configuracoes:integracoes:runs' %}">Histórico</a>
+</nav>
+
+{% if active_tab == "configuration" %}
+<section class="settings-section integration-section">
+  <div class="settings-section-heading"><div><h2>Configuração</h2><p>As credenciais são criptografadas antes de serem gravadas.</p></div></div>
+  {% if perms.configuracoes.manage_integrations %}
+  <form class="integration-form" method="post" action="{% url 'configuracoes:integracoes:save-config' integration.key %}">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}
+      {% if field.name != "password" %}<div class="integration-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label><div class="integration-control">{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div></div>{% endif %}
+    {% endfor %}
+    <div class="integration-field integration-credential-field"><label for="{{ form.password.id_for_label }}">Senha</label><div class="integration-control">{% if integration.credentials_configured %}<details class="integration-credential-editor"{% if form.password.errors %} open{% endif %}><summary>Alterar credenciais</summary><div>{{ form.password }}<small>Informe a nova senha. O campo vazio mantém a senha atual.</small></div></details>{% else %}{{ form.password }}<small>Informe a senha. Ela não será exibida novamente após salvar.</small>{% endif %}{{ form.password.errors }}</div></div>
+    <div class="integration-form-actions"><button class="settings-button" type="submit">Salvar configuração</button></div>
+  </form>
+  {% endif %}
+  <div class="integration-credential-actions">
+    {% if integration.secret_ciphertext or integration.username %}{% if perms.configuracoes.manage_integrations %}
+    <span>Credenciais armazenadas com proteção do Windows.</span>
+    <button class="integration-button integration-button--danger" type="button" data-dialog-open="remove-credentials-dialog">Remover credenciais</button>
+    {% endif %}{% endif %}
+  </div>
+  {% if integration.key == "otrs" and integration.accessible_databases %}<div class="integration-databases"><h3>Bancos disponíveis para a conta</h3><p>{% for db in integration.accessible_databases %}<span>{{ db }}</span>{% endfor %}</p><small>Informe o banco desejado no campo Banco acima.</small></div>{% endif %}
+</section>
+{% elif active_tab == "diagnostics" and integration.key == "cmdb" %}
+<section class="settings-section integration-section">
+  <div class="settings-section-heading"><div><h2>Diagnóstico CMDB</h2><p>A consulta é limitada e os resultados são filtrados pela lista de campos públicos.</p></div></div>
+  {% if perms.configuracoes.run_integrations %}
+  <div class="integration-diagnostic-grid">
+    <form class="integration-form integration-form--diagnostic" method="post" action="{% url 'configuracoes:integracoes:cmdb-diagnose' %}">{% csrf_token %}<input type="hidden" name="operation" value="search"><h3>Pesquisar itens</h3>
+      {% for field in search_form %}<div class="integration-field integration-field--stacked"><label for="{{ field.id_for_label }}">{{ field.label }}</label><div class="integration-control">{{ field }}{% if field.name == "class_name" %}<datalist id="cmdb-class-options"><option value="Links de internet">USADO PELO ARION · classe prioritária</option><option value="Operadoras">USADO PELO ARION · classe prioritária</option><option value="Aparelhos de radiocomunicação"></option><option value="Parceiros"></option><option value="Pop"></option><option value="Telefonia"></option></datalist><small>Confirme o nome exato da classe conforme o CMDB.</small>{% endif %}{{ field.errors }}</div></div>{% endfor %}
+      <div class="integration-form-actions"><button class="settings-button" type="submit">Pesquisar</button></div>
+    </form>
+    <form class="integration-form integration-form--diagnostic" method="post" action="{% url 'configuracoes:integracoes:cmdb-diagnose' %}">{% csrf_token %}<input type="hidden" name="operation" value="get"><h3>Obter por ConfigItemID</h3>
+      <div class="integration-field integration-field--stacked"><label for="{{ get_form.config_item_ids.id_for_label }}">{{ get_form.config_item_ids.label }}</label><div class="integration-control">{{ get_form.config_item_ids }}<small>De 1 a 500 IDs; o client divide a leitura em lotes configurados.</small>{{ get_form.config_item_ids.errors }}</div></div>
+      <div class="integration-form-actions"><button class="settings-button" type="submit">Obter itens</button></div>
+    </form>
+  </div>
+  {% endif %}
+  {% if results != None %}<div class="integration-results"><h3>Resultado da consulta <span>{{ results|length }} registros</span></h3>{% if results %}<div class="integration-result-list">{% for item in results %}<article class="integration-result-item"><dl>{% for key, value in item.items %}{% if key != "CIXMLData" %}<div><dt>{{ key }}</dt><dd>{{ value|default:"—" }}</dd></div>{% endif %}{% endfor %}</dl>{% if item.CIXMLData %}<div class="integration-attributes"><h4>Campos públicos</h4>{% for key, value in item.CIXMLData.items %}<p><strong>{{ key }}:</strong> {{ value|default:"—" }}</p>{% endfor %}</div>{% endif %}</article>{% endfor %}</div>{% else %}<p>Nenhum item retornado para estes filtros.</p>{% endif %}</div>{% endif %}
+</section>
+{% elif active_tab == "schema" and integration.key == "otrs" %}
+<section class="settings-section integration-section">
+  <div class="settings-section-heading"><div><h2>Estrutura do banco</h2><p>Metadados do information_schema e amostras limitadas a 50 linhas por página.</p></div><form class="integration-search" method="get" action="{% url 'configuracoes:integracoes:otrs-schema' %}"><label for="table-search">Buscar tabela</label><input id="table-search" type="search" name="q" value="{{ search }}" placeholder="ticket, article, queue…"><button class="integration-button" type="submit">Buscar</button></form></div>
+  {% if schema_error %}<p class="integration-inline-error">{{ schema_error }}</p>{% endif %}
+  {% if integration.accessible_databases %}<p class="integration-databases-label">Bancos visíveis à conta: {% for db in integration.accessible_databases %}<span>{{ db }}</span>{% endfor %}</p>{% endif %}
+  {% if tables %}<div class="integration-table-wrap"><table class="integration-table"><thead><tr><th>Tabela / view</th><th>Tipo</th><th>Linhas estimadas</th><th></th></tr></thead><tbody>{% for table in tables %}{% if not search or search|lower in table.name|lower %}<tr><td>{{ table.name }}</td><td>{{ table.type }}</td><td>{{ table.estimated_rows|default:"—" }}</td><td><a href="{% url 'configuracoes:integracoes:otrs-table' table.name %}">Inspecionar</a></td></tr>{% endif %}{% endfor %}</tbody></table></div>{% endif %}
+  {% if table_detail %}<div class="integration-table-detail"><h3>{{ table_name }}</h3><div class="integration-schema-grid"><section><h4>Colunas</h4><div class="integration-table-wrap"><table class="integration-table"><thead><tr><th>Coluna</th><th>Tipo</th><th>Nullable</th><th>Chave</th><th>Default</th><th>Extra</th></tr></thead><tbody>{% for row in table_detail.columns %}<tr><td>{{ row.column }}</td><td>{{ row.type }}</td><td>{{ row.nullable }}</td><td>{{ row.key|default:"—" }}</td><td>{{ row.default|default:"—" }}</td><td>{{ row.extra|default:"—" }}</td></tr>{% endfor %}</tbody></table></div></section>
+  <section><h4>Índices</h4>{% if table_detail.indexes %}<div class="integration-table-wrap"><table class="integration-table"><thead><tr><th>Nome</th><th>Tipo</th><th>Único</th><th>Coluna</th></tr></thead><tbody>{% for row in table_detail.indexes %}<tr><td>{{ row.name }}</td><td>{{ row.type }}</td><td>{% if row.unique %}Sim{% else %}Não{% endif %}</td><td>{{ row.column }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p>Sem índices encontrados.</p>{% endif %}</section>
+  <section><h4>Chaves estrangeiras</h4>{% if table_detail.foreign_keys %}<div class="integration-table-wrap"><table class="integration-table"><thead><tr><th>Coluna</th><th>Referência</th><th>Coluna referenciada</th></tr></thead><tbody>{% for row in table_detail.foreign_keys %}<tr><td>{{ row.column }}</td><td>{{ row.referenced_schema }}.{{ row.referenced_table }}</td><td>{{ row.referenced_column }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p>Nenhuma FK registrada.</p>{% endif %}</section>
+  <section><div class="integration-sample-heading"><h4>Amostra sanitizada <span>máximo 50 linhas</span></h4><form method="get" action=""><label for="sample-page">Página</label><input id="sample-page" type="number" min="1" max="10000" name="page" value="{{ sample_page|default:'1' }}"><button class="integration-button" type="submit">Abrir</button></form></div>{% if table_detail.sample_rows %}<div class="integration-table-wrap"><table class="integration-table"><thead><tr>{% for key in table_detail.sample_rows.0.keys %}<th>{{ key }}</th>{% endfor %}</tr></thead><tbody>{% for row in table_detail.sample_rows %}<tr>{% for key, value in row.items %}<td>{{ value|default:"—" }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>{% else %}<p>Nenhuma linha de amostra disponível.</p>{% endif %}</section></div></div>{% endif %}
+</section>
+{% else %}
+<section class="settings-section integration-section">
+  <div class="settings-section-heading"><div><h2>Visão geral</h2><p>Resumo seguro da configuração e do estado atual.</p></div></div>
+  <dl class="integration-overview-facts">
+    <div><dt>Tipo</dt><dd>{{ integration.kind }}</dd></div><div><dt>Status da conexão</dt><dd>{{ integration.get_status_display }}</dd></div>
+    <div><dt>Uso operacional</dt><dd>{% if integration.enabled %}Ativo{% else %}Inativo{% endif %}</dd></div>
+    {% if integration.key == "cmdb" %}<div><dt>URL base</dt><dd>{{ integration.config.base_url|default:"Não configurada" }}</dd></div><div><dt>TLS</dt><dd>{% if integration.config.verify_tls %}Verificado{% else %}Verificação desativada explicitamente{% endif %}</dd></div><div><dt>Lote de leitura</dt><dd>{{ integration.config.batch_size|default:"50" }} itens</dd></div>
+    {% else %}<div><dt>Host</dt><dd>{{ integration.config.host|default:"Não configurado" }}</dd></div><div><dt>Porta</dt><dd>{{ integration.config.port|default:"3306" }}</dd></div><div><dt>Banco</dt><dd>{{ integration.config.database|default:"A selecionar" }}</dd></div><div><dt>Usuário</dt><dd>{{ integration.username|default:"Não configurado" }}</dd></div><div><dt>Tabelas visíveis</dt><dd>{% if integration.config.database and integration.status == "connected" %}Inspecione a estrutura do banco{% else %}—{% endif %}</dd></div>{% endif %}
+    <div><dt>Credenciais</dt><dd>{% if integration.credentials_configured %}Configuradas e protegidas{% else %}Não configuradas{% endif %}</dd></div>
+    <div><dt>Último teste</dt><dd>{% if integration.last_test_at %}{{ integration.last_test_at|date:"d/m/Y H:i:s" }} · {{ integration.last_latency_ms }} ms{% else %}Ainda não testado{% endif %}</dd></div>
+    <div><dt>Última leitura</dt><dd>{% if integration.last_read_at %}{{ integration.last_read_at|date:"d/m/Y H:i:s" }}{% else %}—{% endif %}</dd></div>
+    {% if integration.last_error %}<div><dt>Último resultado</dt><dd>{{ integration.last_error }}</dd></div>{% endif %}
+  </dl>
+  <div class="integration-actions">
+    {% if perms.configuracoes.run_integrations %}<form method="post" action="{% if integration.key == 'cmdb' %}{% url 'configuracoes:integracoes:cmdb-test' %}{% else %}{% url 'configuracoes:integracoes:otrs-test' %}{% endif %}">{% csrf_token %}<button class="settings-button" type="submit">Testar conexão</button></form>{% endif %}
+    {% if integration.key == "cmdb" and perms.configuracoes.run_integrations %}<a class="integration-button" href="?tab=diagnostics">Consulta de diagnóstico</a>{% endif %}
+    {% if integration.key == "otrs" and perms.configuracoes.inspect_integrations %}<a class="integration-button" href="{% url 'configuracoes:integracoes:otrs-schema' %}">Inspecionar estrutura</a>{% endif %}
+    {% if perms.configuracoes.manage_integrations %}<a class="integration-button" href="?tab=configuration">Editar configuração</a><button class="integration-button{% if integration.enabled %} integration-button--danger{% endif %}" type="button" data-dialog-open="toggle-integration-dialog">{% if integration.enabled %}Desativar{% else %}Ativar{% endif %}</button>{% endif %}
+  </div>
+  {% if integration.key == "otrs" and integration.accessible_databases %}<div class="integration-databases"><h3>Bancos disponíveis</h3><p>{% for db in integration.accessible_databases %}<span>{{ db }}</span>{% endfor %}</p></div>{% endif %}
+</section>
+<section class="settings-section integration-section"><div class="settings-section-heading"><div><h2>Execuções recentes</h2><p>Resultados sem payload ou credenciais.</p></div><a class="integration-link" href="{% url 'configuracoes:integracoes:runs' %}">Ver histórico →</a></div>{% include "integracoes/_run_list.html" with run_list=runs %}</section>
+{% endif %}
+
+{% if perms.configuracoes.manage_integrations %}
+<dialog class="integration-dialog" id="toggle-integration-dialog"><form method="post" action="{% url 'configuracoes:integracoes:toggle' integration.key %}">{% csrf_token %}<h2>Confirmar alteração</h2><p>{% if integration.enabled %}Desativar a integração?{% else %}Ativar a integração?{% endif %} A configuração e as credenciais serão mantidas.</p><div><button class="integration-button" type="button" data-dialog-close>Cancelar</button><button class="settings-button" type="submit">Confirmar</button></div></form></dialog>
+<dialog class="integration-dialog" id="remove-credentials-dialog"><form method="post" action="{% url 'configuracoes:integracoes:remove-credentials' integration.key %}">{% csrf_token %}<input type="hidden" name="confirm" value="yes"><h2>Remover credenciais</h2><p>O usuário e a senha protegida serão removidos. Esta ação exige nova configuração para testar a fonte.</p><div><button class="integration-button" type="button" data-dialog-close>Cancelar</button><button class="integration-button integration-button--danger" type="submit">Remover credenciais</button></div></form></dialog>
+{% endif %}
+{% endblock %}
