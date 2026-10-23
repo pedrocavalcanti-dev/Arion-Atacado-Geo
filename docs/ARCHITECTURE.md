@@ -41,3 +41,17 @@ detalhada para o Cockpit. Consulta e exportação chamam o mesmo serviço com o
 usuário autenticado; `DataScopeService` restringe a QuerySet CMDB antes da
 agregação. Consultas salvas persistem apenas a configuração privada do usuário e
 são executadas novamente sob o escopo vigente.
+
+
+## Auditoria
+
+`AuditService.record()` e o ponto central para registrar acoes relevantes. O
+servico captura ator, IP e User-Agent da requisicao e remove recursivamente
+campos com nomes de credenciais da metadata. `AuditEvent` identifica categoria,
+acao, resultado, modulo e objeto para pesquisa e investigacao. A UI usa a
+permissao administrativa `view_audit_log`, oferece consulta paginada e CSV do
+recorte atual; eventos nao podem ser editados ou apagados pela aplicacao.
+Pesquisa operacional, filtros, navegacao e abertura de detalhe nao geram
+eventos. Exportacoes sao registradas depois que o arquivo esta preparado, sem
+guardar conteudo exportado. Retencao automatica nao esta implementada; uma
+politica futura depende de decisao administrativa.

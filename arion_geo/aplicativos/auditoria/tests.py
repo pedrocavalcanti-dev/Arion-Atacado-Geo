@@ -132,9 +132,20 @@ class AuditEventsIntegrationTests(TestCase):
         self.assertContains(list_response, "Criou registro demo")
         detail_response = self.client.get(reverse("configuracoes:audit-detail", args=(event.pk,)))
         self.assertEqual(detail_response.status_code, 200)
-        self.assertContains(detail_response, "Metadata")
+        self.assertContains(detail_response, "Dados tecnicos")
         self.assertContains(detail_response, "visible")
         self.assertNotContains(detail_response, "Excluir")
+
+    def test_audit_csv_exports_filtered_rows_and_records_one_export_event(self):
+        AuditService.record(user=self.admin, category="ADMINISTRATION", action="USER_CREATED", result="SUCCESS", module="Usuários", description="Conta de teste", object_label="alvo")
+        response = self.client.get(reverse("configuracoes:audit"), {"category": "ADMINISTRATION", "export": "csv"})
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode("utf-8-sig")
+        self.assertIn("Conta de teste", content)
+        self.assertNotIn("AUDIT_EXPORT", content)
+        export_event = AuditEvent.objects.get(action="AUDIT_EXPORT")
+        self.assertEqual(export_event.result, "SUCCESS")
+        self.assertEqual(export_event.metadata["format"], "csv")
 
 
 class AuthenticationAuditTests(TestCase):

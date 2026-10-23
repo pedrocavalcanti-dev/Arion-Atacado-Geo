@@ -186,7 +186,7 @@ class CMDBViewsTests(TestCase):
         batch = CMDBImport.objects.create(filename="base.xlsx", file_sha256="a" * 64, imported_by=self.user)
         for index in range(60):
             CMDBLink.objects.create(
-                config_item_id=str(36131000000 + index), designation_arion=f"BD{index:07d}",
+                config_item_id=str(36131000000 + index), designation_arion=f"BD{index:07d}", isp_raw=f"Carrier {index}",
                 name=f"Link São Paulo {index}", city="São Paulo", uf="SP", deployment_state="Operacional",
                 incident_state="Operational", provider=provider, operadora=operadora, projeto=projeto,
                 last_seen_import=batch,
@@ -194,8 +194,15 @@ class CMDBViewsTests(TestCase):
         response = self.client.get(reverse("base_links:index"), {"q": "BD0000001", "uf": "SP"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["page_obj"].paginator.count, 1)
+        self.assertContains(response, 'data-clear-search')
+        self.assertContains(response, 'view=providers')
+        self.assertContains(response, '</svg>Por provedor</a>')
+        self.assertContains(response, 'value="500"')
         response = self.client.get(reverse("base_links:index"), {"page_size": 25})
         self.assertEqual(response.context["page_obj"].paginator.num_pages, 3)
+        response = self.client.get(reverse("base_links:index"), {"page_size": 500, "q": "Carrier 1"})
+        self.assertEqual(response.context["page_size"], 500)
+        self.assertEqual(response.context["page_obj"].paginator.count, 11)
         response = self.client.get(reverse("base_links:index"), {"operadora": operadora.pk, "classification_status": "classified"})
         self.assertEqual(response.context["page_obj"].paginator.count, 0)
 

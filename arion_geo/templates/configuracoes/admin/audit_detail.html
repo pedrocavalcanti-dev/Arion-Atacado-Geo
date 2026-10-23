@@ -1,20 +1,21 @@
 {% extends "configuracoes/base.html" %}
-{% block title %}Evento de auditoria · Arion{% endblock %}
+{% block title %}Evento de auditoria | Arion{% endblock %}
 {% block settings_title %}Detalhe do evento{% endblock %}
-{% block settings_description %}Registro somente para leitura do histórico de auditoria.{% endblock %}
+{% block settings_description %}Registro de auditoria somente para leitura.{% endblock %}
 {% block settings_content %}
 <section class="settings-section">
-  <div class="admin-detail-actions"><a class="settings-button settings-button--secondary" href="{% url 'configuracoes:audit' %}">Voltar à auditoria</a></div>
+  <div class="admin-detail-actions"><a class="settings-button settings-button--secondary" href="{% url 'configuracoes:audit' %}">Voltar a auditoria</a></div>
   <dl class="settings-details audit-details">
-    <div><dt>Data/Hora</dt><dd>{{ event.timestamp|date:"d/m/Y H:i:s T" }}</dd></div>
-    <div><dt>Usuário</dt><dd>{% if event.user %}{{ event.user.get_full_name|default:event.user.username }} · {{ event.user.username }}{% else %}Sistema / usuário removido{% endif %}</dd></div>
-    <div><dt>Categoria</dt><dd>{{ event.category }}</dd></div><div><dt>Ação</dt><dd>{{ event.action }}</dd></div>
-    {% if event.object_type %}<div><dt>Tipo do objeto</dt><dd>{{ event.object_type }}</dd></div>{% endif %}
-    {% if event.object_id %}<div><dt>Identificador</dt><dd>{{ event.object_id }}</dd></div>{% endif %}
-    {% if event.description %}<div class="audit-description"><dt>Descrição</dt><dd>{{ event.description }}</dd></div>{% endif %}
+    <div><dt>Data / hora</dt><dd>{{ event.timestamp|date:"d/m/Y H:i:s T" }}</dd></div>
+    <div><dt>Usuario</dt><dd>{% if event.user %}{{ event.user.get_full_name|default:event.user.username }} - {{ event.user.username }}{% else %}Sistema / usuario removido{% endif %}</dd></div>
+    <div><dt>Categoria / acao</dt><dd>{{ event.category }} / {{ event.action }}</dd></div>
+    <div><dt>Resultado / modulo</dt><dd>{{ event.result|default:"-" }} / {{ event.module|default:"-" }}</dd></div>
+    {% if event.object_type or event.object_id or event.object_label %}<div><dt>Objeto</dt><dd>{{ event.object_label|default:event.object_type }}{% if event.object_id %} #{{ event.object_id }}{% endif %}</dd></div>{% endif %}
+    {% if event.description %}<div class="audit-description"><dt>Descricao</dt><dd>{{ event.description }}</dd></div>{% endif %}
     {% if event.ip_address %}<div><dt>IP</dt><dd>{{ event.ip_address }}</dd></div>{% endif %}
-    {% if event.user_agent %}<div class="audit-description"><dt>User Agent</dt><dd>{{ event.user_agent }}</dd></div>{% endif %}
+    {% if event.user_agent %}<div class="audit-description"><dt>User Agent</dt><dd title="{{ event.user_agent }}">{{ event.user_agent|truncatechars:180 }}</dd></div>{% endif %}
   </dl>
-  {% if metadata_rows %}<h2 class="audit-metadata-title">Metadata</h2><dl class="settings-details audit-metadata">{% for key, value in metadata_rows %}{% if value != None and value != "" %}<div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>{% endif %}{% endfor %}</dl>{% endif %}
+  {% if changes %}<h2 class="audit-metadata-title">Mudancas</h2><div class="audit-change-list">{% for label,before,after in changes %}<article><strong>{{ label }}</strong><div><span>Antes</span><p>{{ before|default:"-" }}</p></div><div><span>Depois</span><p>{{ after|default:"-" }}</p></div></article>{% endfor %}</div>{% endif %}
+  {% if technical_metadata %}<details class="audit-technical"><summary>Dados tecnicos</summary><pre>{{ technical_metadata }}</pre></details>{% endif %}
 </section>
 {% endblock %}

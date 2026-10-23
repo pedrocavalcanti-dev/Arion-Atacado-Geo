@@ -348,3 +348,16 @@ conteudo anexado nao e analisado nesta versao Preview.
 
 A ARI permanece sem integracao com LLM, APIs externas, OTRS ou CMDB. Nenhum dado
 real e consultado para compor respostas, relatorios ou dashboards demonstrativos.
+
+
+## Auditoria
+
+`/configuracoes/administracao/auditoria/` e uma central administrativa somente
+para leitura, protegida pela permissao `view_audit_log`. Registra autenticacao,
+alteracoes administrativas, importacao CMDB, visoes salvas do Cockpit e
+exportacoes do Cockpit. Busca comum, filtros, paginacao e abertura de detalhes nao
+sao auditados. A listagem filtra por periodo, usuario, categoria, acao, modulo e
+resultado; o CSV exporta o recorte filtrado e tambem gera um evento
+`AUDIT_EXPORT`. Metadata e sanitizada pelo `AuditService`; nao ha edicao, limpeza
+ou retencao automatica dos eventos. Politica de retencao permanece uma decisao
+administrativa futura.

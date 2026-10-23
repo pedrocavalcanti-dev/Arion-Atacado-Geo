@@ -30,15 +30,23 @@ def sanitize_metadata(value):
 
 class AuditService:
     @staticmethod
-    def record(*, request=None, user=None, category, action, description="", obj=None, metadata=None):
+    def record(*, request=None, user=None, category, action, description="", obj=None, object_label="", result="SUCCESS", module="", metadata=None):
         safe_metadata = sanitize_metadata(metadata or {})
         remote = request.META.get("REMOTE_ADDR") if request else None
         agent = request.META.get("HTTP_USER_AGENT", "")[:500] if request else ""
         actor = user or getattr(request, "user", None)
         if not getattr(actor, "is_authenticated", False):
             actor = None
+        if obj and not object_label:
+            if hasattr(obj, "get_full_name") and obj.get_full_name():
+                object_label = obj.get_full_name()
+            elif hasattr(obj, "get_username"):
+                object_label = obj.get_username()
+            else:
+                object_label = getattr(obj, "name", "") or str(obj)
         return AuditEvent.objects.create(
-            user=actor, category=category, action=action,
+            user=actor, category=category, action=action, result=result, module=module or category,
+            object_label=str(object_label or (getattr(obj, "name", "") if obj else ""))[:200],
             description=description, object_type=obj.__class__.__name__ if obj else "",
             object_id=str(obj.pk) if obj and obj.pk else "", ip_address=remote,
             user_agent=agent, metadata=safe_metadata)

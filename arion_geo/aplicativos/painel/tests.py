@@ -10,6 +10,7 @@ from openpyxl import load_workbook
 
 from aplicativos.base_links.models import CMDBImport, CMDBLink, Operadora, Projeto, Provider
 from aplicativos.configuracoes.models import UserDataScope
+from aplicativos.auditoria.models import AuditEvent
 from aplicativos.painel.models import SavedAnalyticsView
 from aplicativos.painel.services.analytics import AnalyticsQueryService
 from aplicativos.painel.views import STATE_NAMES
@@ -227,6 +228,7 @@ class AnalyticsTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response["Content-Type"].startswith(content_type))
             self.assertIn(filename, response["Content-Disposition"])
+            self.assertTrue(AuditEvent.objects.filter(action=f"EXPORT_{file_format.upper()}", module="Cockpit", user=self.user).exists())
             if file_format == "csv":
                 content = response.content.decode("utf-8-sig")
                 self.assertIn("SP", content)

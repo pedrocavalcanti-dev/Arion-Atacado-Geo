@@ -1,3 +1,4 @@
+import csv
 import json
 
 from django.contrib import messages
@@ -9,7 +10,9 @@ from django.contrib.auth.models import Group, Permission
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.utils import timezone
+from datetime import timedelta
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
@@ -36,7 +39,11 @@ def account(request):
     if request.method == "POST":
         form = AccountForm(request.POST, instance=request.user)
         if form.is_valid():
+            before = {"first_name": request.user.first_name, "last_name": request.user.last_name, "email": request.user.email}
             form.save()
+            after = {"first_name": request.user.first_name, "last_name": request.user.last_name, "email": request.user.email}
+            if before != after:
+                AuditService.record(request=request, user=request.user, category="ACCOUNT", action="ACCOUNT_UPDATED", module="Conta", description="Dados da conta atualizados", obj=request.user, metadata={"before": before, "after": after})
             messages.success(request, "Seus dados foram atualizados.")
             return redirect("configuracoes:account")
     else:
@@ -247,13 +254,21 @@ def scope_edit(request, pk):
 @access_required("view_audit_log")
 def audit_list(request):
     events = AuditEvent.objects.select_related("user").all()
-    filters = {key: request.GET.get(key, "").strip() for key in ("user", "category", "action", "from", "to", "q")}
+    filters = {key: request.GET.get(key, "").strip() for key in ("user", "category", "action", "result", "module", "from", "to", "q", "period", "page_size", "order")}
     if filters["user"].isdigit():
         events = events.filter(user_id=int(filters["user"]))
     if filters["category"]:
         events = events.filter(category=filters["category"])
     if filters["action"]:
         events = events.filter(action=filters["action"])
+    if filters["result"] in ("SUCCESS", "FAILED", "BLOCKED"):
+        events = events.filter(result=filters["result"])
+    if filters["module"]:
+        events = events.filter(module=filters["module"])
+    now = timezone.now()
+    period_start = {"today": timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0), "24h": now - timedelta(hours=24), "7d": now - timedelta(days=7), "30d": now - timedelta(days=30)}.get(filters["period"])
+    if period_start:
+        events = events.filter(timestamp__gte=period_start)
     date_field = forms.DateField(required=False, input_formats=["%Y-%m-%d"])
     try:
         date_from = date_field.clean(filters["from"]) if filters["from"] else None
@@ -266,31 +281,56 @@ def audit_list(request):
         events = events.filter(timestamp__date__lte=date_to)
     query = filters["q"]
     if query:
-        events = events.filter(Q(description__icontains=query) | Q(object_type__icontains=query) | Q(object_id__icontains=query) | Q(user__username__icontains=query) | Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query))
+        events = events.filter(Q(description__icontains=query) | Q(action__icontains=query) | Q(object_type__icontains=query) | Q(object_id__icontains=query) | Q(object_label__icontains=query) | Q(module__icontains=query) | Q(user__username__icontains=query) | Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query))
+    events = events.order_by("timestamp", "pk") if filters["order"] == "oldest" else events.order_by("-timestamp", "-pk")
+    if request.GET.get("export") == "csv":
+        rows = list(events)
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response.write("\ufeff")
+        writer = csv.writer(response, delimiter=";")
+        writer.writerow(("Data", "Usu?rio", "Categoria", "A??o", "Resultado", "Objeto", "Descri??o", "IP"))
+        def safe(value):
+            value = str(value or "")
+            return "'" + value if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
+        for event in rows:
+            writer.writerow(tuple(safe(value) for value in (event.timestamp.strftime("%d/%m/%Y %H:%M:%S"), event.user.get_username() if event.user else "Sistema", event.category, event.action, event.result, event.object_label or " ".join(filter(None, (event.object_type, event.object_id))), event.description, event.ip_address or "")))
+        AuditService.record(request=request, category="EXPORT", action="AUDIT_EXPORT", module="Auditoria", description="Exporta??o do hist?rico de auditoria", metadata={"format": "csv", "rows": len(rows), "filters": {key: filters[key] for key in ("user", "category", "action", "result", "module", "from", "to", "period") if filters[key]}})
+        return response
     filters["users"] = get_user_model().objects.filter(auditevent__isnull=False).distinct().order_by("username")
-    filters["categories"] = AuditEvent.objects.order_by("category").values_list("category", flat=True).distinct()
+    labels = {"AUTHENTICATION": "Autentica??o", "ADMINISTRATION": "Administra??o", "INTEGRATION": "Integra??o", "EXPORT": "Exporta??o", "ANALYTICS": "Analytics", "COCKPIT": "Cockpit", "ACCOUNT": "Conta", "ARI": "ARI"}
+    filters["categories"] = [(value, labels.get(value, value.title())) for value in AuditEvent.objects.order_by("category").values_list("category", flat=True).distinct()]
     filters["actions"] = AuditEvent.objects.order_by("action").values_list("action", flat=True).distinct()
+    filters["modules"] = AuditEvent.objects.exclude(module="").order_by("module").values_list("module", flat=True).distinct()
+    filters["page_sizes"] = (25, 50, 100)
+    page_size = int(filters["page_size"]) if filters["page_size"].isdigit() and int(filters["page_size"]) in (25, 50, 100) else 50
     page_query = request.GET.copy()
     page_query.pop("page", None)
-    return render(request, "configuracoes/admin/audit.html", _admin_context(request, "audit", page_obj=Paginator(events, 30).get_page(request.GET.get("page")), filters=filters, page_query=page_query.urlencode()))
+    page_query.pop("export", None)
+    page_obj = Paginator(events, page_size).get_page(request.GET.get("page"))
+    for event in page_obj.object_list:
+        event.category_label = dict(filters["categories"]).get(event.category, event.category.title())
+    context = _admin_context(request, "audit", page_obj=page_obj, filters=filters, page_query=page_query.urlencode(), total_events=events.count(), failures=events.filter(result="FAILED").count(), admin_actions=events.filter(category="ADMINISTRATION").count(), exports=events.filter(category="EXPORT").count())
+    return render(request, "configuracoes/admin/audit.html", context)
 
 
 @login_required
 @access_required("view_audit_log")
 def audit_detail(request, pk):
     event = get_object_or_404(AuditEvent.objects.select_related("user"), pk=pk)
-    def flatten(value, prefix=""):
-        rows = []
-        if isinstance(value, dict):
-            for key, item in value.items():
-                rows.extend(flatten(item, f"{prefix} · {key}" if prefix else str(key)))
-        elif isinstance(value, list):
-            rows.append((prefix, ", ".join(str(item) for item in value)))
-        else:
-            rows.append((prefix, value))
-        return rows
-    metadata_rows = flatten(event.metadata or {})
-    return render(request, "configuracoes/admin/audit_detail.html", _admin_context(request, "audit", event=event, metadata_rows=metadata_rows))
+    changes = []
+    metadata = event.metadata or {}
+    if isinstance(metadata.get("before"), dict) and isinstance(metadata.get("after"), dict):
+        for key in sorted(set(metadata["before"]) | set(metadata["after"])):
+            if metadata["before"].get(key) != metadata["after"].get(key):
+                changes.append((key.replace("_", " ").title(), metadata["before"].get(key), metadata["after"].get(key)))
+    elif isinstance(metadata, dict):
+        for key, value in metadata.items():
+            if key.endswith("_before"):
+                after_key = key[:-7] + "_after"
+                if after_key in metadata:
+                    changes.append((key[:-7].replace("_", " ").title(), value, metadata[after_key]))
+    technical_metadata = json.dumps(metadata, ensure_ascii=False, indent=2) if metadata else ""
+    return render(request, "configuracoes/admin/audit_detail.html", _admin_context(request, "audit", event=event, changes=changes, technical_metadata=technical_metadata))
 
 
 @login_required

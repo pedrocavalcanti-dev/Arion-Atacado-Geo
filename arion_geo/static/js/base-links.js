@@ -46,12 +46,31 @@
   backdrop?.addEventListener("click", closeDrawer);
   document.addEventListener("keydown", event => { if (event.key === "Escape") closeDrawer(); });
 
+  document.querySelectorAll("[data-sort-key], [data-page-number]").forEach(link => {
+    link.addEventListener("click", event => {
+      event.preventDefault();
+      const url = new URL(window.location.href);
+      if (link.dataset.sortKey) url.searchParams.set("sort", link.dataset.sortKey);
+      if (link.dataset.pageNumber) url.searchParams.set("page", link.dataset.pageNumber);
+      window.location.href = url;
+    });
+  });
   document.querySelector("[data-page-size]")?.addEventListener("change", event => {
     const url = new URL(window.location.href);
     url.searchParams.set("page_size", event.target.value);
     url.searchParams.delete("page");
     window.location.href = url;
   });
+  const searchInput = document.querySelector("[data-clear-search]")?.previousElementSibling;
+  const clearSearch = document.querySelector("[data-clear-search]");
+  searchInput?.addEventListener("input", () => { clearSearch.hidden = !searchInput.value; });
+  clearSearch?.addEventListener("click", () => {
+    if (!searchInput) return;
+    searchInput.value = "";
+    clearSearch.hidden = true;
+    searchInput.form?.requestSubmit();
+  });
+
   const fileInput = document.querySelector('.file-picker input[type="file"]');
   fileInput?.addEventListener("change", () => {
     const name = document.querySelector("[data-file-name]");

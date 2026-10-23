@@ -391,6 +391,7 @@ def analytics_export(request):
             response = HttpResponse(_pdf_report(result["metric_label"], generated, filters, result), content_type="application/pdf")
             filename = "arion-cockpit.pdf"
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        AuditService.record(request=request, category="EXPORT", action=f"EXPORT_{export_format.upper()}", module="Cockpit", description=f"Exporta??o Cockpit {export_format.upper()}", result="SUCCESS", metadata={"format": export_format, "filters": payload.get("filters", {}), "period_from": result.get("period_from"), "period_to": result.get("period_to"), "group_by": result.get("group_by_label"), "rows": len(result.get("detail", []))})
         return response
     except (ValueError, TypeError, json.JSONDecodeError) as error:
         return JsonResponse({"error": str(error) or "Consulta inválida."}, status=400)

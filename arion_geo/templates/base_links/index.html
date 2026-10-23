@@ -6,7 +6,7 @@
 <section class="links-page" aria-labelledby="links-title">
   <header class="links-heading">
     <div><p class="section-kicker">NOC ATACADO <span>/</span> BASE</p><h1 id="links-title">Base de Links</h1><p>Espelho operacional da base oficial do OTRS / CMDB.</p></div>
-    <div class="links-heading-actions"><span class="source-badge"><i></i>Fonte oficial: OTRS / CMDB</span>{% if perms.configuracoes.import_cmdb %}<a class="links-primary-button" href="{% url 'base_links:import' %}">Importar / Atualizar CMDB <span aria-hidden="true">↗</span></a>{% endif %}</div>
+    <div class="links-heading-actions"><span class="source-badge"><i></i>Fonte oficial: OTRS / CMDB</span><a class="links-secondary-button" href="{% url 'base_links:index' %}?view=providers"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="2"/><path d="M2.5 7h15M7 7v10m6-10v10"/></svg>Por provedor</a>{% if perms.configuracoes.import_cmdb %}<a class="links-primary-button" href="{% url 'base_links:import' %}">Importar / Atualizar CMDB <span aria-hidden="true">&#8599;</span></a>{% endif %}</div>
   </header>
   {% if latest_import %}<p class="last-sync">Última atualização: {{ latest_import.created_at|date:"d/m/Y H:i" }} · {{ latest_import.filename }}</p>{% endif %}
   <div class="links-kpis" aria-label="Resumo da base CMDB">
@@ -17,13 +17,12 @@
     <article><span>Provedores</span><strong>{{ provider_count|intcomma }}</strong></article>
   </div>
 
-  <nav class="base-view-tabs" aria-label="Visão da base"><a class="is-active" href="{% url 'base_links:index' %}?view=links">Links</a><a href="{% url 'base_links:index' %}?view=providers">Por provedor</a></nav>
 
   {% if not latest_import %}
   <div class="links-empty"><span class="empty-mark" aria-hidden="true">↥</span><h2>Nenhuma base CMDB foi importada ainda.</h2><p>Envie o export XLSX do OTRS / CMDB para criar o espelho local de links.</p>{% if perms.configuracoes.import_cmdb %}<a class="links-primary-button" href="{% url 'base_links:import' %}">Importar export CMDB <span aria-hidden="true">↗</span></a>{% endif %}</div>
   {% else %}
   <form class="links-filters" method="get" action="{% url 'base_links:index' %}">
-    <label class="links-search"><span class="sr-only">Buscar na base</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg><input type="search" name="q" value="{{ filters.q }}" placeholder="Buscar designação, ConfigItem, ISP, cidade, contrato..."></label>
+    <div class="links-search"><label class="sr-only" for="links-search-input">Buscar designa&ccedil;&atilde;o, ConfigItem, ISP, cidade ou contrato</label><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg><input id="links-search-input" type="search" name="q" value="{{ filters.q }}" placeholder="Buscar designa&ccedil;&atilde;o, ConfigItem, ISP, cidade, contrato..."><button type="button" data-clear-search aria-label="Limpar busca"{% if not filters.q %} hidden{% endif %}>&times;</button></div>
     <select name="operadora" aria-label="Filtrar operadora"><option value="">Todas as operadoras</option>{% for option in operators %}<option value="{{ option.pk }}"{% if filters.operadora == option.pk|stringformat:"s" %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select>
     <select name="projeto" aria-label="Filtrar projeto"><option value="">Todos os projetos</option>{% for option in projects %}<option value="{{ option.pk }}"{% if filters.projeto == option.pk|stringformat:"s" %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select>
     <select name="uf" aria-label="Filtrar estado"><option value="">Todas as UFs</option>{% for option in ufs %}<option value="{{ option }}"{% if filters.uf == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
@@ -33,11 +32,11 @@
     <select name="link_type" aria-label="Filtrar tipo"><option value="">Todos os tipos</option>{% for option in link_types %}<option value="{{ option }}"{% if filters.link_type == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select>
     <select name="classification_status" aria-label="Filtrar classificação"><option value="">Todas as classificações</option>{% for value,label in classification_options %}<option value="{{ value }}"{% if filters.classification_status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
     <select name="presence" aria-label="Filtrar presença no último export"><option value="">Todos os registros do espelho</option><option value="present"{% if filters.presence == "present" %} selected{% endif %}>Presentes no último export</option><option value="absent"{% if filters.presence == "absent" %} selected{% endif %}>Ausentes no último export</option></select>
-    <input type="hidden" name="sort" value="{{ sort }}"><button type="submit">Filtrar</button><a href="{% url 'base_links:index' %}">Limpar</a>
+    <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="page_size" value="{{ page_size }}"><div class="links-filter-actions"><a href="{% url 'base_links:index' %}">Limpar</a><button type="submit">Filtrar</button></div>
   </form>
 
   <div class="links-table-wrap"><table class="links-table"><thead><tr>
-    <th><a href="?{{ request.GET.urlencode }}&sort=designation">Designação</a></th><th>Operadora</th><th>Projeto</th><th><a href="?{{ request.GET.urlencode }}&sort=provider">Provedor</a></th><th><a href="?{{ request.GET.urlencode }}&sort=uf">Cidade / UF</a></th><th>Velocidade</th><th><a href="?{{ request.GET.urlencode }}&sort=deployment">Implantação</a></th><th>Incidente</th>
+    <th><a data-sort-key="designation" href="?{{ request.GET.urlencode }}&sort=designation">Designação</a></th><th>Operadora</th><th>Projeto</th><th><a data-sort-key="provider" href="?{{ request.GET.urlencode }}&sort=provider">Provedor</a></th><th><a data-sort-key="uf" href="?{{ request.GET.urlencode }}&sort=uf">Cidade / UF</a></th><th>Velocidade</th><th><a data-sort-key="deployment" href="?{{ request.GET.urlencode }}&sort=deployment">Implantação</a></th><th>Incidente</th>
   </tr></thead><tbody>
     {% for link in links %}<tr class="links-row" data-link-id="{{ link.pk }}" tabindex="0" role="button" aria-label="Abrir detalhes de {{ link.designation_arion|default:link.config_item_id }}">
       <td><strong>{{ link.designation_arion|default:"Sem designação" }}</strong><small>CI #{{ link.config_item_id }}</small>{% if not link.is_present_in_latest_import %}<small class="missing-source">Não consta no último export</small>{% endif %}</td>
@@ -48,9 +47,9 @@
       <td>{{ link.speed_raw|default:"—" }}</td>
       <td><span class="state-badge state-badge--{{ link.deployment_state|slugify }}">{{ link.deployment_state|default:"Não informado" }}</span></td>
       <td><span class="incident-badge{% if 'incident' in link.incident_state|lower %} is-incident{% endif %}">{% if 'incident' in link.incident_state|lower %}Incidente{% else %}Normal{% endif %}</span></td>
-    </tr>{% empty %}<tr><td colspan="8" class="table-empty">Nenhum link corresponde aos filtros informados.</td></tr>{% endfor %}
+    </tr>{% empty %}<tr><td colspan="8" class="table-empty"><strong>Nenhum link encontrado.</strong><span>Tente ajustar os filtros ou limpar a busca.</span><a href="{% url 'base_links:index' %}">Limpar filtros</a></td></tr>{% endfor %}
   </tbody></table></div>
-  <footer class="links-pagination"><span>{{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} links</span><label>Por página <select data-page-size><option value="25"{% if page_size == 25 %} selected{% endif %}>25</option><option value="50"{% if page_size == 50 %} selected{% endif %}>50</option><option value="100"{% if page_size == 100 %} selected{% endif %}>100</option></select></label><nav aria-label="Paginação">{% if page_obj.has_previous %}<a href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}" aria-label="Página anterior">←</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}" aria-label="Próxima página">→</a>{% endif %}</nav></footer>
+  <footer class="links-pagination"><span>{{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} links</span><label>Por página <select data-page-size><option value="25"{% if page_size == 25 %} selected{% endif %}>25</option><option value="50"{% if page_size == 50 %} selected{% endif %}>50</option><option value="100"{% if page_size == 100 %} selected{% endif %}>100</option><option value="200"{% if page_size == 200 %} selected{% endif %}>200</option><option value="500"{% if page_size == 500 %} selected{% endif %}>500</option></select></label><nav aria-label="Paginação">{% if page_obj.has_previous %}<a data-page-number="{{ page_obj.previous_page_number }}" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}" aria-label="Página anterior">&larr; Anterior</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a data-page-number="{{ page_obj.next_page_number }}" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}" aria-label="Próxima página">Pr&oacute;xima &rarr;</a>{% endif %}</nav></footer>
   {% endif %}
 </section>
 <div class="links-drawer-backdrop" data-drawer-backdrop hidden></div><aside class="links-drawer thin-scroll" data-link-drawer aria-hidden="true" inert><button type="button" class="drawer-close" data-drawer-close aria-label="Fechar detalhes">×</button><div data-drawer-content><p class="drawer-loading">Carregando detalhes…</p></div></aside>

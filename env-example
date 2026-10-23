@@ -1,4 +1,0 @@
-DJANGO_DEBUG=True
-DJANGO_SECRET_KEY=replace-with-a-private-secret-key
-DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
-MAPBOX_PUBLIC_TOKEN=

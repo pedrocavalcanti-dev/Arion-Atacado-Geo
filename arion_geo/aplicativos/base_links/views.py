@@ -110,7 +110,7 @@ def index(request):
     }
     if filters["q"]:
         query = Q()
-        for field in ("config_item_id", "designation_arion", "name", "address", "city", "uf", "provider__name", "circuit", "contract_number", "operator_designation", "client_identification"):
+        for field in ("config_item_id", "designation_arion", "name", "address", "city", "uf", "provider__name", "isp_raw", "circuit", "contract_number", "operator_designation", "client_identification"):
             query |= Q(**{f"{field}__icontains": filters["q"]})
         queryset = queryset.filter(query)
     if filters["operadora"]:
@@ -134,7 +134,7 @@ def index(request):
         page_size = int(request.GET.get("page_size", "50"))
     except ValueError:
         page_size = 50
-    if page_size not in (25, 50, 100):
+    if page_size not in (25, 50, 100, 200, 500):
         page_size = 50
     page_obj = Paginator(queryset, page_size).get_page(request.GET.get("page"))
     total = scoped_links.count()
