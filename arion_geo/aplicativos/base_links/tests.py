@@ -163,7 +163,7 @@ class CMDBViewsTests(TestCase):
         scope.mode = GroupDataScope.Mode.ALL
         scope.save()
         self.operator = CMDBOperatorMirror.objects.create(source_config_item_id="base-op", name="Operadora CMDB")
-        self.link = CMDBLinkMirror.objects.create(source_config_item_id="base-ci", source_number="BASE-1", name="Link Base", designation="LINK-001", state="SP", city="São Paulo", operator=self.operator, legacy_project="Projeto congelado", isp_raw="6804", deployment_state="Operacional")
+        self.link = CMDBLinkMirror.objects.create(source_config_item_id="base-ci", source_number="BASE-1", name="Link Base", designation="LINK-001", state="SP", city="São Paulo", operator=self.operator, legacy_project="Projeto congelado", contracting_client_raw="CLARO", contracting_client="Claro", business_project="Projeto congelado", business_identity_confidence="HIGH", isp_raw="6804", deployment_state="Operacional")
 
     def test_base_and_import_require_login(self):
         response = self.client.get(reverse("base_links:index"))
@@ -195,6 +195,42 @@ class CMDBViewsTests(TestCase):
         self.assertNotContains(response, "6804")
         self.assertNotContains(response, "Other")
 
+    def test_config_item_navigation_ignores_stale_dimensions_but_still_enforces_data_scope(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("base_links:index"), {
+            "config_item_id": "base-ci", "q": "not-the-link", "cliente": "Vivo",
+            "projeto": "Outro projeto", "uf": "BA", "provider_id": "999999",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_obj"].paginator.count, 1)
+        self.assertEqual(response.context["links"][0].source_config_item_id, "base-ci")
+
+        outside_operator = CMDBOperatorMirror.objects.create(source_config_item_id="base-op-out", name="Outside")
+        CMDBLinkMirror.objects.create(source_config_item_id="outside-ci", name="Outside link", operator=outside_operator)
+        group = self.user.groups.get(name="Analista NOC")
+        scope = group.data_scope
+        scope.mode = GroupDataScope.Mode.CUSTOM
+        scope.save()
+        scope.allowed_operators.set([Operadora.objects.create(name="Claro", normalized_name="claro")])
+        denied = self.client.get(reverse("base_links:index"), {
+            "config_item_id": "outside-ci", "cliente": "Vivo", "uf": "BA",
+        })
+        self.assertEqual(denied.context["page_obj"].paginator.count, 0)
+
+    def test_map_base_link_filters_accept_other_client_and_provider_id(self):
+        CMDBLinkMirror.objects.create(
+            source_config_item_id="base-ci-telmex", name="TELMEX - BRADESCO - BD123",
+            state="SP", operator=self.operator, contracting_client="TELMEX",
+            business_project="BRADESCO",
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("base_links:index"), {
+            "uf": "SP", "cliente": "other", "projeto": "BRADESCO", "provider_id": self.operator.pk,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_obj"].paginator.count, 1)
+        self.assertEqual(response.context["links"][0].contracting_client, "TELMEX")
+
     def test_search_normalizes_accents_spacing_and_case(self):
         self.client.force_login(self.user)
         self.link.address = "AVENIDA ERNESTO GEISEL, 370 - CENTRO - SÃO FÉLIX DO CORIBE - BA"
@@ -213,8 +249,8 @@ class CMDBViewsTests(TestCase):
         unresolved = CMDBLinkMirror.objects.create(source_config_item_id="base-ci-unresolved", name="Link sem provedor", designation="", source_number="LINK-NO-DESIGNATION", legacy_project="", isp_raw="6746")
         self.client.force_login(self.user)
         response = self.client.get(reverse("base_links:index"))
-        self.assertContains(response, "Operadora contratada")
-        self.assertContains(response, "Não classificada")
+        self.assertContains(response, "Cliente")
+        self.assertContains(response, "N\u00e3o classificado")
         self.assertContains(response, "GIGA+")
         self.assertContains(response, "Projeto congelado")
         self.assertNotContains(response, 'name="operadora"')
@@ -226,13 +262,73 @@ class CMDBViewsTests(TestCase):
         self.assertEqual(detail["provider_resolution_method"], CMDBLinkMirror.OperatorResolution.EMPTY)
         self.assertEqual(detail["config_item_number"], "BASE-1")
         self.assertEqual(detail["project_legacy"], "Projeto congelado")
-        self.assertEqual(detail["operadora"], "Não classificada")
+        self.assertEqual(detail["operadora"], "Claro")
         self.assertNotIn("password", detail)
         self.assertEqual(unresolved.operator_id, None)
         catalog = self.client.get(reverse("base_links:providers"))
         self.assertEqual(catalog.status_code, 200)
         self.assertContains(catalog, "GIGA+")
-        self.assertContains(catalog, "PROVIDER-NUMBER-9")
+        self.assertContains(catalog, "Provedores / ISP")
+        provider_detail = self.client.get(reverse("base_links:provider-detail", args=[self.operator.pk])).json()
+        self.assertEqual(provider_detail["number"], "PROVIDER-NUMBER-9")
+        self.assertEqual(provider_detail["phone"], "")
+
+    def test_provider_view_and_detail_are_scoped_and_secret_safe(self):
+        self.operator.phone = "+55 11 3333-0000"
+        self.operator.whatsapp = "+55 11 99999-0000"
+        self.operator.business_hours = "24 horas"
+        self.operator.opening_email = "noc@example.com"
+        self.operator.portal_url = "https://portal.example.com"
+        self.operator.save()
+        CMDBLinkMirror.objects.create(source_config_item_id="base-ci-extra", name="Link adicional", operator=self.operator, state="RJ", business_project="Outro projeto")
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("base_links:index"), {"view": "providers", "provider_id": self.operator.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["provider_count"], 1)
+        self.assertContains(response, "Telefone")
+        detail = self.client.get(reverse("base_links:provider-detail", args=[self.operator.pk]))
+        self.assertEqual(detail.status_code, 200)
+        payload = detail.json()
+        self.assertEqual(payload["link_count"], 2)
+        self.assertEqual(len(payload["links"]), 2)
+        self.assertEqual(payload["phone"], "+55 11 3333-0000")
+        self.assertEqual({row["config_item_id"] for row in payload["links"]}, {"base-ci", "base-ci-extra"})
+        self.assertFalse({"portal_username", "password", "senha", "secret", "token"} & set(payload))
+        self.assertNotIn("UsuarioPortalOperadora", str(payload))
+
+        outside = CMDBOperatorMirror.objects.create(source_config_item_id="base-op-out", name="Outside")
+        CMDBLinkMirror.objects.create(source_config_item_id="outside-ci", name="Outside link", operator=outside, business_project="Outside")
+        scope = self.user.groups.get(name="Analista NOC").data_scope
+        scope.mode = GroupDataScope.Mode.CUSTOM
+        scope.save()
+        scope.allowed_operators.set([Operadora.objects.create(name="Claro", normalized_name="claro")])
+        scope.allowed_projects.set([Projeto.objects.create(name="Projeto congelado", normalized_name="projeto congelado")])
+        self.assertEqual(self.client.get(reverse("base_links:provider-detail", args=[outside.pk])).status_code, 404)
+
+    def test_page_size_300_and_link_history_are_lazy_deduplicated_and_scoped(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        ticket = OTRSTicket.objects.create(external_id=99001, ticket_number="202610240000001", queue_external_id=107,
+            queue_name="NOC - ATACADO", external_state_id=1, external_state_name="open", business_status="OPEN",
+            is_business_open=True, is_present_in_queue=True, source_created_at=timezone.now() - timedelta(hours=30))
+        for relation_type in ("DependsOn", "ConnectedTo"):
+            OTRSTicketConfigItem.objects.create(ticket=ticket, config_item_id="base-ci", cmdb_link=self.link,
+                relation_type=relation_type, relation_state="Valid")
+        for index in range(301):
+            CMDBLinkMirror.objects.create(source_config_item_id=f"page-ci-{index:03d}", name=f"Page link {index:03d}", operator=self.operator)
+        self.client.force_login(self.user)
+        page = self.client.get(reverse("base_links:index"), {"page_size": 300})
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.context["page_size"], 300)
+        self.assertEqual(len(page.context["links"]), 300)
+        self.assertContains(page, 'value="300" selected')
+        detail = self.client.get(reverse("base_links:detail", args=[self.link.pk])).json()
+        self.assertEqual(detail["history"]["tickets_period"], 1)
+        self.assertEqual(len(detail["history"]["tickets"]), 1)
+        self.assertEqual(detail["history"]["backlog"], 1)
+        self.assertEqual(detail["history"]["over_24h"], 1)
+        empty = CMDBLinkMirror.objects.get(source_config_item_id="page-ci-000")
+        self.assertEqual(self.client.get(reverse("base_links:detail", args=[empty.pk])).json()["history"]["total"], 0)
 
     def test_detail_endpoint_uses_one_local_mirror_query(self):
         self.client.force_login(self.user)
@@ -248,12 +344,12 @@ class CMDBViewsTests(TestCase):
 
     def test_list_query_count_does_not_grow_with_rows_on_page(self):
         for index in range(20):
-            CMDBLinkMirror.objects.create(source_config_item_id=f"query-ci-{index:02d}", name=f"Link {index:02d}", operator=self.operator, legacy_project="Projeto congelado")
+            CMDBLinkMirror.objects.create(source_config_item_id=f"query-ci-{index:02d}", name=f"Link {index:02d}", operator=self.operator, legacy_project="Projeto congelado", business_project="Projeto congelado")
         self.client.force_login(self.user)
         with CaptureQueriesContext(connection) as small:
             self.client.get(reverse("base_links:index"))
         for index in range(20, 45):
-            CMDBLinkMirror.objects.create(source_config_item_id=f"query-ci-{index:02d}", name=f"Link {index:02d}", operator=self.operator, legacy_project="Projeto congelado")
+            CMDBLinkMirror.objects.create(source_config_item_id=f"query-ci-{index:02d}", name=f"Link {index:02d}", operator=self.operator, legacy_project="Projeto congelado", business_project="Projeto congelado")
         with CaptureQueriesContext(connection) as larger:
             self.client.get(reverse("base_links:index"))
         self.assertLessEqual(len(larger), len(small) + 1)
@@ -265,7 +361,7 @@ class CMDBViewsTests(TestCase):
         scope = group.data_scope
         scope.mode = GroupDataScope.Mode.CUSTOM
         scope.save()
-        scope.allowed_operators.set([Operadora.objects.create(name=self.operator.name, normalized_name="operadora cmdb")])
+        scope.allowed_operators.set([Operadora.objects.create(name="Claro", normalized_name="claro")])
         scope.allowed_projects.set([Projeto.objects.create(name="Projeto congelado", normalized_name="projeto congelado")])
         self.client.force_login(self.user)
         response = self.client.get(reverse("base_links:index"), {"q": "FIND-ME-OUTSIDE"})
@@ -273,7 +369,7 @@ class CMDBViewsTests(TestCase):
 
     def test_pagination_keeps_filter_query_parameters(self):
         for index in range(30):
-            CMDBLinkMirror.objects.create(source_config_item_id=f"base-ci-{index:02d}", source_number=f"BASE-{index:02d}", name=f"Link {index:02d}", state="SP", operator=self.operator, legacy_project="Projeto congelado")
+            CMDBLinkMirror.objects.create(source_config_item_id=f"base-ci-{index:02d}", source_number=f"BASE-{index:02d}", name=f"Link {index:02d}", state="SP", operator=self.operator, legacy_project="Projeto congelado", business_project="Projeto congelado")
         self.client.force_login(self.user)
         response = self.client.get(reverse("base_links:index"), {"uf": "SP", "projeto": "Projeto congelado", "page_size": 25, "page": 2})
         self.assertEqual(response.context["page_obj"].number, 2)
@@ -290,14 +386,14 @@ class CMDBViewsTests(TestCase):
         scope = group.data_scope
         scope.mode = GroupDataScope.Mode.CUSTOM
         scope.save()
-        scope.allowed_operators.set([Operadora.objects.create(name=self.operator.name, normalized_name="operadora cmdb")])
+        scope.allowed_operators.set([Operadora.objects.create(name="Claro", normalized_name="claro")])
         scope.allowed_projects.set([Projeto.objects.create(name="Projeto congelado", normalized_name="projeto congelado")])
         self.client.force_login(self.user)
         response = self.client.get(reverse("base_links:export"))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode("utf-8-sig")
-        self.assertIn("Projeto legado", content)
-        self.assertIn("Operadora contratada", content)
+        self.assertIn("Projeto", content)
+        self.assertIn("Cliente", content)
         self.assertIn("Operadora CMDB", content)
         self.assertNotIn("Senha PPOE", content)
         self.assertNotIn("senha-secreta", content)
@@ -310,7 +406,7 @@ class CMDBViewsTests(TestCase):
         scope = group.data_scope
         scope.mode = GroupDataScope.Mode.CUSTOM
         scope.save()
-        scope.allowed_operators.set([Operadora.objects.create(name=self.operator.name, normalized_name="operadora cmdb")])
+        scope.allowed_operators.set([Operadora.objects.create(name="Claro", normalized_name="claro")])
         scope.allowed_projects.set([Projeto.objects.create(name="Projeto congelado", normalized_name="projeto congelado")])
         self.client.force_login(self.user)
         response = self.client.get(reverse("base_links:index"))
@@ -322,11 +418,11 @@ class CMDBViewsTests(TestCase):
         self.assertEqual(denied.status_code, 404)
 
     def test_map_aggregate_counts_real_links_and_open_tickets(self):
-        ticket = OTRSTicket.objects.create(external_id=500, ticket_number="T-500", queue_external_id=107, queue_name="NOC - ATACADO", external_state_id=1, external_state_name="em atendimento", business_status="OPEN", is_business_open=True)
+        ticket = OTRSTicket.objects.create(external_id=500, ticket_number="T-500", queue_external_id=107, queue_name="NOC - ATACADO", external_state_id=1, external_state_name="em atendimento", business_status="OPEN", is_business_open=True, is_present_in_queue=True, source_created_at=__import__("django.utils.timezone", fromlist=["now"]).now())
         OTRSTicketConfigItem.objects.create(ticket=ticket, config_item_id="base-ci", cmdb_link=self.link, relation_type="DependsOn", relation_state="Valid")
         self.client.force_login(self.user)
-        data = self.client.get(reverse("base_links:map-aggregates")).json()
-        self.assertEqual(data["source_total"], 1)
+        data = self.client.get(reverse("base_links:map-aggregates"), {"mode": "calls", "period": "last_30"}).json()
+        self.assertEqual(data["filtered_source_total"], 1)
         self.assertEqual(data["states"]["SP"]["total_links"], 1)
-        self.assertEqual(data["states"]["SP"]["open_tickets"], 1)
+        self.assertEqual(data["states"]["SP"]["active_tickets"], 1)
         self.assertEqual(data["affected_link_count"], 1)

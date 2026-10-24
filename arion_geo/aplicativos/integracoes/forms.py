@@ -2,6 +2,26 @@ from django import forms
 from urllib.parse import urlsplit
 
 
+class ArionDatabaseCandidateForm(forms.Form):
+    host = forms.CharField(label="Host", max_length=255, initial="127.0.0.1")
+    port = forms.IntegerField(label="Porta", min_value=1, max_value=65535, initial=3306)
+    database = forms.CharField(label="Schema", max_length=128, initial="arion_geo")
+    user = forms.CharField(label="Usu\u00e1rio", max_length=255)
+    password = forms.CharField(label="Senha", max_length=512, required=False, strip=False,
+                               widget=forms.PasswordInput(render_value=False))
+    timeout = forms.IntegerField(label="Timeout (segundos)", min_value=1, max_value=60, initial=10)
+
+    def clean(self):
+        cleaned = super().clean()
+        for field in ("host", "database", "user"):
+            value = cleaned.get(field)
+            if value is not None:
+                cleaned[field] = value.strip()
+                if not cleaned[field]:
+                    self.add_error(field, "Este campo é obrigatório para MySQL.")
+        return cleaned
+
+
 class CMDBConfigurationForm(forms.Form):
     base_url = forms.URLField(label="URL base", max_length=500, widget=forms.URLInput(attrs={"placeholder": "https://servidor/otrs/nph-genericinterface.pl/Webservice/"}))
     username = forms.CharField(label="Usuário", max_length=255, required=False)

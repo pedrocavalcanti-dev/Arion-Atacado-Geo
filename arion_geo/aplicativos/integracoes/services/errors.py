@@ -46,12 +46,40 @@ class OTRSAuthenticationError(IntegrationError):
     safe_message = "Falha de autenticação no banco OTRS."
 
 
+class OTRSCredentialMissingError(IntegrationError):
+    safe_message = "Credencial OTRS ausente. Configure usuário e senha para testar a conexão."
+
+
+class OTRSCredentialDecryptionError(IntegrationError):
+    safe_message = "Falha ao descriptografar a credencial OTRS neste usuário do Windows. Salve a senha novamente nesta máquina."
+
+
+class OTRSCredentialInvalidError(IntegrationError):
+    safe_message = "A credencial OTRS descriptografada está vazia ou em formato inválido. Salve a senha novamente."
+
+
 class OTRSTimeoutError(IntegrationError):
     safe_message = "A conexão com o banco OTRS excedeu o tempo limite."
 
 
+class OTRSConnectionRefusedError(IntegrationError):
+    safe_message = "O host OTRS recusou a conexão na porta configurada."
+
+
+class OTRSHostUnreachableError(IntegrationError):
+    safe_message = "Não foi possível localizar ou alcançar o host configurado para o OTRS."
+
+
 class OTRSUnavailableError(IntegrationError):
     safe_message = "Servidor do banco OTRS indisponível."
+
+
+class OTRSDatabaseNotFoundError(IntegrationError):
+    safe_message = "O banco OTRS configurado não existe ou não está acessível para esta credencial."
+
+
+class OTRSDriverError(IntegrationError):
+    safe_message = "Erro inesperado do driver MySQL ao conectar ao OTRS. Consulte o tipo do erro no registro técnico."
 
 
 class OTRSDatabaseError(IntegrationError):

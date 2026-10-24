@@ -8,7 +8,7 @@ CMDB ServiceUp alimenta `CMDBOperatorMirror` e `CMDBLinkMirror`. OTRS MySQL read
 
 ## Scheduler
 
-`integration_worker` e uma management command para processo separado do servidor HTTP. Nao e iniciado por view, middleware ou `AppConfig.ready()`. Cadencias: OTRS fast 1 min, OTRS full 30 min, CMDB full 10 min. Lease persistente por fonte impede concorrencia entre worker e comando manual; heartbeat de 20 s renova expiracao de 180 s. SQLite em desenvolvimento e MariaDB em producao usam a mesma tabela local.
+`integration_worker` e uma management command para processo separado do servidor HTTP. Nao e iniciado por view, middleware ou `AppConfig.ready()`. Cadencias: OTRS fast 2 min, OTRS full 30 min, CMDB full 10 min. Lease persistente por fonte impede concorrencia entre worker e comando manual; heartbeat de 20 s renova expiracao de 180 s. SQLite em desenvolvimento e MySQL em producao usam a mesma tabela local. A conexao OTRS e independente e permanece MySQL read-only.
 
 OTRS incremental consulta `ticket.change_time` com janela de seguranca de 2 minutos, inclui tickets conhecidos que sairam da fila e recarrega relacoes em lotes. Primeira execucao exige full. Cursor so avanca apos persistencia local confirmada. Falha preserva snapshot e cursor.
 

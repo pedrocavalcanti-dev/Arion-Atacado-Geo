@@ -7,13 +7,14 @@ from django.db.models.functions import Lower, Replace
 
 TEXT_SEARCH_FIELDS = (
     "name", "designation", "address", "city", "state", "legacy_project",
+    "contracting_client", "business_project", "business_account", "business_id",
     "operator__name", "contract_number", "customer_id", "identification",
     "circuit", "isp_raw",
 )
 IDENTIFIER_FIELDS = ("source_config_item_id", "source_number")
 
 # Applying Replace in SQL keeps accent-insensitive matching portable across the
-# SQLite development database and MariaDB production database. Tokens are matched
+# SQLite development database and MySQL production database. Tokens are matched
 # independently, so repeated whitespace in source values does not need rewriting.
 _ACCENTS = (
     ("áàâãä", "a"), ("éèêë", "e"), ("íìîï", "i"),

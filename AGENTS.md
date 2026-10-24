@@ -41,7 +41,7 @@ exploração operacional diária, consulta rápida, visualização e análise in
 - CSS
 - JavaScript vanilla
 - SQLite em desenvolvimento
-- MariaDB em produção
+- MySQL em produção
 - Mapbox GL JS
 - Django Templates
 
@@ -595,7 +595,7 @@ SQLite.
 
 Produção:
 
-MariaDB.
+MySQL.
 
 Evite escrever código específico de SQLite quando a funcionalidade precisa funcionar em produção.
 

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Mapa ? Arion Atacado Geo{% endblock %}
+{% block title %}Mapa &middot; ARION ATACADO GEO{% endblock %}
 {% block body_class %}geo-body{% endblock %}
 {% block extra_css %}
   {% if mapbox_token %}<link href="https://api.mapbox.com/mapbox-gl-js/v3.33.0/mapbox-gl.css" rel="stylesheet">{% endif %}
@@ -13,5 +13,5 @@
 {% endblock %}
 {% block extra_js %}
   {% if mapbox_token %}<script src="https://api.mapbox.com/mapbox-gl-js/v3.33.0/mapbox-gl.js" defer></script>{% endif %}
-  <script src="{% static 'js/mapa/mapa-cmdb.js' %}" defer></script>
+  <script src="{% static 'js/mapa/mapa-real.js' %}" defer></script>
 {% endblock %}

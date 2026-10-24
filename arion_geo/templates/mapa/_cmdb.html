@@ -1,20 +1,64 @@
 {% load static %}
-<header class="geo-toolbar cmdb-map-toolbar">
-  <div class="geo-heading"><span class="section-kicker">NOC ATACADO <span>/</span> GEOGRAFIA</span><h1 id="geo-title">Mapa da base CMDB</h1><span class="source-badge"><i></i>Espelho CMDB · {{ link_count }} links</span></div>
-  <div class="cmdb-map-controls">
-    <label><span>Metrica</span><select data-cmdb-metric><option value="base">Links CMDB</option><option value="tickets">Tickets no periodo</option><option value="open_tickets">Tickets abertos</option><option value="affected_links">Links afetados</option><option value="recurrences">Links reincidentes</option></select></label>
-    <label><span>De</span><input type="date" data-cmdb-date-from></label><label><span>Ate</span><input type="date" data-cmdb-date-to></label>
-    <label><span>Provedor</span><select data-cmdb-operator><option value="">Todos</option></select></label>
-    <label><span>Projeto legado</span><select data-cmdb-project><option value="">Todos</option></select></label>
-    <label class="cmdb-map-search"><span>Buscar UF</span><input type="search" data-cmdb-state-search placeholder="Ex.: SP ou Sao Paulo" list="cmdb-state-options"><datalist id="cmdb-state-options"><option value="AC"><option value="AL"><option value="AP"><option value="AM"><option value="BA"><option value="CE"><option value="DF"><option value="ES"><option value="GO"><option value="MA"><option value="MG"><option value="MS"><option value="MT"><option value="PA"><option value="PB"><option value="PE"><option value="PI"><option value="PR"><option value="RJ"><option value="RN"><option value="RS"><option value="RO"><option value="RR"><option value="SC"><option value="SP"><option value="SE"><option value="TO"></datalist></label>
-    <span class="cmdb-map-total"><strong data-cmdb-total>—</strong><small data-cmdb-total-label>links CMDB</small></span>
+<div class="geo-toolbar">
+  <div class="geo-heading">
+    <span class="section-kicker">NOC ATACADO <span>/</span> GEOGRAFIA</span>
+    <h1 id="geo-title">Visão geográfica</h1>
+    <span class="source-badge" data-source-badge><i></i>CMDB real · base atual</span>
+    <nav class="geo-breadcrumb" data-breadcrumb aria-label="Localização atual" hidden><button type="button" data-brazil-link>Brasil</button><span aria-hidden="true">/</span><span data-selected-name></span></nav>
   </div>
-</header>
-<div class="cmdb-map-notice"><span data-cmdb-source-note>Dados do espelho local.</span> <span data-cmdb-uf-note></span></div>
-<div class="geo-map-stage" data-cmdb-map data-token="{{ mapbox_token }}" data-geojson-url="{% static 'geo/brasil_estados.geojson' %}" data-api-url="{% url 'base_links:map-aggregates' %}">
-  <div id="brazil-map" class="geo-map-canvas" role="application" aria-label="Mapa da base CMDB por unidade federativa"></div>
-  <div class="map-message" data-cmdb-message role="status"><span class="map-message-spinner" aria-hidden="true"></span><div><strong data-cmdb-message-title>Preparando mapa</strong><span data-cmdb-message-description>Carregando dados locais.</span></div></div>
-  <aside class="national-panel cmdb-map-summary" data-cmdb-summary><header class="national-header"><div><span class="section-kicker">BASE DE LINKS</span><span class="national-subtitle">Distribuicao por estado</span></div></header><div class="cmdb-state-list" data-cmdb-state-list><p>Carregando agregados...</p></div></aside>
-  <aside class="state-panel thin-scroll cmdb-state-panel" data-cmdb-state-panel hidden><div class="panel-topline"><span class="section-kicker">DETALHES DA UNIDADE</span><button class="panel-close" type="button" data-cmdb-panel-close aria-label="Fechar painel">×</button></div><div class="panel-title"><div><h2 data-cmdb-state-name></h2><span>Brasil</span></div></div><div class="panel-total"><strong data-cmdb-state-total></strong><span data-cmdb-state-metric-label>Links CMDB</span></div><p class="panel-context" data-cmdb-state-context></p><section class="panel-section"><h3>Provedores · CMDB</h3><div data-cmdb-state-operators></div></section><section class="panel-section"><h3>Projetos · valor legado temporário</h3><div data-cmdb-state-projects></div></section><p class="panel-note">Tickets usam o espelho local OTRS. Período significa data de criação; backlog aberto é snapshot atual.</p></aside>
-  <div class="geo-map-error" data-cmdb-error hidden><span class="error-mark">!</span><div><strong>Nao foi possivel carregar a base geografica.</strong><span data-cmdb-error-detail></span></div><button type="button" data-cmdb-retry>Tentar novamente</button></div>
+  <div class="geo-control-area">
+    <div class="geo-control-row geo-control-row--primary">
+      <div class="mode-control"><span class="control-caption">O QUE ESTOU ANALISANDO</span><div class="mode-filters" role="group" aria-label="Modo geográfico">
+        <button class="mode-chip is-selected" type="button" data-mode="base" aria-pressed="true">Base</button>
+        <button class="mode-chip" type="button" data-mode="projects" aria-pressed="false">Projetos</button>
+        <button class="mode-chip" type="button" data-mode="calls" aria-pressed="false">Chamados</button>
+        <button class="mode-chip" type="button" data-mode="repeat" aria-pressed="false">Reincidência</button>
+        <button class="mode-chip" type="button" data-mode="motives" aria-pressed="false">Motivos</button>
+      </div></div>
+      <div class="geo-search-wrap"><label class="map-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg><input type="search" data-state-search placeholder="Buscar estado..." autocomplete="off" aria-label="Buscar estado por nome ou sigla"><kbd>UF</kbd></label><div class="state-search-results" data-state-search-results role="listbox" hidden></div></div>
+      <label class="motives-select" data-motives-select hidden><span>Motivo</span><select data-motive-filter aria-label="Filtrar motivo"><option value="">Todos os motivos</option></select></label>
+    </div>
+    <div class="geo-control-row geo-control-row--secondary">
+      <div class="operator-control"><span class="control-caption">DE QUEM ESTOU ANALISANDO</span><div class="geo-filters" role="group" aria-label="Filtrar cliente contratante">
+        <button class="filter-chip is-selected" type="button" data-client="all" aria-pressed="true">Todas</button><button class="filter-chip" type="button" data-client="Claro" aria-pressed="false">Claro</button><button class="filter-chip" type="button" data-client="Vivo" aria-pressed="false">Vivo</button><button class="filter-chip" type="button" data-client="Algar" aria-pressed="false">Algar</button><button class="filter-chip" type="button" data-client="other" aria-pressed="false">Outras</button>
+      </div></div>
+      <div class="future-filters"><label><span>Projeto</span><select data-project-filter aria-label="Filtrar projeto"><option value="">Todos</option></select></label><label data-period-control hidden><span>Período</span><select data-period-filter aria-label="Selecionar período"><option value="this_month">Este mês</option><option value="last_month">Mês anterior</option><option value="last_30">Últimos 30 dias</option><option value="last_90">Últimos 90 dias</option><option value="custom">Personalizado</option></select></label>
+        <details class="map-more-filters"><summary>Mais filtros</summary><label><span>Provedor / ISP</span><select data-provider-filter><option value="">Todos</option></select></label><div data-ticket-filters hidden><label><span>Status</span><select data-status-filter><option value="">Todos</option><option value="OPEN">Aberto</option><option value="PENDING">Pendente</option><option value="SCHEDULED">Agendado</option><option value="RESOLVED">Resolvido</option><option value="CLOSED">Fechado</option></select></label><label><span>Prioridade</span><select data-priority-filter><option value="">Todas</option></select></label></div></details>
+      </div>
+      <div class="geo-custom-period" data-custom-period hidden><label>De <input type="date" data-date-from></label><label>Até <input type="date" data-date-to></label><button type="button" data-apply-period>Aplicar</button></div>
+      <div class="geo-legend" data-legend aria-live="polite"></div>
+    </div>
+  </div>
 </div>
+
+<main class="geo-map-stage" data-map-config data-token="{{ mapbox_token }}" data-geojson-url="{% static 'geo/brasil_estados.geojson' %}" data-api-url="{% url 'base_links:map-aggregates' %}" data-detail-url="{% url 'base_links:map-state-detail' %}" data-base-url="{% url 'base_links:index' %}" data-cockpit-url="{% url 'cockpit' %}">
+  <div id="brazil-map" class="geo-map-canvas" role="application" aria-label="Mapa interativo do Brasil por estado"></div>
+  <div class="map-message" data-map-message role="status" aria-live="polite"><span class="map-message-spinner" data-map-spinner aria-hidden="true"></span><div><strong data-message-title>Preparando mapa</strong><span data-message-description>Carregando dados locais do CMDB e OTRS.</span></div></div>
+  <aside class="national-panel" data-national-panel aria-label="Resumo nacional do Brasil"><header class="national-header"><div><span class="section-kicker">BRASIL</span><span class="national-subtitle">Visão nacional</span></div><button class="national-collapse" type="button" data-national-collapse aria-label="Recolher resumo nacional" aria-expanded="true">&#8249;</button></header><div class="national-content" data-national-content><div class="national-tabs" role="tablist" aria-label="Resumo nacional"><button type="button" role="tab" data-national-tab="summary" aria-selected="true">Resumo</button><button type="button" role="tab" data-national-tab="ranking" aria-selected="false">Ranking</button><button type="button" role="tab" data-national-tab="distribution" aria-selected="false">Distribuição</button></div><div class="national-view" data-national-view role="tabpanel"></div></div></aside>
+  <button class="national-expand" type="button" data-national-expand hidden>› <span>Resumo</span></button>
+  <button class="map-backdrop" type="button" data-panel-backdrop aria-label="Fechar detalhes do estado" tabindex="-1"></button>
+  <aside class="state-panel thin-scroll" data-state-panel aria-label="Detalhes da unidade federativa" aria-hidden="true" inert hidden>
+    <div class="panel-topline"><span class="section-kicker">DETALHES DA UNIDADE</span><button class="panel-close" type="button" data-panel-close aria-label="Fechar painel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="panel-title"><div class="panel-identity"><img class="state-flag panel-flag" data-panel-flag alt="" width="30" height="20" decoding="async"><span class="state-code" data-panel-code></span></div><div><h2 data-panel-name></h2><span>Brasil</span></div></div>
+    <div class="panel-total"><strong data-panel-total>0</strong><span data-panel-scope>links CMDB · Atual</span></div><p class="panel-context" data-panel-context></p>
+    <section class="panel-section" data-panel-section="clients"><h3 data-panel-client-heading>Clientes</h3><div data-panel-clients></div></section><section class="panel-section" data-panel-section="coverage"><h3>Cobertura de Cliente</h3><div data-panel-coverage></div></section>
+    <section class="panel-section" data-panel-section="status"><h3>Status dos chamados</h3><div data-panel-status></div></section>
+    <section class="panel-section" data-panel-section="reasons"><h3>Motivos de encerramento</h3><div data-panel-reasons></div></section>
+    <section class="panel-section" data-panel-section="projects"><h3>Projetos principais</h3><div data-panel-projects></div></section>
+    <section class="panel-section" data-panel-section="providers"><h3>Provedores / ISP</h3><div data-panel-providers></div></section>
+    <section class="panel-section" data-panel-section="cities"><h3>Principais cidades</h3><div data-panel-cities></div></section>
+    <section class="panel-section panel-links-section" data-panel-section="links"><h3>Links da unidade</h3><div data-panel-links></div></section>
+    <section class="panel-section panel-tickets-section" data-panel-section="tickets"><h3>Chamados do recorte</h3><div data-panel-tickets></div></section>
+    <div class="panel-actions"><a data-open-base href="#">Ver links na Base</a><a data-open-cockpit href="#">Analisar no Cockpit</a></div>
+    <p class="panel-note" data-panel-note>Dimensões comerciais derivadas do Nome original CMDB; o Provedor vem da relação ISP do ConfigItem.</p>
+  </aside>
+  <div class="ticket-detail-backdrop" data-ticket-modal hidden>
+    <section class="ticket-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="ticket-dialog-title" tabindex="-1">
+      <header><div><span class="section-kicker">DETALHE DO CHAMADO</span><h2 id="ticket-dialog-title" data-ticket-title></h2></div><button type="button" data-ticket-close aria-label="Fechar detalhe do chamado">&times;</button></header>
+      <div class="ticket-detail-content" data-ticket-content></div>
+    </section>
+  </div>
+  <div class="geo-map-error" data-map-error hidden role="alert"><span class="error-mark" aria-hidden="true">!</span><div><strong data-map-error-title>Não foi possível carregar o mapa.</strong><span data-map-error-detail></span></div><button type="button" data-map-retry>Tentar novamente</button></div>
+  <span class="map-screenreader" data-map-announcement aria-live="polite"></span>
+  {{ state_flags|json_script:"state-flags-data" }}
+</main>

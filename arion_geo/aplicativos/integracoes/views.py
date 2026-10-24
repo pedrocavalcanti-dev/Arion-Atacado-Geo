@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 from django.conf import settings
@@ -14,14 +15,29 @@ from aplicativos.configuracoes.access_control import is_system_admin
 
 from .clients.cmdb import CMDBClient
 from .clients.otrs import OTRSReadOnlyClient
-from .forms import CMDBConfigurationForm, CMDBGetForm, CMDBSearchForm, OTRSConfigurationForm
+from .forms import ArionDatabaseCandidateForm, CMDBConfigurationForm, CMDBGetForm, CMDBSearchForm, OTRSConfigurationForm
 from .models import (
     CMDBLinkMirror, CMDBOperatorMirror, Integration, IntegrationLease,
     IntegrationRun, IntegrationSyncState, OTRSTicket,
 )
-from .services.errors import IntegrationError, IntegrationNotConfigured
+from .services.errors import (
+    IntegrationError,
+    IntegrationNotConfigured,
+    OTRSCredentialDecryptionError,
+    OTRSCredentialMissingError,
+)
 from .services.secrets import get_secret_protector
 from .services.analytics import TicketQueryService
+from .services.arion_database import (
+    active_database_summary, activate_candidate, candidate_config,
+    migration_state, password_for_connection_test, read_bootstrap_config,
+    record_candidate_test, rollback_to_previous, save_candidate_config,
+    test_mysql_connection,
+)
+from .services.arion_database_migration import (
+    CandidateStageError, copy_local_data, dry_run_migration, log_candidate_stage_failure,
+    safe_stage_error_detail, prepare_candidate_schema, validate_candidate_migration,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +81,12 @@ def _cmdb_client(integration):
 
 
 def _otrs_client(integration):
-    if not integration.credentials_configured:
-        raise IntegrationNotConfigured()
-    password = get_secret_protector().unprotect(integration.secret_ciphertext)
+    if not integration.username or not integration.secret_ciphertext:
+        raise OTRSCredentialMissingError()
+    try:
+        password = get_secret_protector().unprotect(integration.secret_ciphertext)
+    except Exception:
+        raise OTRSCredentialDecryptionError() from None
     config = integration.config or {}
     return OTRSReadOnlyClient(
         host=config.get("host", ""), port=config.get("port", 3306), database=config.get("database", ""),
@@ -108,7 +127,7 @@ def _run_operation(*, request, integration, operation, callback):
             error = f"{error} Código técnico: {exc.error_code}"
         run.status = IntegrationRun.Status.FAILED
         run.message = error
-        if isinstance(exc, IntegrationNotConfigured):
+        if isinstance(exc, (IntegrationNotConfigured, OTRSCredentialMissingError)):
             integration.status = Integration.Status.NOT_CONFIGURED
         else:
             integration.status = Integration.Status.UNAVAILABLE
@@ -118,6 +137,11 @@ def _run_operation(*, request, integration, operation, callback):
             logger.warning(
                 "CMDB operation failed integration=cmdb operation=%s request_id=%s http_status=%s exception=%s error_code=%s duration_ms=%s",
                 operation, run.request_id, exc.http_status or "unknown", type(exc).__name__, exc.error_code or "", max(0, int((time.perf_counter() - started) * 1000)),
+            )
+        else:
+            logger.warning(
+                "External integration operation failed integration=%s operation=%s exception=%s duration_ms=%s",
+                integration.key, operation, type(exc).__name__, max(0, int((time.perf_counter() - started) * 1000)),
             )
     except Exception as exc:
         # Do not log exception text or traceback: a provider error could include connection secrets.
@@ -172,7 +196,7 @@ def home(request):
     }
     database_health = {"status": "Indisponível", "online": False, "latency_ms": None, "engine": "Desconhecido", "environment": "Desenvolvimento" if settings.DEBUG else "Produção", "name": ""}
     engine = connections["default"].settings_dict.get("ENGINE", "")
-    database_health["engine"] = "SQLite" if "sqlite" in engine else "MariaDB" if "mysql" in engine else connections["default"].vendor.upper()
+    database_health["engine"] = "SQLite" if "sqlite" in engine else "MySQL" if "mysql" in engine else connections["default"].vendor.upper()
     database_health["name"] = str(connections["default"].settings_dict.get("NAME", "")).split("/")[-1].split("\\")[-1]
     started = time.perf_counter()
     try:
@@ -201,13 +225,30 @@ def home(request):
 @require_GET
 def arion_detail(request):
     _require_permission(request, "view_integrations")
-    engine = connections["default"].settings_dict.get("ENGINE", "")
-    health = {
-        "status": "Indisponível", "online": False, "latency_ms": None,
-        "engine": "SQLite" if "sqlite" in engine else "MariaDB" if "mysql" in engine else connections["default"].vendor.upper(),
-        "environment": "Desenvolvimento" if settings.DEBUG else "Produção",
-        "name": str(connections["default"].settings_dict.get("NAME", "")).split("/")[-1].split("\\")[-1],
-    }
+    candidate = candidate_config(decrypt=False) or {}
+    initial = {key: candidate.get(key, "") for key in ("database", "host", "port", "user", "timeout")}
+    initial.setdefault("database", "arion_geo")
+    initial.setdefault("host", "127.0.0.1")
+    initial.setdefault("port", 3306)
+    initial.setdefault("timeout", 10)
+    return render(request, "integracoes/arion.html", _arion_context(request, ArionDatabaseCandidateForm(initial=initial)))
+
+
+def _arion_context(request, form):
+    active = active_database_summary(settings.DATABASES["default"])
+    bootstrap, _ = read_bootstrap_config()
+    if os.environ.get("DATABASE_URL", "").strip():
+        next_boot = active
+    else:
+        active_config = bootstrap["active"]
+        next_name = str(active_config.get("database", ""))
+        next_boot = {
+            "engine": "MySQL" if active_config.get("engine") == "mysql" else "SQLite",
+            "name": next_name if active_config.get("engine") == "mysql" else next_name.replace("\\", "/").rsplit("/", 1)[-1],
+        }
+    health = {"status": "Indisponivel", "online": False, "latency_ms": None,
+              "engine": active["engine"], "environment": "Desenvolvimento" if settings.DEBUG else "Producao",
+              "name": active["name"]}
     started = time.perf_counter()
     try:
         with connections["default"].cursor() as cursor:
@@ -216,7 +257,133 @@ def arion_detail(request):
         health.update(status="Online", online=True, latency_ms=max(0, int((time.perf_counter() - started) * 1000)))
     except Exception:
         pass
-    return render(request, "integracoes/arion.html", {"database_health": health, "active_section": "overview"})
+    return _admin_context_for_integration(
+        request, "integrations", database_health=health, active_database=active,
+        next_boot_database=next_boot,
+        restart_required=(active["engine"], active["name"]) != (next_boot["engine"], next_boot["name"]),
+        pending_database=candidate_config(decrypt=False) or {}, database_form=form,
+        migration_state=migration_state(), rollback_available=bool(
+            (bootstrap.get("rollback") or {}).get("engine") == "sqlite"
+            or (active["engine"] == "MySQL" and not os.environ.get("DATABASE_URL", "").strip()
+                and (settings.BASE_DIR / "db.sqlite3").is_file())
+        ),
+        database_url_override=bool(os.environ.get("DATABASE_URL", "").strip()),
+    )
+
+
+@login_required
+@require_POST
+def arion_save_configuration(request):
+    _require_permission(request, "view_integrations")
+    _require_permission(request, "manage_integrations")
+    form = ArionDatabaseCandidateForm(request.POST)
+    if form.is_valid():
+        try:
+            saved = save_candidate_config(form.cleaned_data)
+        except Exception as exc:
+            form.add_error(None, exc.messages[0] if hasattr(exc, "messages") else "Nao foi possivel salvar o candidato MySQL.")
+        else:
+            AuditService.record(request=request, category="INTEGRATION", action="ARION_DATABASE_CONFIG_SAVED",
+                                module="Banco Arion", description="Banco MySQL candidato salvo",
+                                result="SUCCESS", metadata={"engine": saved["engine"]})
+            messages.success(request, "MySQL salvo como candidato. O banco ativo permanece inalterado.")
+            return redirect("configuracoes:integracoes:arion")
+    return render(request, "integracoes/arion.html", _arion_context(request, form))
+
+
+@login_required
+@require_POST
+def arion_test_connection(request):
+    _require_permission(request, "view_integrations")
+    _require_permission(request, "manage_integrations")
+    form = ArionDatabaseCandidateForm(request.POST)
+    if not form.is_valid():
+        return render(request, "integracoes/arion.html", _arion_context(request, form))
+    values = form.cleaned_data
+    try:
+        save_candidate_config(values)
+        candidate = candidate_config(decrypt=False)
+        password = password_for_connection_test({**candidate, "password": values["password"]})
+        result = test_mysql_connection(candidate, password)
+        record_candidate_test()
+        messages.success(request, f"Conexao do candidato OK - MySQL {result['version'].split('.', 1)[0]}.x - Banco: {result['database']}.")
+        AuditService.record(request=request, category="INTEGRATION", action="ARION_DATABASE_TESTED",
+                            module="Banco Arion", description="Teste do MySQL candidato concluido",
+                            result="SUCCESS", metadata={"engine": "mysql"})
+    except Exception as exc:
+        safe_message = exc.messages[0] if hasattr(exc, "messages") else "Falha segura ao testar o Banco Arion."
+        messages.error(request, safe_message)
+        AuditService.record(request=request, category="INTEGRATION", action="ARION_DATABASE_TESTED",
+                            module="Banco Arion", description="Teste do MySQL candidato falhou",
+                            result="FAILURE", metadata={"engine": "mysql", "error_type": type(exc).__name__})
+    return render(request, "integracoes/arion.html", _arion_context(request, form))
+
+
+@login_required
+@require_POST
+def arion_migration_action(request, action):
+    _require_permission(request, "view_integrations")
+    _require_permission(request, "manage_integrations")
+    outcome = "SUCCESS"
+    exception_type = ""
+    technical_error = None
+    try:
+        if action == "prepare":
+            report = prepare_candidate_schema()
+            if report["newly_applied"]:
+                messages.success(request, f"Schema MySQL preparado com sucesso. {report['newly_applied']} migrations aplicadas.")
+            else:
+                messages.success(request, "Schema ja estava atualizado. Nenhuma migration pendente.")
+        elif action == "copy":
+            report = copy_local_data()
+            messages.success(request, f"Dados locais copiados. Models preservados: {len(report['copied_counts'])}.")
+        elif action == "validate":
+            validate_candidate_migration()
+            messages.success(request, "Validacao aprovada. MySQL pode ser ativado para o proximo inicio.")
+        elif action == "activate":
+            activate_candidate()
+            messages.success(request, "MySQL ativado para o proximo inicio. Reinicie o servidor web e integration_worker.")
+        elif action == "rollback":
+            rollback_to_previous()
+            messages.success(request, "SQLite restaurado como banco ativo para o proximo inicio.")
+        elif action == "dry-run":
+            report = dry_run_migration()
+            privileges = report["required_privileges"]
+            if privileges["sufficient"] is False:
+                messages.warning(request, "Dry run: o usuario MySQL nao possui todos os privilegios necessarios para preparar o schema.")
+            elif privileges["sufficient"] is None:
+                messages.warning(request, "Dry run: conexao OK, mas nao foi possivel verificar grants do usuario MySQL.")
+            else:
+                messages.success(request, f"Dry run OK. Schema: {'presente' if report['migration_table_exists'] else 'sem migrations'}; conflitos de usuario: {report['username_conflict_count']}.")
+        else:
+            messages.error(request, "Acao de banco invalida.")
+    except Exception as exc:
+        outcome = "FAILURE"
+        exception_type = type(exc).__name__
+        if not isinstance(exc, CandidateStageError):
+            log_candidate_stage_failure(action, exc)
+        if isinstance(exc, CandidateStageError):
+            detail = exc.technical_detail
+            if request.user.is_superuser or is_system_admin(request.user):
+                technical_error = {"stage": action, "detail": detail}
+                messages.error(request, f"Falha na etapa {action}. Veja os detalhes tecnicos abaixo.")
+            else:
+                messages.error(request, "A etapa do Banco Arion falhou. Consulte o log tecnico seguro.")
+        elif hasattr(exc, "messages"):
+            messages.error(request, exc.messages[0])
+        elif request.user.is_superuser or is_system_admin(request.user):
+            technical_error = {"stage": action, "detail": safe_stage_error_detail(exc)}
+            messages.error(request, f"Falha na etapa {action}. Veja os detalhes tecnicos abaixo.")
+        else:
+            messages.error(request, "A etapa do Banco Arion falhou. Consulte o log tecnico seguro.")
+    AuditService.record(request=request, category="INTEGRATION", action="ARION_DATABASE_STAGE",
+                        module="Banco Arion", description="Etapa do candidato MySQL executada",
+                        result=outcome, metadata={"stage": action, "exception_type": exception_type})
+    if technical_error:
+        form = ArionDatabaseCandidateForm(initial=candidate_config(decrypt=False) or {})
+        return render(request, "integracoes/arion.html",
+                      {**_arion_context(request, form), "technical_error": technical_error})
+    return redirect("configuracoes:integracoes:arion")
 
 
 @login_required

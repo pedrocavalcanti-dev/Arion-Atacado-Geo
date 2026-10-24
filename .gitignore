@@ -12,6 +12,9 @@ venv/
 
 # Django
 arion_geo/db.sqlite3
+var/database-config.json
+var/logs/
+var/backups/
 staticfiles/
 media/
 
@@ -32,3 +35,6 @@ Desktop.ini
 .coverage
 htmlcov/
 private_media/
+
+# Runtime/local database configuration
+var/

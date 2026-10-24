@@ -346,9 +346,9 @@ class DataScopeIntegrationTests(TestCase):
         self.vivo_mirror = CMDBOperatorMirror.objects.create(source_config_item_id="op-vivo", name="Vivo")
         created = timezone.now()
         self.links = [
-            CMDBLinkMirror.objects.create(source_config_item_id="scope-1", state="SP", operator=self.claro_mirror, legacy_project="Bradesco", isp_raw="ISP Claro", source_created_at=created),
-            CMDBLinkMirror.objects.create(source_config_item_id="scope-2", state="RJ", operator=self.claro_mirror, legacy_project="FUST", isp_raw="ISP Claro", source_created_at=created),
-            CMDBLinkMirror.objects.create(source_config_item_id="scope-3", state="MG", operator=self.vivo_mirror, legacy_project="Bradesco", isp_raw="ISP Vivo", source_created_at=created),
+            CMDBLinkMirror.objects.create(source_config_item_id="scope-1", state="SP", operator=self.claro_mirror, legacy_project="Bradesco", contracting_client="Claro", business_project="Bradesco", isp_raw="ISP Claro", source_created_at=created),
+            CMDBLinkMirror.objects.create(source_config_item_id="scope-2", state="RJ", operator=self.claro_mirror, legacy_project="Bradesco", contracting_client="Claro", business_project="FUST", isp_raw="ISP Claro", source_created_at=created),
+            CMDBLinkMirror.objects.create(source_config_item_id="scope-3", state="MG", operator=self.vivo_mirror, legacy_project="Bradesco", contracting_client="Vivo", business_project="Bradesco", isp_raw="ISP Vivo", source_created_at=created),
         ]
         self.group = Group.objects.get(name=GROUP_ANALYST)
         self.user.groups.set([self.group])
@@ -368,29 +368,29 @@ class DataScopeIntegrationTests(TestCase):
         self.assertEqual(outside_detail.status_code, 404)
         dashboard = self.client.get(reverse("dashboard"))
         self.assertEqual(dashboard.context["total_links"], 1)
-        macro_counts = {item["name"]: item["value"] for item in dashboard.context["macro_operators"]}
-        self.assertEqual(macro_counts["OUTROS"], 1)
-        self.assertEqual(sum(macro_counts.values()), dashboard.context["total_links"])
         ranking = self.client.get(reverse("rankings:index"))
         self.assertEqual([row["name"] for row in ranking.context["operators"]], ["Claro"])
 
     def test_scope_is_applied_before_cockpit_filters_and_options(self):
-        response = self.client.post(reverse("analytics-query"), data=json.dumps({"metric": "links", "group_by": "operator", "period_from": "2026-10", "period_to": "2026-10", "period": "2026-10", "filters": {}}), content_type="application/json")
+        from aplicativos.integracoes.models import OTRSTicket, OTRSTicketConfigItem
+        ticket = OTRSTicket.objects.create(external_id=9101, ticket_number="SCOPE-9101", queue_external_id=107, queue_name="NOC - ATACADO", external_state_id=1, external_state_name="em atendimento", business_status="OPEN", is_business_open=True, is_present_in_queue=True, source_created_at=timezone.now())
+        OTRSTicketConfigItem.objects.create(ticket=ticket, config_item_id="scope-1", cmdb_link=self.links[0], relation_type="DependsOn", relation_state="Valid")
+        response = self.client.post(reverse("analytics-query"), data=json.dumps({"metric": "links_affected", "group_by": "operator", "period_from": "2026-10", "period_to": "2026-10", "period": "2026-10", "filters": {}}), content_type="application/json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["value"], 1)
-        self.assertEqual(response.json()["options"]["operator"], ["Claro"])
-        outside = self.client.post(reverse("analytics-query"), data=json.dumps({"metric": "links", "group_by": "operator", "period_from": "2026-10", "period_to": "2026-10", "period": "2026-10", "filters": {"operator": "Vivo"}}), content_type="application/json")
+        self.assertEqual(response.json()["options"]["provider"], ["Claro"])
+        outside = self.client.post(reverse("analytics-query"), data=json.dumps({"metric": "links_affected", "group_by": "operator", "period_from": "2026-10", "period_to": "2026-10", "period": "2026-10", "filters": {"operator": "Vivo"}}), content_type="application/json")
         self.assertEqual(outside.status_code, 200)
         self.assertEqual(outside.json()["value"], 0)
 
     def test_scope_is_applied_before_map_aggregation_and_filtering(self):
         all_data = self.client.get(reverse("base_links:map-aggregates"))
         self.assertEqual(all_data.status_code, 200)
-        self.assertEqual(all_data.json()["total_links"], 1)
-        self.assertEqual([row["name"] for row in all_data.json()["operators"]], ["Claro"])
-        outside = self.client.get(reverse("base_links:map-aggregates"), {"operator": self.vivo_mirror.pk})
+        self.assertEqual(all_data.json()["filtered_source_total"], 1)
+        self.assertEqual(all_data.json()["clients"], ["Claro"])
+        outside = self.client.get(reverse("base_links:map-aggregates"), {"provider": self.vivo_mirror.pk})
         self.assertEqual(outside.status_code, 200)
-        self.assertEqual(outside.json()["total_links"], 0)
+        self.assertEqual(outside.json()["filtered_source_total"], 0)
 
     def test_custom_scope_with_empty_lists_and_user_without_group_return_no_data(self):
         self.scope.allowed_operators.clear()

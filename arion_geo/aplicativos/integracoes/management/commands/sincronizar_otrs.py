@@ -108,6 +108,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"OTRS {'APLICADO' if apply else 'DRY-RUN'} concluído: fila={result['queue']['name']} id={result['queue']['id']}."))
         self.stdout.write(f"Tickets: encontrados={result['tickets']['found']}; criados={result['tickets']['created']}; atualizados={result['tickets']['updated']}; inalterados={result['tickets']['unchanged']}; ausentes da fila={result['tickets']['stale']}.")
         self.stdout.write(f"Ticket-CI: {result['relations']['found']}; criadas={result['relations']['created']}; atualizadas={result['relations']['updated']}; ausentes={result['relations']['stale']}; ConfigItem sem Link local={result['relations']['unresolved_link']}.")
+        terminal = result["ticket_terminal_fields"]
+        self.stdout.write(f"Campos de fechamento sincronizados: CodigoFechamento={terminal['closing_code_filled']}; ticketResolvido={terminal['resolved_at_filled']}; data terminal StateUpdate={terminal['terminal_at_filled']}.")
         relation_stats = result["relation_stats"]
         self.stdout.write(f"Cardinalidade: tickets com CI={relation_stats['tickets_with_ci']}; sem CI={relation_stats['tickets_without_ci']}; exatamente 1 CI={relation_stats['tickets_one_ci']}; múltiplos CIs={relation_stats['tickets_multiple_ci']}; ConfigItems únicos={relation_stats['unique_config_items']}; ConfigItems em múltiplos tickets={relation_stats['configitems_multiple_tickets']}.")
         self.stdout.write(f"CI-para-Link local: resolvidos={relation_stats['resolved_local_links']}; não resolvidos={relation_stats['unresolved_local_links']}.")
@@ -125,6 +127,17 @@ class Command(BaseCommand):
 
     def _print_local_proof(self):
         current = OTRSTicket.objects.filter(is_present_in_queue=True)
+        responsibility = {row["responsibility_normalized"]: row["total"] for row in current.values("responsibility_normalized").annotate(total=Count("id"))}
+        self.stdout.write(
+            "Procedência local: "
+            f"PROCEDENTE={responsibility.get('PROCEDENTE', 0)}; "
+            f"IMPROCEDENTE={responsibility.get('IMPROCEDENTE', 0)}; "
+            f"INDETERMINADO={responsibility.get('INDETERMINADO', 0)}."
+        )
+        from aplicativos.painel.services.analytics import normalize_closing_reason
+        coded = current.exclude(closing_code_raw="")
+        reasons = {normalize_closing_reason(value) for value in coded.values_list("closing_code_raw", flat=True).distinct()}
+        self.stdout.write(f"Fechamento local: CodigoFechamento preenchido={coded.count()}; motivos distintos normalizados={len(reasons)}; ticketResolvido={current.filter(resolved_at__isnull=False).count()}; data terminal StateUpdate={current.filter(terminal_state_at__isnull=False).count()}; cancelamento datado={current.filter(canceled_at__isnull=False).count()}.")
         statuses = {row["business_status"]: row["total"] for row in current.values("business_status").annotate(total=Count("id"))}
         self.stdout.write(f"Snapshot local: tickets atuais na fila={current.count()}.")
         self.stdout.write("Status local: " + "; ".join(f"{status}={statuses.get(status, 0)}" for status in OTRSStateMapping.BusinessStatus.values))
@@ -139,10 +152,3 @@ class Command(BaseCommand):
         self.stdout.write(f"Relações Ticket-CI sem Link local={unresolved}.")
         resolved_state = current.filter(external_state_name__iexact="resolvido")
         self.stdout.write(f"resolvido: quantidade atual={resolved_state.count()}; business-open=NAO ({resolved_state.filter(is_business_open=True).count()} aberto[s]).")
-        for ticket in current.filter(config_items__is_present_in_source=True, config_items__cmdb_link__operator__isnull=False).select_related().prefetch_related("config_items__cmdb_link__operator").distinct()[:5]:
-            relation = ticket.config_items.filter(is_present_in_source=True, cmdb_link__isnull=False).select_related("cmdb_link", "cmdb_link__operator").first()
-            if relation and relation.cmdb_link:
-                link = relation.cmdb_link
-                self.stdout.write(f"Prova local: ticket={ticket.ticket_number}; state={ticket.external_state_name}; business={ticket.business_status}; ConfigItemID={relation.config_item_id}; Number={link.source_number}; Link={link.name}; ISP={link.isp_raw}; Provedor={link.operator.name if link.operator else '(não resolvida)'}.")
-                break
-

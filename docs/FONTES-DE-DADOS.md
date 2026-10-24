@@ -15,13 +15,13 @@ Nenhum request dessas paginas abre conexao com CMDB ou OTRS. Falhas externas man
 
 ## Estados de negocio e metricas
 
-`em atendimento` -> `OPEN`; `Pendente` -> `PENDING`; `resolvido` -> `RESOLVED`; `closed successful` e `Encerrado com viabilidade` -> `CLOSED`; `cancelado` -> `CANCELED`; estado nao reconhecido -> `UNKNOWN`. Apenas `OPEN` e `PENDING` sao `is_business_open=True`.
+`em atendimento` -> `OPEN`; `Pendente` -> `PENDING`; `agendado` -> `SCHEDULED`; `resolvido` -> `RESOLVED`; `closed successful` e `Encerrado com viabilidade` -> `CLOSED`; `cancelado` -> `CANCELED`; estado nao reconhecido -> `UNKNOWN`. `OPEN`, `PENDING` e `SCHEDULED` sao `is_business_open=True`; os demais estados nao compoem backlog.
 
 KPIs globais contam tickets distintos. Ticket associado a multiplos Links conta uma vez no total geral e em cada Link associado. Para Data Scope `CUSTOM`, ticket sem relacao confirmavel com Link permitido nao e exposto. SLA e apresentado por nome e nao se calcula cumprimento sem regra de negocio confirmada. Nao ha serie historica de estados: backlog e abertos sao snapshot atual; periodos de volume usam `source_created_at`.
 
 ## Sincronizacao e freshness
 
-Execute o worker dedicado com `.venv\Scripts\python.exe arion_geo\gerenciar.py integration_worker`. OTRS incremental roda a cada 1 minuto, reconciliacao completa a cada 30 minutos e CMDB completo a cada 10 minutos. A primeira execucao OTRS e full. Um lease persistente por fonte impede concorrencia entre processos, com heartbeat e expiracao de 180 segundos. O incremental usa `ticket.change_time` e sobreposicao de 2 minutos; cursor so avanca apos apply local bem-sucedido. Relacoes dos tickets afetados sao consultadas em lote. A interface de Integracoes mostra snapshots e freshness local; `stale` nao apaga dados nem zera indicadores.
+Execute o worker dedicado com `.venv\Scripts\python.exe arion_geo\gerenciar.py integration_worker`. OTRS incremental roda a cada 2 minutos, reconciliacao completa a cada 30 minutos e CMDB completo a cada 10 minutos. A primeira execucao OTRS e full. Um lease persistente por fonte impede concorrencia entre processos, com heartbeat e expiracao de 180 segundos. O incremental usa `ticket.change_time` e sobreposicao de 2 minutos; cursor so avanca apos apply local bem-sucedido. Relacoes dos tickets afetados sao consultadas em lote. A interface de Integracoes mostra snapshots e freshness local; `stale` nao apaga dados nem zera indicadores.
 
 Comandos manuais: `sincronizar_cmdb --apply`, `sincronizar_otrs --queue "NOC - ATACADO" --full --apply` e `sincronizar_otrs --queue "NOC - ATACADO" --fast --apply`. Eles usam os mesmos leases. Full sync so reconcilia ausencias depois de fetch completo.
 
@@ -40,17 +40,18 @@ A ARI segue como Preview isolada com artefatos demonstrativos explicitamente ide
 Conclusoes e inventarios de schema ficam em `docs/estudos/`. Contagens registradas nos estudos sao fotografias datadas, nao constantes do codigo.
 
 
-## Snapshot validado em 23/10/2026
+## Snapshot local consultado em 24/10/2026
 
-Apos full CMDB, full OTRS e fast OTRS aplicados: 3.435 Links CMDB presentes e 1.329 Operadoras presentes. ISP: 3.316 resolvidos por ConfigItemID, 17 por nome exato, 99 nao resolvidos e 3 vazios. Full CMDB levou 54,5 s.
+O mirror CMDB contém 3.437 links atuais e 1.330 operadoras presentes. O FULL OTRS consultado em 24/10/2026 encontrou a fila `NOC - ATACADO` (ID 107), 11.973 tickets e 7.505 relações Ticket-ConfigItem; todas resolveram para Link local. Os estados espelhados foram `OPEN=7`, `PENDING=5`, `SCHEDULED=7`, `RESOLVED=0`, `CLOSED=10.968`, `CANCELED=986` e `UNKNOWN=0`; backlog atual=19. O FULL levou 134,9 s e usou 104 SELECTs; atualizou 1.849 tickets e manteve 10.124 inalterados.
 
-A fila `NOC - ATACADO` resolveu para ID 107 e contem 11.963 tickets: `OPEN=18`, `PENDING=3`, `RESOLVED=21`, `CLOSED=10.936`, `CANCELED=985`, `UNKNOWN=0`; business-open=21. Full OTRS levou 179,3 s. O fast seguinte levou 1,0 s e nao encontrou alteracoes, mantendo snapshot e cursor, comprovando idempotencia.
+Há 7.501 tickets com CI, 4.472 sem CI, 7.497 com exatamente um CI e 4 com múltiplos CIs. Há 2.011 ConfigItemIDs distintos; 1.445 deles estão relacionados a mais de um ticket.
 
-Foram espelhadas 7.497 relacoes Ticket-ConfigItem: 7.493 tickets com CI, 4.470 sem CI, 7.489 tickets com um CI, 4 com multiplos CIs, 2.009 ConfigItems unicos e 1.444 ConfigItems ligados a mais de um ticket. As 7.497 relacoes resolveram para Link local; nenhuma ficou sem Link.
+O estudo read-only confirmou o Dynamic Field Ticket `RvalidacaoProcedenteImprocedente`, label `Validação`, tipo `Dropdown`, na tabela `dynamic_field`; seus valores são lidos de `dynamic_field_value`. Entre os 11.973 tickets atuais, 1.848 (15,43%) têm classificação: 1.505 `Procedente` e 343 `Improcedente`. No período de 01/10 a 24/10/2026, 534 tickets válidos da fila tinham classificação: 429 Procedente, 84 Improcedente e 21 sem classificação. Entre 517 tickets distintos relacionados aos Providers, os números foram 421, 77 e 19, respectivamente. Códigos de fechamento como `SemIntervencaoTecnica` aparecem tanto com Procedente quanto com Improcedente; o campo não comprova culpa do Provider nem altera o Índice ARION V1.
+
 ## Semantica dos espelhos validada em 23/10/2026
 
 `CMDBLinkMirror.isp_raw` corresponde ao `ConfigItemID` de itens da classe CMDB chamada `Operadoras` em 3.316 links; outros 17 resolveram por nome exato. A relacao resolvida representa o nome de Provedor/ISP do Link com forte evidencia. O ID bruto nunca deve ser apresentado como nome.
 
 Nao foi encontrada fonte oficial confiavel para Projeto nem para Operadora contratada. `legacy_project` e um campo historico copiado do XLSX e nao e atualizado pela sincronizacao. `DesignacaoOperadora`, numero do contrato e SLA nao sao prova da operadora contratada. A definicao e a contagem dos campos candidatos estao em `docs/estudos/MAPEAMENTO-NEGOCIO-CMDB-OTRS.md`.
 
-`TicketQueryService.noc_tickets()` e a base operacional compartilhada: nome exato `NOC - ATACADO` e presenca atual na fila. Volume por periodo usa `source_created_at`; backlog e snapshot atual OPEN + PENDING e nao herda o filtro de criacao. RESOLVED, CLOSED e CANCELED ficam fora do backlog.
+`TicketQueryService.noc_tickets()` e a base operacional compartilhada: nome exato `NOC - ATACADO` e presenca atual na fila. Volume por periodo usa `source_created_at`; backlog e snapshot atual OPEN + PENDING + SCHEDULED e nao herda o filtro de criacao. SCHEDULED e categoria distinta de PENDING. RESOLVED, CLOSED, CANCELED e UNKNOWN ficam fora do backlog.

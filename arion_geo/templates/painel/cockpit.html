@@ -1,71 +1,108 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Cockpit da operação · Arion Atacado Geo{% endblock %}
+{% block title %}Cockpit da opera&ccedil;&atilde;o &middot; ARION ATACADO GEO{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/painel/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/painel/cockpit.css' %}">
 {% endblock %}
 {% block content %}
-<section class="dashboard-page cockpit" data-cockpit data-query-url="{% url 'analytics-query' %}" data-saved-url="{% url 'analytics-saved-views' %}" data-export-url="{% url 'analytics-export' %}" aria-labelledby="cockpit-title">
+<section class="dashboard-page cockpit" data-cockpit data-initial-loading="true" data-results-ready="false" data-default-start="{{ default_start }}" data-default-end="{{ default_end }}" data-query-url="{% url 'analytics-query' %}" data-saved-url="{% url 'analytics-saved-views' %}" data-export-url="{% url 'analytics-export' %}" aria-labelledby="cockpit-title">
   {% csrf_token %}
   <header class="cockpit-heading">
-    <div><p class="section-kicker">NOC ATACADO <span>/</span> COCKPIT</p><h1 id="cockpit-title">Investigue a operação</h1><p>Explore métricas e dimensões dentro do seu escopo de dados.</p></div>
-    <span class="source-badge"><i></i>Espelhos locais CMDB e OTRS</span>
+    <div class="cockpit-heading-copy"><p class="section-kicker">NOC ATACADO <span>/</span> COCKPIT</p><h1 id="cockpit-title">Explore os tickets da opera&ccedil;&atilde;o</h1><p>Filtros e an&aacute;lises baseados somente na fila NOC - ATACADO.</p><span class="source-badge"><i></i>Espelhos locais CMDB e OTRS</span></div>
+    <aside class="cockpit-current-analysis" aria-label="An&aacute;lise atual" title="" data-current-analysis>
+      <span class="panel-kicker">AN&Aacute;LISE ATUAL</span>
+      <strong data-analysis-title>Preparando an&aacute;lise...</strong>
+      <p><span data-current-period></span><span aria-hidden="true"> &middot; </span><span data-period-semantics></span></p>
+    </aside>
   </header>
-
   <section class="cockpit-query-panel" aria-label="Consulta">
     <div class="cockpit-query-tools">
-      <div class="quick-queries" role="group" aria-label="Consultas rápidas">
-        <span>Consultas rápidas</span>
-        <button type="button" data-quick="finance">Tickets por serviço</button><button type="button" data-quick="recurrence">Reincidência</button><button type="button" data-quick="sla">Tickets por SLA</button><button type="button" data-quick="backlog">Backlog por operadora</button><button type="button" data-quick="project">Tickets por projeto legado</button><button type="button" data-quick="reasons">Tickets por status</button>
+      <div class="quick-queries" role="group" aria-label="Consultas r&aacute;pidas">
+        <span>Consultas r&aacute;pidas</span>
+        <button type="button" data-quick="finance">Pend&ecirc;ncia Financeira</button><button type="button" data-quick="recurrence">Reincid&ecirc;ncia</button><button type="button" data-quick="backlog">Backlog por Provedor</button><button type="button" data-quick="status">Tickets por Status</button><button type="button" data-quick="reason">Tickets por Motivo</button><button type="button" data-quick="high-critical">Alto / Cr&iacute;tico</button>
       </div>
       <div class="cockpit-actions">
         {% if can_save_views %}<button type="button" class="cockpit-action" data-saved-toggle>Minhas consultas</button><button type="button" class="cockpit-action cockpit-action-primary" data-save-open>Salvar consulta</button>{% endif %}
-        <div class="cockpit-export-menu"><button type="button" class="cockpit-action" data-export-toggle aria-expanded="false">Exportar <span aria-hidden="true">⌄</span></button><div data-export-options hidden>
-          <button type="button" data-export="xlsx"><span class="cockpit-export-icon" aria-hidden="true">X</span><span><strong>Excel</strong><small>Planilha com resumo e dados</small></span></button>
-          <button type="button" data-export="csv"><span class="cockpit-export-icon" aria-hidden="true">≡</span><span><strong>CSV</strong><small>Dados tabulares completos</small></span></button>
-          <button type="button" data-export="pdf"><span class="cockpit-export-icon" aria-hidden="true">▤</span><span><strong>PDF</strong><small>Relatório visual para compartilhar</small></span></button>
+        <div class="cockpit-export-menu"><button type="button" class="cockpit-action" data-export-toggle aria-expanded="false">Exportar <span aria-hidden="true">&#8964;</span></button><div data-export-options hidden>
+          <button type="button" data-export="pdf"><span class="cockpit-export-icon" aria-hidden="true">&#9643;</span><span><strong>PDF anal&iacute;tico</strong><small>Relat&oacute;rio completo com gr&aacute;ficos e tickets</small></span></button>
+          <button type="button" data-export="xlsx"><span class="cockpit-export-icon" aria-hidden="true">X</span><span><strong>Excel completo</strong><small>Resumo, distribui&ccedil;&atilde;o e tickets</small></span></button>
+          <button type="button" data-export="csv"><span class="cockpit-export-icon" aria-hidden="true">&#8801;</span><span><strong>CSV de tickets</strong><small>Registros que comp&otilde;em o resultado</small></span></button>
         </div></div>
       </div>
     </div>
-
     <form class="cockpit-filters" data-filters>
       <div class="cockpit-primary-filters">
-        <label>M&eacute;trica<select name="metric"><option value="tickets">Tickets</option><option value="links">Links CMDB</option><option value="open_tickets">Abertos</option><option value="closed_tickets">Resolvidos/encerrados</option><option value="recurrences">Links reincidentes</option><option value="backlog">Backlog aberto</option></select></label>
-        <label>De<select name="period_from" data-period></select></label><label>Até<select name="period_to" data-period></select></label>
-        <label>Comparar com<select name="compare_to"><option value="">Sem comparação</option></select></label>
-        <label>Provedor<select name="operator" data-option="operator"><option value="all">Todas</option></select></label>
-        <label>Projeto (legado)<select name="project" data-option="project"><option value="all">Todos</option></select></label>
-      </div>
-      <button type="button" class="cockpit-more-toggle" data-more-toggle aria-expanded="false"><span class="cockpit-more-symbol" aria-hidden="true">+</span><span data-more-label>Mais filtros</span></button>
-      <div class="cockpit-more-filters" data-more-filters hidden>
-        <label>Operadora<select name="contract_operator" data-option="contract_operator"><option value="all">Todas</option></select></label>
+        <label>M&eacute;trica<select name="metric"><option value="tickets" title="N&atilde;o inclui tickets cancelados ou n&atilde;o classificados.">Tickets criados</option><option value="backlog">Backlog atual</option><option value="open_tickets">Em atendimento</option><option value="pending_tickets">Pendentes</option><option value="scheduled_tickets">Agendados</option><option value="resolved_tickets">Resolvidos</option><option value="closed_tickets">Encerrados</option><option value="resolved_closed_tickets">Resolvidos + Encerrados</option><option value="canceled_tickets">Cancelados</option><option value="links_affected">Links afetados</option><option value="recurrences">Links reincidentes</option></select></label>
+        <label>De<input type="date" name="start" required></label><label>At&eacute;<input type="date" name="end" required></label>
+        <label>Motivo<select name="termination_reason" data-option="termination_reason"><option value="all">Todos</option></select></label>
         <label>Provedor<select name="provider" data-option="provider"><option value="all">Todos</option></select></label>
-        <label>UF<select name="uf" data-option="uf"><option value="all">Todas</option></select></label>
-        <label>Servi&#231;o<select name="service"><option value="all">Todos</option></select></label>
-        <label>Status<select name="status"><option value="all">Todos</option></select></label>
-        <label>SLA<select name="sla_status"><option value="all">Todos</option></select></label>
-        <label>Agrupar por<select name="group_by"><option value="operator">Provedor</option><option value="project">Projeto (legado)</option><option value="contract_operator">Operadora</option><option value="provider">Provedor</option><option value="uf">UF</option><option value="month">M&ecirc;s</option><option value="status">Status</option><option value="sla_status">SLA</option><option value="service">Servi&#231;o</option></select></label>
+        <label>Status<select name="status" data-option="status"><option value="all">Todos</option></select></label>
       </div>
-      <div class="cockpit-filter-footer"><div class="cockpit-query-summary"><strong>Análise atual</strong><div data-query-summary aria-live="polite"></div></div><div><button type="button" class="cockpit-action" data-clear>Limpar filtros</button><button type="submit" class="cockpit-action cockpit-action-primary">Aplicar análise</button></div></div>
+      <details class="cockpit-more-filters" data-more-filters><summary><span data-more-label>Mais filtros</span></summary><div>
+        <label>Situa&ccedil;&atilde;o OTRS<select name="source_state" data-option="source_state"><option value="all">Todas</option></select></label>
+        <label>UF<select name="uf" data-option="uf"><option value="all">Todas</option></select></label>
+        <label>SLA<select name="sla" data-option="sla"><option value="all">Todos</option></select></label>
+        <label>Prioridade<select name="priority" data-option="priority"><option value="all">Todas</option></select></label>
+        <label>Servi&ccedil;o<select name="service" data-option="service"><option value="all">Todos</option></select></label>
+        <label>Compara&ccedil;&atilde;o<input type="month" name="compare_to"></label>
+      </div></details>
+      <div class="cockpit-filter-footer"><div class="cockpit-query-summary"><strong>Filtros ativos</strong><div data-query-summary aria-live="polite"></div></div><div><button type="button" class="cockpit-action" data-clear>Limpar filtros</button><button type="submit" class="cockpit-action cockpit-action-primary">Aplicar an&aacute;lise</button></div></div>
     </form>
   </section>
-
-  <div class="cockpit-active" data-active-filters aria-live="polite"></div>
-  <div class="cockpit-error" data-error role="alert" hidden><span>Não foi possível carregar esta análise.</span><button type="button" data-retry>Tentar novamente</button></div>
+  <div class="cockpit-error" data-error role="alert" hidden><span>N&atilde;o foi poss&iacute;vel carregar esta an&aacute;lise.</span><button type="button" data-retry>Tentar novamente</button></div>
   <p class="cockpit-status" data-status role="status" aria-live="polite"></p>
-  <div class="dashboard-kpis cockpit-kpis" data-kpis aria-live="polite"></div>
-
-  <div class="cockpit-results">
-    <article class="dash-panel dash-card cockpit-trend-panel"><header><div><span class="panel-kicker">EVOLUÇÃO</span><h2 data-trend-title>Chamados ao longo do período</h2><p data-trend-context></p><div class="cockpit-chart-legend" data-chart-legend></div></div><span data-comparison></span></header><div class="cockpit-chart" data-series aria-live="polite"></div></article>
-    <article class="dash-panel dash-card cockpit-breakdown-panel"><header><div><span class="panel-kicker">DISTRIBUICAO</span><h2>Resultado por dimensao</h2></div><label><span>Dimensao</span><select aria-label="Dimensao da distribuicao" data-breakdown><option value="operator">Provedor</option><option value="project">Projeto (legado)</option><option value="contract_operator">Operadora</option><option value="provider">Provedor</option><option value="uf">UF</option><option value="month">M&ecirc;s</option><option value="status">Status</option><option value="sla_status">SLA</option><option value="service">Servi&#231;o</option></select></label></header><div class="cockpit-breakdown-columns" aria-hidden="true"><span>Dimensao</span><span>Resultado</span><span>Participacao</span></div><div data-breakdown-list></div></article>
+  <section class="cockpit-kpi-section" aria-labelledby="analysis-results-title">
+    <header><h2 id="analysis-results-title">Indicadores da an&aacute;lise</h2><div class="cockpit-kpi-actions"><span data-comparison></span><button type="button" class="cockpit-global-collapse" data-details-global aria-expanded="true" aria-controls="cockpit-secondary-sections"><span data-details-global-label>Recolher detalhes</span><i aria-hidden="true"></i></button></div></header>
+    <div class="dashboard-kpis cockpit-kpis" data-kpis aria-live="polite"><article class="cockpit-skeleton cockpit-skeleton-kpi"></article><article class="cockpit-skeleton cockpit-skeleton-kpi"></article><article class="cockpit-skeleton cockpit-skeleton-kpi"></article><article class="cockpit-skeleton cockpit-skeleton-kpi"></article></div>
+  </section>
+  <section class="cockpit-visual cockpit-temporal dash-card" aria-labelledby="cockpit-visual-title">
+    <header><div><span class="panel-kicker">AN&Aacute;LISE TEMPORAL</span><h2 id="cockpit-visual-title">Evolu&ccedil;&atilde;o da an&aacute;lise</h2></div></header>
+    <div class="cockpit-chart-grid cockpit-overview-grid" data-overview-grid aria-live="polite"><article class="cockpit-skeleton cockpit-skeleton-chart"></article></div>
+    <section class="cockpit-calendar" data-calendar data-calendar-loading="true" aria-labelledby="cockpit-calendar-title">
+      <header><div><span class="panel-kicker">DETALHE MENSAL</span><h3 id="cockpit-calendar-title" data-calendar-title>Detalhe do m&ecirc;s</h3><p data-calendar-subtitle>Distribui&ccedil;&atilde;o di&aacute;ria dos registros da consulta.</p></div><label>M&ecirc;s<select data-month-select aria-label="M&ecirc;s do detalhe anal&iacute;tico"></select></label></header>
+      <div class="cockpit-month-summary" data-calendar-summary></div>
+      <div class="cockpit-calendar-grid" data-calendar-grid aria-live="polite">
+        <div class="cockpit-calendar-skeleton" data-calendar-skeleton aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+    </section>
+  </section>
+  <div class="cockpit-secondary-sections" id="cockpit-secondary-sections">
+  <section class="cockpit-distributions dash-card" aria-labelledby="cockpit-distributions-title" data-detail-section="dimensions">
+    <header class="cockpit-distributions-header">
+      <button type="button" class="cockpit-collapse-toggle cockpit-distributions-toggle" data-collapse-toggle="dimensions" aria-expanded="true" aria-controls="cockpit-dimensions-panel">
+        <span class="cockpit-collapse-heading"><span class="panel-kicker">DISTRIBUI&Ccedil;&Otilde;ES</span><strong id="cockpit-distributions-title">Distribui&ccedil;&otilde;es da an&aacute;lise</strong><small>Explore o resultado por provedor, UF, prioridade e outras dimens&otilde;es.</small></span><i class="cockpit-chevron" aria-hidden="true"></i>
+      </button>
+      <label class="cockpit-visualize-by">Visualizar por<select aria-label="Visualizar por" data-breakdown><option value="provider">Provedor</option><option value="uf">UF</option><option value="status">Status</option><option value="source_state">Situa&ccedil;&atilde;o OTRS</option><option value="priority">Prioridade</option><option value="sla">SLA</option><option value="termination_reason">Motivo</option><option value="month">Per&iacute;odo</option></select></label>
+    </header>
+    <div class="cockpit-collapse-panel" id="cockpit-dimensions-panel" data-collapse-panel="dimensions" aria-hidden="false"><div class="cockpit-collapse-inner">
+      <div class="cockpit-chart-grid cockpit-dimension-grid" data-dimension-grid aria-live="polite"><article class="cockpit-skeleton cockpit-skeleton-chart"></article></div>
+    </div></div>
+  </section>
+  <section class="cockpit-detail cockpit-detail-collapsible dash-card" aria-labelledby="cockpit-detail-title" data-detail-section="distribution">
+    <header class="cockpit-collapsible-header"><button type="button" class="cockpit-collapse-toggle" data-collapse-toggle="distribution" aria-expanded="false" aria-controls="cockpit-distribution-panel"><span class="cockpit-collapse-heading"><span class="panel-kicker">DISTRIBUI&Ccedil;&Atilde;O COMPLETA</span><strong id="cockpit-detail-title" data-breakdown-title>Distribui&ccedil;&atilde;o completa</strong><small>Todos os grupos encontrados na consulta.</small></span><span class="cockpit-section-count" data-detail-groups></span><i class="cockpit-chevron" aria-hidden="true"></i></button></header>
+    <div class="cockpit-collapse-panel is-collapsed" id="cockpit-distribution-panel" data-collapse-panel="distribution" aria-hidden="true" inert><div class="cockpit-collapse-inner">
+      <div class="cockpit-detail-summary"><span data-detail-total></span></div>
+      <div class="cockpit-table-wrap"><table><thead><tr><th data-detail-dimension>Dimens&atilde;o</th><th data-detail-metric>Tickets</th><th>Participa&ccedil;&atilde;o</th></tr></thead><tbody data-detail-body><tr><td colspan="3"><span class="cockpit-skeleton cockpit-skeleton-row"></span></td></tr><tr><td colspan="3"><span class="cockpit-skeleton cockpit-skeleton-row"></span></td></tr></tbody><tfoot><tr><td colspan="3" data-provider-quality></td></tr></tfoot></table></div>
+      <nav class="cockpit-pagination" data-detail-pagination aria-label="Pagina&ccedil;&atilde;o da distribui&ccedil;&atilde;o"></nav>
+    </div></div>
+  </section>
+  <section class="cockpit-tickets dash-card" aria-labelledby="cockpit-tickets-title" data-detail-section="tickets">
+    <header class="cockpit-tickets-header"><button type="button" class="cockpit-collapse-toggle cockpit-tickets-toggle" data-collapse-toggle="tickets" aria-expanded="true" aria-controls="cockpit-tickets-panel"><span class="cockpit-collapse-heading"><span class="panel-kicker">EVID&Ecirc;NCIA</span><strong id="cockpit-tickets-title">Tickets do resultado</strong><small>Registros que comp&otilde;em esta an&aacute;lise.</small></span><i class="cockpit-chevron" aria-hidden="true"></i></button><span class="cockpit-section-count" data-ticket-count></span></header>
+    <div class="cockpit-collapse-panel" id="cockpit-tickets-panel" data-collapse-panel="tickets" aria-hidden="false"><div class="cockpit-collapse-inner">
+      <div class="cockpit-ticket-tools"><label>Buscar nos tickets<input type="search" data-ticket-search maxlength="120" placeholder="Ticket, ConfigItem, circuito ou provedor"></label><label>Exibir<select data-ticket-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select><span>por p&aacute;gina</span></label></div>
+      <div class="cockpit-ticket-day-note" data-ticket-day-active hidden role="status"><span data-ticket-day-label></span><button type="button" data-ticket-day-clear>Voltar ao resultado completo</button></div>
+      <div class="cockpit-table-wrap"><table><thead><tr><th>Ticket / fonte</th><th>Data base</th><th>Cria&ccedil;&atilde;o</th><th>Status</th><th>Situa&ccedil;&atilde;o OTRS</th><th>Motivo</th><th>Provedor</th><th>UF</th><th>Prioridade</th><th>SLA</th></tr></thead><tbody data-ticket-body><tr><td colspan="10"><span class="cockpit-skeleton cockpit-skeleton-row"></span></td></tr><tr><td colspan="10"><span class="cockpit-skeleton cockpit-skeleton-row"></span></td></tr><tr><td colspan="10"><span class="cockpit-skeleton cockpit-skeleton-row"></span></td></tr></tbody></table></div>
+      <nav class="cockpit-pagination" data-ticket-pagination aria-label="Pagina&ccedil;&atilde;o dos tickets"></nav>
+    </div></div>
+  </section>
   </div>
-
-  <section class="cockpit-detail dash-card" aria-labelledby="cockpit-detail-title"><header><div><span class="panel-kicker">DETALHAMENTO</span><h2 id="cockpit-detail-title">Composição do resultado</h2></div><span data-detail-total></span></header><div class="cockpit-table-wrap"><table><thead><tr><th data-detail-dimension>Dimensão</th><th data-detail-metric>Resultado</th><th>Participação</th></tr></thead><tbody data-detail-body></tbody></table></div></section>
-
+  <div class="cockpit-results-loading" data-results-loading hidden role="status">Atualizando an&aacute;lise...</div>
+  <dialog class="cockpit-day-dialog" data-day-dialog aria-labelledby="cockpit-day-title"><header><div><span class="panel-kicker">DETALHE DI&Aacute;RIO</span><h2 id="cockpit-day-title" data-day-title></h2><p data-day-count></p></div><button type="button" data-day-close aria-label="Fechar detalhe do dia">Fechar</button></header><footer><button type="button" data-day-view>Ver tickets deste dia</button><button type="button" class="cockpit-action-primary" data-day-apply>Aplicar dia como per&iacute;odo</button></footer></dialog>
+  <dialog class="cockpit-ticket-drawer" data-ticket-drawer aria-labelledby="drawer-ticket-title"><header><div><span class="panel-kicker">EVID&Ecirc;NCIA DO RESULTADO</span><h2 id="drawer-ticket-title" data-drawer-title>Ticket</h2><p data-drawer-status></p></div><button type="button" data-drawer-close aria-label="Fechar detalhes do ticket">Fechar</button></header><section><h3>Dados do ticket</h3><dl class="cockpit-drawer-fields" data-drawer-fields></dl></section><section><h3>V&iacute;nculo CMDB</h3><div data-drawer-links></div></section><section><h3>Por que este ticket faz parte desta an&aacute;lise?</h3><ul data-drawer-evidence></ul></section></dialog>
   {% if can_save_views %}
   <section class="cockpit-saved" data-saved-panel hidden aria-labelledby="saved-title"><header><div><span class="panel-kicker">PESSOAL</span><h2 id="saved-title">Minhas consultas</h2></div><button type="button" data-saved-close aria-label="Fechar minhas consultas">Fechar</button></header><div data-saved-list></div></section>
-  <dialog class="cockpit-dialog" data-save-dialog><form data-save-form><h2>Salvar consulta</h2><label>Nome da consulta<input name="name" maxlength="80" required autocomplete="off" placeholder="Ex.: Claro SP — Reincidências"></label><footer><button type="button" data-dialog-close>Cancelar</button><button type="submit" class="cockpit-action-primary">Salvar consulta</button></footer></form></dialog>
+  <dialog class="cockpit-dialog" data-save-dialog><form data-save-form><h2>Salvar consulta</h2><label>Nome da consulta<input name="name" maxlength="80" required autocomplete="off" placeholder="Ex.: Provedor SP - Reincidencias"></label><footer><button type="button" data-dialog-close>Cancelar</button><button type="submit" class="cockpit-action-primary">Salvar consulta</button></footer></form></dialog>
   <dialog class="cockpit-dialog" data-rename-dialog><form data-rename-form><h2>Renomear consulta</h2><label>Novo nome<input name="name" maxlength="80" required autocomplete="off"></label><input type="hidden" name="id"><footer><button type="button" data-rename-close>Cancelar</button><button type="submit" class="cockpit-action-primary">Salvar nome</button></footer></form></dialog>
   {% endif %}
 </section>

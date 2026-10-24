@@ -1,8 +1,57 @@
 {% extends "integracoes/base_integracoes.html" %}
-{% block title %}Banco Arion · Integrações{% endblock %}
+{% load static %}
+{% block title %}Banco Arion &middot; Integra&ccedil;&otilde;es{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% static 'js/integracoes/arion-database.js' %}" defer></script>{% endblock %}
 {% block integration_content %}
-<a class="integration-back" href="{% url 'configuracoes:integrations' %}">← Todas as integrações</a>
-<p class="integration-eyebrow">INTEGRAÇÕES / BANCO ARION</p><h1>Banco Arion</h1><p class="integration-page-description">Saúde do banco operacional. Esta conexão é gerenciada pelo ambiente e não pode ser editada aqui.</p>
-<nav class="integration-tabs" aria-label="Seções do Banco Arion"><a href="#overview" aria-current="page">Visão geral</a><a href="#overview">Saúde</a></nav>
-<section class="integration-overview-panel" id="overview"><div class="integration-card-top"><h2>Estado da conexão</h2><span class="integration-status{% if database_health.online %} integration-status--connected{% else %} integration-status--unavailable{% endif %}"><i></i>{{ database_health.status }}</span></div><dl class="integration-overview-facts"><div><dt>Engine</dt><dd>{{ database_health.engine }}</dd></div><div><dt>Ambiente</dt><dd>{{ database_health.environment }}</dd></div><div><dt>Latência</dt><dd>{% if database_health.latency_ms != None %}{{ database_health.latency_ms }} ms{% else %}—{% endif %}</dd></div><div><dt>Identificação</dt><dd>{{ database_health.name|default:"Banco operacional" }}</dd></div></dl><p class="integration-readonly">Somente diagnóstico · conexão não editável</p></section>
+<a class="integration-back" href="{% url 'configuracoes:integrations' %}">&#8592; Todas as integra&ccedil;&otilde;es</a>
+<p class="integration-eyebrow">INTEGRA&Ccedil;&Otilde;ES / BANCO ARION</p>
+<h1>Banco Arion</h1>
+<p class="integration-page-description">O banco candidato &eacute; preparado sem alterar o banco usado pelo processo atual. Apenas a ativa&ccedil;&atilde;o muda a configura&ccedil;&atilde;o do pr&oacute;ximo in&iacute;cio.</p>
+
+<section class="integration-overview-panel">
+  <div class="integration-card-top"><h2>Banco atualmente ativo (processo)</h2><span class="integration-status{% if database_health.online %} integration-status--connected{% else %} integration-status--unavailable{% endif %}"><i></i>{{ database_health.status }}</span></div>
+  <dl class="integration-overview-facts">
+    <div><dt>Engine</dt><dd>{{ active_database.engine }}</dd></div><div><dt>Banco</dt><dd>{{ active_database.name }}</dd></div>
+    <div><dt>Estado</dt><dd>{{ database_health.status }}</dd></div><div><dt>Lat&ecirc;ncia</dt><dd>{% if database_health.latency_ms != None %}{{ database_health.latency_ms }} ms{% else %}&mdash;{% endif %}</dd></div>
+    <div><dt>Pr&oacute;ximo in&iacute;cio</dt><dd>{{ next_boot_database.engine }} &middot; {{ next_boot_database.name }}</dd></div>
+  </dl>
+  {% if restart_required %}<p class="integration-note">O banco do pr&oacute;ximo in&iacute;cio foi alterado. Reinicie o servidor web e integration_worker para aplicar.</p>{% endif %}
+</section>
+
+<section class="integration-overview-panel">
+  <div class="integration-card-top"><h2>MySQL candidato</h2><span>{% if pending_database.engine %}{{ pending_database.host }}:{{ pending_database.port }} / {{ pending_database.database }}{% else %}N&atilde;o configurado{% endif %}</span></div>
+  {% if database_url_override %}<p class="integration-note">DATABASE_URL tem preced&ecirc;ncia e impede a ativa&ccedil;&atilde;o pelo arquivo local.</p>{% endif %}
+  <dl class="integration-overview-facts">
+    <div><dt>Conex&atilde;o</dt><dd>{% if migration_state.connection_tested %}OK{% else %}Pendente{% endif %}</dd></div>
+    <div><dt>Schema</dt><dd>{% if migration_state.schema_prepared %}Preparado{% else %}Pendente{% endif %}</dd></div>
+    <div><dt>Dados locais</dt><dd>{% if migration_state.data_copied %}Migrados{% else %}Pendentes{% endif %}</dd></div>
+    <div><dt>Valida&ccedil;&atilde;o</dt><dd>{% if migration_state.validated %}Aprovada{% else %}Pendente{% endif %}</dd></div>
+  </dl>
+  <form class="integration-form" method="post" action="{% url 'configuracoes:integracoes:arion-save' %}">
+    {% csrf_token %}
+    {% if database_form.non_field_errors %}<div class="integration-form-errors">{{ database_form.non_field_errors }}</div>{% endif %}
+    {% for field in database_form %}
+      <div class="integration-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label><div class="integration-control">{{ field }}{{ field.errors }}{% if field.name == "password" %}<small>{% if pending_database.password_configured %}Senha protegida com DPAPI. Vazio mant&eacute;m o segredo armazenado.{% else %}Ser&aacute; protegida com DPAPI e n&atilde;o ser&aacute; exibida novamente.{% endif %}</small>{% endif %}</div></div>
+    {% endfor %}
+    <div class="integration-form-actions">
+      <button class="integration-button" type="submit" formaction="{% url 'configuracoes:integracoes:arion-test' %}">Testar conex&atilde;o</button>
+      <button class="settings-button settings-button--primary" type="submit">Salvar candidato</button>
+    </div>
+  </form>
+</section>
+
+<section class="integration-overview-panel">
+  <div class="integration-card-top"><h2>Preparar e validar</h2><span>Etapas independentes</span></div>
+  {% if technical_error %}<details class="integration-note"><summary>Ver detalhes tecnicos</summary><p>Etapa: {{ technical_error.stage }}</p><pre>{{ technical_error.detail }}</pre></details>{% endif %}
+  <div class="integration-form-actions">
+    <form data-db-stage-form data-pending-label="Verificando..." method="post" action="{% url 'configuracoes:integracoes:arion-action' 'dry-run' %}">{% csrf_token %}<button class="integration-button" type="submit" {% if not pending_database.engine %}disabled{% endif %}>Dry run</button></form>
+    <form data-db-stage-form data-pending-label="Preparando schema..." method="post" action="{% url 'configuracoes:integracoes:arion-action' 'prepare' %}">{% csrf_token %}<button class="integration-button" type="submit" {% if not migration_state.connection_tested %}disabled{% endif %}>Preparar schema</button></form>
+    <form data-db-stage-form data-pending-label="Migrando dados..." method="post" action="{% url 'configuracoes:integracoes:arion-action' 'copy' %}">{% csrf_token %}<button class="integration-button" type="submit" {% if not migration_state.connection_tested or not migration_state.schema_prepared %}disabled{% endif %}>Migrar dados locais</button></form>
+    <form data-db-stage-form data-pending-label="Validando..." method="post" action="{% url 'configuracoes:integracoes:arion-action' 'validate' %}">{% csrf_token %}<button class="integration-button" type="submit" {% if not migration_state.schema_prepared or not migration_state.data_copied %}disabled{% endif %}>Validar migra&ccedil;&atilde;o</button></form>
+    <form data-db-stage-form data-pending-label="Ativando..." method="post" action="{% url 'configuracoes:integracoes:arion-action' 'activate' %}">{% csrf_token %}<button class="settings-button settings-button--primary" type="submit" {% if not migration_state.validated or database_url_override %}disabled{% endif %}>Ativar MySQL</button></form>
+    {% if rollback_available %}<form data-db-stage-form data-pending-label="Revertendo..." method="post" action="{% url 'configuracoes:integracoes:arion-action' 'rollback' %}">{% csrf_token %}<button class="integration-button" type="submit">Reverter para SQLite</button></form>{% endif %}
+  </div>
+  {% if migration_state.validated %}<p class="integration-note">MySQL preparado e validado. Ative-o para definir o pr&oacute;ximo in&iacute;cio.</p>{% endif %}
+  <p class="integration-note">OTRS &eacute; uma integra&ccedil;&atilde;o externa separada e permanece somente leitura. O Banco Arion &eacute; o banco operacional local.</p>
+</section>
 {% endblock %}

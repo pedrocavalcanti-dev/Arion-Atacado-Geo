@@ -30,7 +30,7 @@ class CMDBClient:
         "ConfigItemID", "Number", "Name", "Class", "CurDeplState",
         "CurDeplStateType", "CurInciState", "CurInciStateType", "VersionID", "LastVersionID", "CIXMLData",
     )
-    SENSITIVE_PARTS = ("password", "passwd", "pwd", "senha", "credential", "secret", "token", "auth", "cookie", "session", "apikey", "privatekey")
+    SENSITIVE_PARTS = ("password", "passwd", "pwd", "senha", "credential", "secret", "token", "auth", "cookie", "session", "apikey", "privatekey", "portalusername", "usuarioportal")
 
     def __init__(self, *, base_url, username, password, timeout=15, verify_tls=True, batch_size=50, opener=None):
         parsed = urlsplit((base_url or "").strip())

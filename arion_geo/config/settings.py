@@ -67,7 +67,12 @@ TEMPLATES = [{
 }]
 WSGI_APPLICATION = "config.wsgi.application"
 
-DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
+from aplicativos.integracoes.services.arion_database import django_database_settings
+
+DATABASES = {"default": django_database_settings(base_dir=BASE_DIR)}
+if DATABASES["default"]["ENGINE"] == "django.db.backends.mysql":
+    import pymysql
+    pymysql.install_as_MySQLdb()
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -116,6 +121,11 @@ LOGGING = {
         "config.errors": {
             "handlers": ["arion_error_console"],
             "level": "WARNING",
+            "propagate": False,
+        },
+        "aplicativos.integracoes.services.arion_database_migration": {
+            "handlers": ["arion_error_console"],
+            "level": "ERROR",
             "propagate": False,
         },
     },

@@ -3,6 +3,7 @@ import threading
 from datetime import timedelta
 
 from django.db import IntegrityError
+from django.db.utils import OperationalError
 from django.utils import timezone
 
 from aplicativos.integracoes.models import IntegrationLease
@@ -48,5 +49,10 @@ class Lease:
 
     def _heartbeat_loop(self, stop):
         while not stop.wait(20):
-            if not self.heartbeat():
-                return
+            try:
+                if not self.heartbeat():
+                    return
+            except OperationalError:
+                # SQLite may reject the lease write while the local mirror commits.
+                # Retry on the normal interval; the lease timeout remains unchanged.
+                continue

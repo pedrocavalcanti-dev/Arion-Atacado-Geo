@@ -132,7 +132,6 @@ class CMDBOperatorMirror(models.Model):
     opening_email = models.CharField(max_length=300, blank=True)
     followup_email = models.CharField(max_length=300, blank=True)
     portal_url = models.CharField(max_length=500, blank=True)
-    portal_username = models.CharField(max_length=300, blank=True)
     escalation_1 = models.CharField(max_length=500, blank=True)
     escalation_2 = models.CharField(max_length=500, blank=True)
     escalation_3 = models.CharField(max_length=500, blank=True)
@@ -178,6 +177,13 @@ class CMDBLinkMirror(models.Model):
     source_config_item_id = models.CharField(max_length=40, unique=True)
     source_number = models.CharField(max_length=40, unique=True, null=True, blank=True)
     name = models.CharField(max_length=500, blank=True)
+    contracting_client_raw = models.CharField(max_length=300, blank=True, db_index=True)
+    contracting_client = models.CharField(max_length=300, blank=True, db_index=True)
+    business_project = models.CharField(max_length=300, blank=True, db_index=True)
+    business_account = models.CharField(max_length=300, blank=True)
+    business_id = models.CharField(max_length=80, blank=True)
+    business_identity_confidence = models.CharField(max_length=16, blank=True, default="UNCLASSIFIED")
+    business_identity_source = models.CharField(max_length=32, blank=True, default="CMDB_NAME_ORIGINAL")
     city = models.CharField(max_length=200, blank=True)
     state = models.CharField(max_length=100, blank=True)
     address = models.CharField(max_length=500, blank=True)
@@ -232,6 +238,7 @@ class OTRSStateMapping(models.Model):
     class BusinessStatus(models.TextChoices):
         OPEN = "OPEN", "Aberto"
         PENDING = "PENDING", "Pendente"
+        SCHEDULED = "SCHEDULED", "Agendado"
         RESOLVED = "RESOLVED", "Resolvido"
         CLOSED = "CLOSED", "Fechado"
         CANCELED = "CANCELED", "Cancelado"
@@ -282,6 +289,12 @@ class OTRSTicket(models.Model):
     escalation_solution_time = models.BigIntegerField(null=True, blank=True)
     source_created_at = models.DateTimeField(null=True, blank=True, db_index=True)
     source_changed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    closing_code_raw = models.CharField(max_length=250, blank=True, db_index=True)
+    responsibility_raw = models.CharField(max_length=120, blank=True, db_index=True)
+    responsibility_normalized = models.CharField(max_length=20, default="INDETERMINADO", db_index=True)
+    resolved_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    terminal_state_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    canceled_at = models.DateTimeField(null=True, blank=True, db_index=True)
     source_last_seen_at = models.DateTimeField(null=True, blank=True, db_index=True)
     source_synced_at = models.DateTimeField(null=True, blank=True)
     is_present_in_queue = models.BooleanField(default=True, db_index=True)

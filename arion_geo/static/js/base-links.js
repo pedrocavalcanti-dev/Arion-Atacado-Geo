@@ -2,84 +2,64 @@
   const drawer = document.querySelector("[data-link-drawer]");
   const backdrop = document.querySelector("[data-drawer-backdrop]");
   const content = document.querySelector("[data-drawer-content]");
-  const escape = value => String(value ?? "").replace(/[&<>\"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
-  const value = (label, text, empty = "Não informado", wide = false) => `<div${wide ? ' class="wide"' : ""}><span>${escape(label)}</span><b>${escape(text || empty)}</b></div>`;
-  const resolutionLabel = method => ({ CONFIG_ITEM_ID: "ConfigItemID", NAME: "Nome", UNRESOLVED: "Não resolvida", EMPTY: "Sem valor na origem" }[method] || method || "Não informado");
-
-  function closeDrawer() {
-    if (!drawer) return;
-    drawer.classList.remove("is-open");
-    drawer.setAttribute("aria-hidden", "true");
-    drawer.inert = true;
-    backdrop.hidden = true;
+  if (!drawer || !content) return;
+  const esc = value => String(value ?? "").replace(/[&<>\"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const dateLabel = value => { if (!value) return "Data não informada"; const date = new Date(value); return Number.isNaN(date.valueOf()) ? String(value) : new Intl.DateTimeFormat("pt-BR", {dateStyle:"short",timeStyle:"short",timeZone:"America/Sao_Paulo"}).format(date); };
+  const statusLabel = value => ({OPEN:"Aberto",PENDING:"Pendente",SCHEDULED:"Agendado",RESOLVED:"Resolvido",CLOSED:"Encerrado"}[value] || value || "Não informado");
+  const val = (label, text, empty = "Não informado") => `<div><span>${esc(label)}</span><b>${esc(text || empty)}</b></div>`;
+  const section = (title, fields) => `<section class="drawer-section"><h3>${esc(title)}</h3><div class="drawer-fields">${fields}</div></section>`;
+  let drawerContext = null;
+  let lastPayload = null;
+  function openShell() { drawer.classList.add("is-open"); drawer.setAttribute("aria-hidden", "false"); drawer.inert = false; backdrop.hidden = false; }
+  function close() { drawer.classList.remove("is-open"); drawer.setAttribute("aria-hidden", "true"); drawer.inert = true; backdrop.hidden = true; drawerContext = null; }
+  function linkActions(link) {
+    const ranking = link.provider_id ? `/rankings/?provider=${encodeURIComponent(link.provider_id)}` : "/rankings/";
+    const cockpit = `/cockpit/?provider=${encodeURIComponent(link.provider || "")}&uf=${encodeURIComponent(link.uf || "")}`;
+    return `<footer class="drawer-actions"><a class="links-secondary-button" href="${cockpit}">Analisar no Cockpit</a><a class="links-secondary-button" href="${ranking}">Ver Provider no Ranking</a></footer>`;
   }
-
-  function section(title, fields) {
-    return `<section class="drawer-section"><h3>${escape(title)}</h3><div class="drawer-fields">${fields}</div></section>`;
+  function historyHtml(h) {
+    const bars = Object.entries(h.monthly || {}).slice(-6).map(([month, count]) => `<div><span>${esc(month.slice(5))}</span><b>${count}</b></div>`).join("");
+    const rows = (h.tickets || []).map(t => `<article><button type="button" class="ticket-number" data-ticket="${esc(JSON.stringify(t))}">#${esc(t.number)}</button><span>${esc(dateLabel(t.created_at))} · ${esc(statusLabel(t.status))}</span><p>${esc([t.client,t.project].filter(Boolean).join(" / ") || "Cliente / Projeto não identificados")}</p><p>${esc(t.closing_reason || t.title || "Sem motivo informado")}</p>${t.duration_hours !== null && t.duration_hours !== undefined ? `<small>Tempo: ${esc(t.duration_hours)}h</small>` : ""}${t.responsibility && t.responsibility !== "INDETERMINADO" ? `<small>${esc(t.responsibility === "PROCEDENTE" ? "Procedente" : "Improcedente")}</small>` : ""}${t.over_24h ? `<em>ARION &gt;24h</em>` : ""}</article>`).join("");
+    return `<section class="drawer-section"><header class="history-heading"><h3>Histórico operacional</h3><select data-history-period aria-label="Período do histórico"><option value="30" ${h.period_days===30?"selected":""}>30 dias</option><option value="90" ${h.period_days===90?"selected":""}>90 dias</option><option value="365" ${h.period_days===365?"selected":""}>12 meses</option></select></header><div class="history-kpis"><div><b>${h.tickets_period}</b><span>Chamados</span></div><div><b>${h.recurrent}</b><span>Reincidência</span></div><div><b>${h.backlog}</b><span>Backlog</span></div><div><b>${h.over_24h}</b><span>&gt;24h</span></div></div>${bars ? `<div class="history-months" aria-label="Chamados por mês">${bars}</div>` : ""}<h4>Últimos chamados</h4><div class="history-tickets">${rows || '<p class="drawer-loading">Nenhum chamado no histórico deste link.</p>'}</div>${h.pages>h.page?`<button class="history-more" type="button" data-history-more="${h.page+1}">Ver histórico completo (${h.total})</button>`:""}</section>`;
   }
-
   function renderLink(link) {
     const incident = link.incident_state || "Não informado";
-    content.innerHTML = `<header class="drawer-heading">
-        <h2>${escape(link.designation_arion || "Não informado")}</h2>
-        <p>Number ${escape(link.config_item_number || "Não informado")} · ConfigItemID ${escape(link.config_item_id)} · Versão ${escape(link.version || "Não informado")}</p>
-        <div class="drawer-statuses"><span class="state-badge">Implantação: ${escape(link.deployment_state || "Não informado")}</span><span class="incident-badge${incident.toLowerCase() === "incident" ? " is-incident" : ""}">Incidente: ${escape(incident)}</span></div>
-      </header>
-      ${section("Relacionamento", value("Projeto legado", link.project_legacy, "Não classificado") + value("Operadora contratada", link.operadora, "Não classificada") + value("Provedor", link.provider, "Não classificado") + value("Number CMDB do provedor", link.provider_cmdb_number) + value("ConfigItemID do provedor", link.provider_cmdb_config_item_id, "Não classificado") + value("ISP original", link.isp_raw) + value("Método de resolução", resolutionLabel(link.provider_resolution_method)))}
-      ${section("Localização", value("Endereço", link.address, "Não informado", true) + value("Cidade", link.city) + value("UF", link.uf))}
-      ${section("Dados do Link", value("Circuito", link.circuit) + value("Tipo", link.link_type) + value("Velocidade", link.speed_raw) + value("Range IP", link.range_ip, "Não informado", true) + value("Equipamento", link.equipment) + value("MAC Address", link.mac_address) + value("Identificação", link.client_identification) + value("Número do contrato", link.contract_number) + value("CNPJ", link.cnpj_arion) + value("Nome original", link.name, "Não informado", true))}
-      ${section("Dados CMDB", value("ConfigItemID do Link", link.config_item_id) + value("Number do Link", link.config_item_number) + value("DefinitionID", link.definition_id) + value("VersionID", link.version) + value("LastVersionID", link.last_version) + value("Último sync", link.synced_at))}
-      ${link.notes ? section("Observação CMDB", value("Observação", link.notes, "Não informado", true)) : ""}`;
+    const backProvider = drawerContext?.provider ? `<button class="drawer-back" type="button" data-return-provider="${esc(drawerContext.provider)}">← Voltar ao Provedor</button>` : "";
+    const latest = link.history?.tickets?.[0];
+    const latestHtml = latest ? `<p class="history-last"><strong>Último chamado</strong> · ${esc(dateLabel(latest.created_at))} · ${esc(statusLabel(latest.status))}${latest.closing_reason ? ` · ${esc(latest.closing_reason)}` : ""}</p>` : "";
+    content.innerHTML = `${backProvider}<header class="drawer-heading"><h2>${esc(link.designation_arion || "Não informado")}</h2><p>Number ${esc(link.config_item_number)} · ConfigItemID ${esc(link.config_item_id)} · Versão ${esc(link.version)}</p><div class="drawer-statuses"><span class="state-badge">Implantação: ${esc(link.deployment_state || "Não informado")}</span><span class="incident-badge">Incidente: ${esc(incident)}</span></div></header>
+      ${section("Relacionamento", val("Cliente", link.cliente) + val("Projeto", link.projeto) + val("Provedor / ISP", link.provider) + val("Number CMDB do provedor", link.provider_cmdb_number) + val("ConfigItemID do provedor", link.provider_cmdb_config_item_id) + val("ISP original", link.isp_raw) + val("Método de resolução", link.provider_resolution_method))}
+      ${section("Localização", val("Endereço", link.address) + val("Cidade", link.city) + val("UF", link.uf))}
+      ${section("Dados do Link", val("Circuito", link.circuit) + val("Tipo", link.link_type) + val("Velocidade", link.speed_raw) + val("Range IP", link.range_ip) + val("Equipamento", link.equipment) + val("MAC Address", link.mac_address) + val("Identificação", link.client_identification) + val("Número do contrato", link.contract_number) + val("CNPJ", link.cnpj_arion) + val("Nome original", link.name))}
+      ${section("Dados CMDB", val("ConfigItemID", link.config_item_id) + val("Number", link.config_item_number) + val("DefinitionID", link.definition_id) + val("VersionID", link.version) + val("Último sync", link.synced_at))}${link.notes ? section("Observação CMDB", val("Observação", link.notes)) : ""}${latestHtml}${historyHtml(link.history)}${linkActions(link)}`;
+    content.querySelector("[data-return-provider]")?.addEventListener("click",e=>openProvider(e.currentTarget.dataset.returnProvider));
+    content.querySelector("[data-history-period]")?.addEventListener("change", e => openLink(drawerContext.id, {period:e.target.value}));
+    content.querySelector("[data-history-more]")?.addEventListener("click", e => openLink(drawerContext.id, {period:link.history.period_days, history_page:e.target.dataset.historyMore}));
+    content.querySelectorAll("[data-ticket]").forEach(button => button.addEventListener("click", () => showTicket(JSON.parse(button.dataset.ticket))));
   }
-
-  async function openDrawer(id) {
-    if (!drawer) return;
-    drawer.classList.add("is-open");
-    drawer.setAttribute("aria-hidden", "false");
-    drawer.inert = false;
-    backdrop.hidden = false;
-    content.innerHTML = '<p class="drawer-loading">Carregando detalhes…</p>';
-    try {
-      const response = await fetch(`/base/api/${encodeURIComponent(id)}/`, { headers: { "X-Requested-With": "XMLHttpRequest" } });
-      if (!response.ok) throw new Error("Não foi possível carregar os detalhes do Link.");
-      renderLink(await response.json());
-    } catch (error) {
-      content.innerHTML = `<p class="drawer-loading">${escape(error.message)}</p>`;
-    }
+  function renderProvider(provider) {
+    const links = provider.links.map(link => `<tr data-link-id="${link.id}" class="provider-link-row" tabindex="0"><td>${esc(link.designation)}</td><td>${esc(link.client)}</td><td>${esc(link.project)}</td><td>${esc([link.city,link.state].filter(Boolean).join(" / "))}</td><td>${esc(link.speed)}</td><td>${esc(link.deployment_state)}</td><td>${esc(link.incident_state)}</td></tr>`).join("");
+    const contacts = [
+      val("Telefone", provider.phone), val("WhatsApp", provider.whatsapp), val("Horário de atendimento", provider.service_hours),
+      `<div><span>E-mail abertura</span><b>${provider.opening_email ? `<a href="mailto:${esc(provider.opening_email)}">${esc(provider.opening_email)}</a>` : "Não informado"}</b></div>`,
+      `<div><span>E-mail acompanhamento</span><b>${provider.followup_email ? `<a href="mailto:${esc(provider.followup_email)}">${esc(provider.followup_email)}</a>` : "Não informado"}</b></div>`,
+      `<div><span>Portal</span><b>${provider.portal_url ? `<a href="${esc(provider.portal_url)}" target="_blank" rel="noopener noreferrer">Abrir portal</a>` : "Não informado"}</b></div>`,
+      val("CNPJ", provider.cnpj), val("Categoria", provider.category), val("ConfigItemID", provider.config_item_id), val("Number CMDB", provider.number)
+    ].join("");
+    content.innerHTML = `<header class="drawer-heading"><h2>${esc(provider.name)}</h2><p>Provedor / ISP · ConfigItemID ${esc(provider.config_item_id)} · Number ${esc(provider.number)}</p><div class="drawer-statuses"><span class="state-badge">Implantação: ${esc(provider.deployment_state)}</span><span class="incident-badge">Incidente: ${esc(provider.incident_state)}</span><span class="state-badge">${provider.link_count} links associados</span></div></header>
+      <div class="history-kpis"><div><b>${provider.link_count}</b><span>Links</span></div><div><b>${provider.operational_links}</b><span>Operacionais</span></div><div><b>${provider.incident_links}</b><span>Com incidente</span></div><div><b>${provider.tickets_30d}</b><span>Chamados · 30d</span></div><div><b>${provider.backlog}</b><span>Backlog</span></div><div><b>${provider.recurrent_links}</b><span>Links reincidentes</span></div><div><b>${provider.over_24h}</b><span>ARION &gt;24h</span></div></div>
+      ${section("Contato operacional", contacts)}${section("Atualização da origem", val("Último sync local", provider.last_sync))}<section class="drawer-section"><h3>Links associados · primeiros ${provider.links.length}</h3><div class="provider-links-scroll"><table class="provider-links-table"><thead><tr><th>Designação</th><th>Cliente</th><th>Projeto</th><th>Cidade / UF</th><th>Velocidade</th><th>Implantação</th><th>Incidente</th></tr></thead><tbody>${links || ""}</tbody></table></div>${provider.links_truncated?"<p>Exibindo os primeiros 20 links.</p>":""}<a class="links-secondary-button" href="${provider.links_url}">Ver todos os links deste Provedor</a></section><footer class="drawer-actions"><a class="links-secondary-button" href="${provider.links_url}">Ver todos os Links</a><a class="links-secondary-button" href="${provider.ranking_url}">Abrir no Ranking</a></footer>`;
+    content.querySelectorAll("[data-link-id]").forEach(row => { const open=()=>openLink(row.dataset.linkId,{}, {provider:provider.id}); row.addEventListener("click",open); row.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();open();}}); });
   }
-
-  document.querySelectorAll("[data-link-id]").forEach(row => {
-    row.addEventListener("click", () => openDrawer(row.dataset.linkId));
-    row.addEventListener("keydown", event => {
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openDrawer(row.dataset.linkId); }
-    });
-  });
-  document.querySelector("[data-drawer-close]")?.addEventListener("click", closeDrawer);
-  backdrop?.addEventListener("click", closeDrawer);
-  document.addEventListener("keydown", event => { if (event.key === "Escape") closeDrawer(); });
-
-  document.querySelectorAll("[data-sort-key], [data-page-number]").forEach(link => {
-    link.addEventListener("click", event => {
-      event.preventDefault();
-      const url = new URL(window.location.href);
-      if (link.dataset.sortKey) url.searchParams.set("sort", link.dataset.sortKey);
-      if (link.dataset.pageNumber) url.searchParams.set("page", link.dataset.pageNumber);
-      window.location.href = url;
-    });
-  });
-  document.querySelector("[data-page-size]")?.addEventListener("change", event => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("page_size", event.target.value);
-    url.searchParams.delete("page");
-    window.location.href = url;
-  });
-  const clearSearch = document.querySelector("[data-clear-search]");
-  const searchInput = clearSearch?.previousElementSibling;
-  searchInput?.addEventListener("input", () => { clearSearch.hidden = !searchInput.value; });
-  clearSearch?.addEventListener("click", () => {
-    if (!searchInput) return;
-    searchInput.value = "";
-    clearSearch.hidden = true;
-    searchInput.form?.requestSubmit();
-  });
+  async function fetchJson(url) { const response=await fetch(url,{headers:{"X-Requested-With":"XMLHttpRequest"}}); if(!response.ok) throw new Error("Não foi possível carregar os detalhes."); return response.json(); }
+  async function openLink(id, params={}, context=null) { drawerContext={type:"link",id,...(context||{})}; openShell(); content.innerHTML='<p class="drawer-loading">Carregando detalhes do link…</p>'; const url=new URL(`/base/api/${encodeURIComponent(id)}/`,location.origin); Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v)); try { lastPayload=await fetchJson(url); renderLink(lastPayload); } catch { content.innerHTML='<p class="drawer-error">Não foi possível carregar os detalhes. <button type="button" data-retry> Tentar novamente</button></p>'; content.querySelector("[data-retry]")?.addEventListener("click",()=>openLink(id,params,context)); } }
+  async function openProvider(id) { drawerContext={type:"provider",id}; openShell(); content.innerHTML='<p class="drawer-loading">Carregando detalhes do provedor…</p>'; try { const p=await fetchJson(`/base/api/provedor/${encodeURIComponent(id)}/`); renderProvider(p); } catch { content.innerHTML='<p class="drawer-error">Não foi possível carregar os detalhes. <button type="button" data-retry>Tentar novamente</button></p>'; content.querySelector("[data-retry]")?.addEventListener("click",()=>openProvider(id)); } }
+  function showTicket(ticket) { let dialog=document.querySelector("[data-base-ticket-dialog]"); if(!dialog){dialog=document.createElement("dialog");dialog.className="base-ticket-dialog";dialog.dataset.baseTicketDialog="";document.body.append(dialog);dialog.addEventListener("click",e=>{if(e.target===dialog)dialog.close();});} dialog.innerHTML=`<header><div><small>OTRS · NOC ATACADO</small><h2>#${esc(ticket.number)}</h2></div><button type="button" aria-label="Fechar">×</button></header><section>${val("Data de criação",dateLabel(ticket.created_at))}${val("Estado",statusLabel(ticket.status))}${val("Cliente",ticket.client)}${val("Projeto",ticket.project)}${val("Motivo",ticket.closing_reason||ticket.title)}${val("Tempo",ticket.duration_hours === null ? "" : `${ticket.duration_hours}h`)}${val("Responsabilidade",ticket.responsibility === "PROCEDENTE" ? "Procedente" : ticket.responsibility === "IMPROCEDENTE" ? "Improcedente" : "Não informado")}</section>`;dialog.querySelector("button").addEventListener("click",()=>dialog.close());dialog.showModal(); }
+  document.querySelectorAll("[data-link-id]").forEach(row=>{row.addEventListener("click",()=>openLink(row.dataset.linkId));row.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openLink(row.dataset.linkId);}});});
+  document.querySelectorAll("[data-provider-id]").forEach(row=>{row.addEventListener("click",()=>openProvider(row.dataset.providerId));row.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openProvider(row.dataset.providerId);}});});
+  document.querySelector("[data-drawer-close]")?.addEventListener("click",close); backdrop?.addEventListener("click",close); document.addEventListener("keydown",e=>{if(e.key==="Escape")close();});
+  document.querySelectorAll("[data-sort-key], [data-page-number]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();const url=new URL(location.href);if(a.dataset.sortKey)url.searchParams.set("sort",a.dataset.sortKey);if(a.dataset.pageNumber)url.searchParams.set("page",a.dataset.pageNumber);location.href=url;}));
+  document.querySelector("[data-page-size]")?.addEventListener("change",e=>{const u=new URL(location.href);u.searchParams.set("page_size",e.target.value);u.searchParams.delete("page");location.href=u;});
+  const clear=document.querySelector("[data-clear-search]"), search=clear?.previousElementSibling; search?.addEventListener("input",()=>clear.hidden=!search.value); clear?.addEventListener("click",()=>{search.value="";clear.hidden=true;search.form?.requestSubmit();});
+  const directProvider=new URL(location.href).searchParams.get("provider_id"); if(directProvider && new URL(location.href).searchParams.get("view")==="providers") openProvider(directProvider);
 })();

@@ -3,6 +3,7 @@ from collections import Counter
 import logging
 import re
 import time
+import unicodedata
 
 from django.db import transaction
 from django.utils import timezone
@@ -18,12 +19,25 @@ IDENTIFIER = re.compile(r"^[A-Za-z0-9_$]+$")
 BUSINESS_STATES = {
     "em atendimento": OTRSStateMapping.BusinessStatus.OPEN,
     "pendente": OTRSStateMapping.BusinessStatus.PENDING,
+    "agendado": OTRSStateMapping.BusinessStatus.SCHEDULED,
     "resolvido": OTRSStateMapping.BusinessStatus.RESOLVED,
     "closed successful": OTRSStateMapping.BusinessStatus.CLOSED,
     "encerrado com viabilidade": OTRSStateMapping.BusinessStatus.CLOSED,
     "cancelado": OTRSStateMapping.BusinessStatus.CANCELED,
 }
-OPEN_STATUSES = {OTRSStateMapping.BusinessStatus.OPEN, OTRSStateMapping.BusinessStatus.PENDING}
+OPEN_STATUSES = {OTRSStateMapping.BusinessStatus.OPEN, OTRSStateMapping.BusinessStatus.PENDING, OTRSStateMapping.BusinessStatus.SCHEDULED}
+
+
+def normalize_responsibility(value):
+    normalized = "".join(
+        character for character in unicodedata.normalize("NFKD", str(value or "").casefold())
+        if not unicodedata.combining(character)
+    ).strip()
+    if normalized == "procedente":
+        return "PROCEDENTE"
+    if normalized == "improcedente":
+        return "IMPROCEDENTE"
+    return "INDETERMINADO"
 
 
 def _val(row, key, default=None):
@@ -55,7 +69,7 @@ class OTRSSyncService:
             table = str(_val(row, "TABLE_NAME") or "")
             column = str(_val(row, "COLUMN_NAME") or "")
             self.columns.setdefault(table.casefold(), set()).add(column)
-        required = (self.TICKET_TABLE, self.QUEUE_TABLE, "ticket_state", "ticket_state_type", "ticket_priority", "ticket_type", "service", "sla", self.RELATION_TABLE, "link_object", "link_type", "link_state")
+        required = (self.TICKET_TABLE, self.QUEUE_TABLE, "ticket_state", "ticket_state_type", "ticket_priority", "ticket_type", "service", "sla", self.RELATION_TABLE, "link_object", "link_type", "link_state", "dynamic_field", "dynamic_field_value", "ticket_history", "ticket_history_type")
         missing = [name for name in required if name.casefold() not in self.columns]
         if missing:
             raise ValueError("Schema OTRS incompleto para sync: " + ", ".join(missing))
@@ -260,6 +274,112 @@ class OTRSSyncService:
             logger.warning("OTRS sync: %s", warning)
         return normalized, mappings, statuses, sorted(set(warnings))
 
+    def _ticket_terminal_fields(self, ticket_rows, dimensions):
+        """Load approved closing fields and an optional ticket validation field in batches."""
+        ticket_ids = [_number(_val(row, "id")) for row in ticket_rows]
+        if not ticket_ids:
+            return {}, {"closing_code_filled": 0, "resolved_at_filled": 0, "terminal_at_filled": 0}
+        dynamic_fields = self._select(
+            "dynamic_field", (("id", "id"), ("name", "name"), ("field_type", "field_type"), ("object_type", "object_type")),
+            where=f"{self._column('dynamic_field', 'name', required=True)} IN (%s, %s, %s)",
+            params=("CodigoFechamento", "ticketResolvido", "RvalidacaoProcedenteImprocedente"),
+        )
+        definitions = {clean(_val(row, "name")): row for row in dynamic_fields}
+        required_fields = {"CodigoFechamento", "ticketResolvido"}
+        if not required_fields.issubset(definitions) or any(clean(_val(definitions[name], "object_type")) != "Ticket" for name in required_fields):
+            raise ValueError("Dynamic Fields de fechamento do tipo Ticket não foram encontrados.")
+        responsibility_definition = definitions.get("RvalidacaoProcedenteImprocedente")
+        if responsibility_definition and (
+            clean(_val(responsibility_definition, "object_type")) != "Ticket"
+            or clean(_val(responsibility_definition, "field_type")).casefold() != "dropdown"
+        ):
+            responsibility_definition = None
+        field_ids = {name: _number(_val(definitions[name], "id")) for name in required_fields}
+        if responsibility_definition:
+            field_ids["RvalidacaoProcedenteImprocedente"] = _number(_val(responsibility_definition, "id"))
+        if any(value is None for value in field_ids.values()):
+            raise ValueError("IDs dos Dynamic Fields de fechamento inválidos.")
+        source_states = {
+            _number(_val(row, "id")): self._state_status(clean(_val(row, "name")))
+            for row in dimensions["states"]
+        }
+        terminal_state_ids = {
+            _number(_val(row, "id")) for row in dimensions["states"]
+            if self._state_status(clean(_val(row, "name"))) in {
+                OTRSStateMapping.BusinessStatus.RESOLVED,
+                OTRSStateMapping.BusinessStatus.CLOSED,
+                OTRSStateMapping.BusinessStatus.CANCELED,
+            }
+        }
+        current_state_by_id = {
+            _number(_val(row, "id")): _number(_val(row, "state_id")) for row in ticket_rows
+        }
+        result = {ticket_id: {"closing_code_raw": "", "responsibility_raw": "", "responsibility_normalized": "INDETERMINADO",
+                              "resolved_at": None, "terminal_state_at": None, "canceled_at": None}
+                  for ticket_id in ticket_ids if ticket_id is not None}
+        object_id = self._column("dynamic_field_value", "object_id", required=True)
+        field_id = self._column("dynamic_field_value", "field_id", required=True)
+        value_text = self._column("dynamic_field_value", "value_text", required=True)
+        value_date = self._column("dynamic_field_value", "value_date", required=True)
+        for offset in range(0, len(ticket_ids), 400):
+            batch = ticket_ids[offset:offset + 400]
+            marks = ",".join(["%s"] * len(batch))
+            field_marks = ", ".join(["%s"] * len(field_ids))
+            sql = (f"SELECT {object_id} AS `object_id`, {field_id} AS `field_id`, "
+                   f"{value_text} AS `value_text`, {value_date} AS `value_date` "
+                   f"FROM {self._table('dynamic_field_value')} WHERE {field_id} IN ({field_marks}) "
+                   f"AND {object_id} IN ({marks})")
+            ordered_field_ids = list(field_ids.values())
+            for row in self.client.execute_select(sql, (*ordered_field_ids, *batch)):
+                target = result.get(_number(_val(row, "object_id")))
+                if not target:
+                    continue
+                source_field = _number(_val(row, "field_id"))
+                if source_field == field_ids["CodigoFechamento"]:
+                    target["closing_code_raw"] = clean(_val(row, "value_text"), 250)
+                elif source_field == field_ids["ticketResolvido"]:
+                    target["resolved_at"] = source_datetime(_val(row, "value_date"))
+                elif field_ids.get("RvalidacaoProcedenteImprocedente") == source_field:
+                    target["responsibility_raw"] = clean(_val(row, "value_text"), 120)
+                    target["responsibility_normalized"] = normalize_responsibility(target["responsibility_raw"])
+
+        current_terminal = {ticket_id: state_id for ticket_id, state_id in current_state_by_id.items()
+                            if state_id in terminal_state_ids}
+        if current_terminal:
+            history_type = self._column("ticket_history", "history_type_id", required=True)
+            history_ticket = self._column("ticket_history", "ticket_id", required=True)
+            history_state = self._column("ticket_history", "state_id", required=True)
+            history_time = self._column("ticket_history", "create_time", required=True)
+            type_id_rows = self._select("ticket_history_type", (("id", "id"), ("name", "name")),
+                                        where=f"{self._column('ticket_history_type', 'name', required=True)} = %s", params=("StateUpdate",))
+            if len(type_id_rows) != 1:
+                raise ValueError("Tipo de histórico StateUpdate não foi encontrado de forma única.")
+            state_ids = sorted(terminal_state_ids)
+            state_marks = ",".join(["%s"] * len(state_ids))
+            for offset in range(0, len(ticket_ids), 400):
+                batch = ticket_ids[offset:offset + 400]
+                marks = ",".join(["%s"] * len(batch))
+                sql = (f"SELECT {history_ticket} AS `ticket_id`, {history_state} AS `state_id`, MAX({history_time}) AS `terminal_at` "
+                       f"FROM {self._table('ticket_history')} WHERE {history_type} = %s "
+                       f"AND {history_state} IN ({state_marks}) AND {history_ticket} IN ({marks}) "
+                       f"GROUP BY {history_ticket}, {history_state}")
+                params = (_number(_val(type_id_rows[0], "id")), *state_ids, *batch)
+                for row in self.client.execute_select(sql, params):
+                    ticket_id = _number(_val(row, "ticket_id"))
+                    state_id = _number(_val(row, "state_id"))
+                    terminal_at = source_datetime(_val(row, "terminal_at"))
+                    target = result.get(ticket_id)
+                    if target and current_terminal.get(ticket_id) == state_id and terminal_at:
+                        target["terminal_state_at"] = terminal_at
+                        if source_states.get(state_id) == OTRSStateMapping.BusinessStatus.CANCELED:
+                            target["canceled_at"] = terminal_at
+        return result, {
+            "closing_code_filled": sum(bool(row["closing_code_raw"]) for row in result.values()),
+            "responsibility_filled": sum(bool(row["responsibility_raw"]) for row in result.values()),
+            "resolved_at_filled": sum(row["resolved_at"] is not None for row in result.values()),
+            "terminal_at_filled": sum(row["terminal_state_at"] is not None for row in result.values()),
+        }
+
     @staticmethod
     def _upsert_dimension(model, rows, *, apply):
         existing = {obj.external_state_id: obj for obj in model.objects.all()}
@@ -286,12 +406,12 @@ class OTRSSyncService:
 
     @staticmethod
     def _upsert_tickets(rows, *, now, apply, reconcile=True):
-        existing = {obj.external_id: obj for obj in OTRSTicket.objects.all()}
+        source_ids = {row["external_id"] for row in rows}
+        existing_qs = OTRSTicket.objects.all() if reconcile else OTRSTicket.objects.filter(external_id__in=source_ids)
+        existing = {obj.external_id: obj for obj in existing_qs}
         fields = tuple(rows[0].keys()) if rows else ()
         create, update, created, updated, unchanged = [], [], 0, 0, 0
-        source_ids = set()
         for row in rows:
-            source_ids.add(row["external_id"])
             values = {**row, "source_last_seen_at": now, "source_synced_at": now, "is_present_in_queue": row.get("is_present_in_queue", True)}
             current = existing.get(row["external_id"])
             if current is None:
@@ -317,7 +437,8 @@ class OTRSSyncService:
     @staticmethod
     def _upsert_relations(relations, *, ticket_map, now, apply, affected_ticket_ids=None):
         tickets_by_external = {ticket.external_id: ticket for ticket in ticket_map.values()}
-        links_by_ci = CMDBLinkMirror.objects.in_bulk(field_name="source_config_item_id")
+        config_item_ids = {relation["config_item_id"] for relation in relations}
+        links_by_ci = CMDBLinkMirror.objects.filter(source_config_item_id__in=config_item_ids).in_bulk(field_name="source_config_item_id")
         existing = {
             (row.ticket_id, row.config_item_id, row.relation_type): row
             for row in OTRSTicketConfigItem.objects.filter(is_present_in_source=True).filter(
@@ -387,6 +508,9 @@ class OTRSSyncService:
         ticket_source_rows = self._tickets(queue_id, changed_since=changed_since, known_ids=known_ids)
         self.progress(f"[OTRS] Tickets atuais encontrados: {len(ticket_source_rows)}.")
         tickets, state_mappings, status_counts, warnings = self._normalize_tickets(ticket_source_rows, queue_id, resolved_queue, dimensions, state_type_map, now)
+        ticket_terminal_fields, terminal_field_counts = self._ticket_terminal_fields(ticket_source_rows, dimensions)
+        for ticket in tickets:
+            ticket.update(ticket_terminal_fields.get(ticket["external_id"], {}))
         objects = self._object_ids()
         relation_type_id = self._relation_ids("link_type", {"DependsOn"})
         relation_state_id = self._relation_ids("link_state", {"Valid"})
@@ -394,7 +518,8 @@ class OTRSSyncService:
         self.progress(f"[OTRS] Relações válidas ticket–ConfigItem: {len(relation_rows)}.")
         ticket_ci_counts = Counter(row["ticket_id"] for row in relation_rows)
         ci_ticket_counts = Counter(row["config_item_id"] for row in relation_rows)
-        local_ci_ids = set(CMDBLinkMirror.objects.values_list("source_config_item_id", flat=True))
+        relation_ci_ids = {row["config_item_id"] for row in relation_rows}
+        local_ci_ids = set(CMDBLinkMirror.objects.filter(source_config_item_id__in=relation_ci_ids).values_list("source_config_item_id", flat=True))
         relation_stats = {
             "tickets_with_ci": len(ticket_ci_counts),
             "tickets_without_ci": max(0, len(tickets) - len(ticket_ci_counts)),
@@ -433,9 +558,16 @@ class OTRSSyncService:
         result = {
             "status": "APPLIED" if apply else "DRY_RUN", "queue": {"name": resolved_queue, "id": queue_id},
             "tickets": ticket_counts_summary, "relations": relation_counts_summary, "state_mappings": mapping_counts,
+            "ticket_terminal_fields": terminal_field_counts,
             "relation_stats": relation_stats,
-            "business_status": status_counts, "business_open": status_counts["OPEN"] + status_counts["PENDING"],
-            "cursor": max((item["source_changed_at"] for item in tickets if item.get("source_changed_at")), default=None),
+            "business_status": status_counts, "business_open": sum(status_counts[key] for key in OPEN_STATUSES),
+            # Advance the watermark to this successful read's start time, even when the delta is empty.
+            # The command persists it only after the local transaction commits; FAST reapplies its
+            # safety window on the next query, so delayed/second-precision changes remain covered.
+            "cursor": max(
+                now,
+                max((item["source_changed_at"] for item in tickets if item.get("source_changed_at")), default=now),
+            ),
             "warnings": warnings, "performance": {"duration_ms": int((time.perf_counter() - started) * 1000), "select_queries": getattr(self.client, "select_queries_count", queries_before) - queries_before, "ticket_query_rows": len(ticket_source_rows), "relation_rows": len(relation_rows), "relation_batches": (len(ticket_source_rows) + 399) // 400},
         }
         return result

@@ -5,9 +5,16 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from aplicativos.integracoes.services.errors import (
+    IntegrationError,
     IntegrationNotConfigured,
     OTRSAuthenticationError,
+    OTRSConnectionRefusedError,
     OTRSDatabaseError,
+    OTRSDatabaseNotFoundError,
+    OTRSCredentialInvalidError,
+    OTRSCredentialMissingError,
+    OTRSDriverError,
+    OTRSHostUnreachableError,
     OTRSTimeoutError,
     OTRSUnavailableError,
 )
@@ -29,8 +36,12 @@ class OTRSReadOnlyClient:
     MAX_PAGE_SIZE = 50
 
     def __init__(self, *, host, port=3306, database="", username, password, timeout=10, connection_factory=None):
-        if not host or not username or not password:
+        if not host:
             raise IntegrationNotConfigured()
+        if not isinstance(username, str) or not username or password is None or password == "":
+            raise OTRSCredentialMissingError()
+        if not isinstance(password, str) or "\r" in password or "\n" in password:
+            raise OTRSCredentialInvalidError()
         self.host = host
         self.port = int(port)
         self.database = (database or "").strip()
@@ -44,10 +55,15 @@ class OTRSReadOnlyClient:
     def test_connection(self):
         with self._connection() as connection:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT 1 AS connection_ok")
+                cursor.execute(
+                    "SELECT DATABASE() AS database_name, VERSION() AS server_version, NOW() AS server_time"
+                )
                 row = cursor.fetchone()
                 if not row:
                     raise OTRSDatabaseError()
+                database_name = self._row_value(row, "database_name")
+                if self.database and database_name != self.database:
+                    raise OTRSDatabaseNotFoundError()
         return True
 
     def list_databases(self):
@@ -183,7 +199,7 @@ class OTRSReadOnlyClient:
         if self._active_connection is not None:
             try:
                 yield self._active_connection
-            except (OTRSAuthenticationError, OTRSTimeoutError, OTRSUnavailableError, OTRSDatabaseError, IntegrationNotConfigured):
+            except IntegrationError:
                 raise
             except Exception as exc:
                 raise self._mapped_error(exc) from None
@@ -196,7 +212,7 @@ class OTRSReadOnlyClient:
             with connection.cursor() as cursor:
                 cursor.execute("SET SESSION TRANSACTION READ ONLY")
             yield connection
-        except (OTRSAuthenticationError, OTRSTimeoutError, OTRSUnavailableError, OTRSDatabaseError, IntegrationNotConfigured):
+        except IntegrationError:
             raise
         except Exception as exc:
             raise self._mapped_error(exc) from None
@@ -285,12 +301,30 @@ class OTRSReadOnlyClient:
     @classmethod
     def _mapped_error(cls, exc):
         code = cls._error_code(exc)
-        if code in {1045, 1698}:
+        detail = " ".join(str(part) for part in getattr(exc, "args", ())).casefold()
+        if code in {1045, 1698, 1130}:
             return OTRSAuthenticationError()
-        if code in {2003, 2005, 2006, 2013}:
-            return OTRSUnavailableError()
+        if code == 1049:
+            return OTRSDatabaseNotFoundError()
+        if code == 2005 or any(term in detail for term in (
+            "name or service not known", "getaddrinfo failed", "no route to host",
+            "network is unreachable", "temporary failure in name resolution",
+        )):
+            return OTRSHostUnreachableError()
+        if code in {2002, 2003} and any(term in detail for term in (
+            "connection refused", "winerror 10061", "errno 111",
+        )):
+            return OTRSConnectionRefusedError()
         if code in {3024, 1969}:
             return OTRSTimeoutError()
-        if isinstance(exc, (TimeoutError,)) or "timeout" in exc.__class__.__name__.casefold():
+        if code in {2002, 2003} and any(term in detail for term in (
+            "timed out", "timeout", "winerror 10060", "errno 110",
+        )):
             return OTRSTimeoutError()
-        return OTRSDatabaseError()
+        if code in {2002, 2003}:
+            return OTRSHostUnreachableError()
+        if code in {2006, 2013}:
+            return OTRSUnavailableError()
+        if isinstance(exc, TimeoutError) or any(term in detail for term in ("timed out", "timeout")):
+            return OTRSTimeoutError()
+        return OTRSDriverError()

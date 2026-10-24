@@ -4,7 +4,18 @@ from unittest.mock import Mock
 
 from aplicativos.integracoes.clients.cmdb import CMDBClient
 from aplicativos.integracoes.clients.otrs import OTRSReadOnlyClient
-from aplicativos.integracoes.services.errors import CMDBAuthenticationError, CMDBTimeoutError, OTRSDatabaseError
+from aplicativos.integracoes.services.errors import (
+    CMDBAuthenticationError,
+    CMDBTimeoutError,
+    OTRSAuthenticationError,
+    OTRSConnectionRefusedError,
+    OTRSCredentialInvalidError,
+    OTRSDatabaseError,
+    OTRSDatabaseNotFoundError,
+    OTRSDriverError,
+    OTRSHostUnreachableError,
+    OTRSTimeoutError,
+)
 
 
 class FakeHTTPResponse:
@@ -122,12 +133,14 @@ class CMDBClientTests(TestCase):
     def test_sanitizer_keeps_new_public_attributes_but_denies_sensitive_names(self):
         result = CMDBClient.sanitize_item({
             "ConfigItemID": "7", "Number": "L-2", "Name": "Metro", "Class": "Link",
-            "Password": "top secret", "PortalPassword": "top secret",
-            "CIXMLData": {"Designacao": "Circuito A", "ISP": "Operadora", "CNPJ": "123", "Equipamento": "router", "SenhaPPOE": "top secret", "RandomField": "hidden", "SessionCookie": "top secret"},
+            "Password": "top secret", "PortalPassword": "top secret", "UsuarioPortalOperadora": "portal-user",
+            "CIXMLData": {"Designacao": "Circuito A", "ISP": "Operadora", "CNPJ": "123", "Equipamento": "router", "SenhaPPOE": "top secret", "UsuarioPortalOperadora": "portal-user", "RandomField": "hidden", "SessionCookie": "top secret"},
         })
         self.assertNotIn("Password", result)
+        self.assertNotIn("UsuarioPortalOperadora", result)
         self.assertEqual(result["CIXMLData"], {"Designacao": "Circuito A", "ISP": "Operadora", "CNPJ": "123", "Equipamento": "router", "RandomField": "hidden"})
         self.assertNotIn("top secret", json.dumps(result))
+        self.assertNotIn("portal-user", json.dumps(result))
 
 
 class FakeCursor:
@@ -147,6 +160,8 @@ class FakeCursor:
         self.connection.queries.append((query, params))
 
     def fetchone(self):
+        if "DATABASE()" in self.query:
+            return {"database_name": "otrs", "server_version": "MariaDB 10.6", "server_time": "2026-10-24 12:00:00"}
         return {"connection_ok": 1}
 
     def fetchall(self):
@@ -201,6 +216,43 @@ class OTRSReadOnlyClientTests(TestCase):
         all_queries = [query.upper().strip() for connection in self.connections for query, _ in connection.queries]
         self.assertTrue(all(query.startswith(("SELECT", "SET SESSION TRANSACTION READ ONLY")) for query in all_queries))
         self.assertTrue(all(connection.closed for connection in self.connections))
+
+    def test_connection_checks_selected_database_and_server_metadata(self):
+        self.assertTrue(self.client.test_connection())
+        query = self.connections[0].queries[-1][0]
+        self.assertIn("DATABASE()", query)
+        self.assertIn("VERSION()", query)
+        self.assertIn("NOW()", query)
+
+        self.client.database = "another_database"
+        with self.assertRaises(OTRSDatabaseNotFoundError):
+            self.client.test_connection()
+
+    def test_driver_errors_have_specific_safe_categories(self):
+        class DriverFailure(Exception):
+            pass
+
+        cases = (
+            ((1045, "Access denied; password=never-show"), OTRSAuthenticationError),
+            ((1049, "Unknown database otrs"), OTRSDatabaseNotFoundError),
+            ((2003, "Can't connect [WinError 10061] Connection refused"), OTRSConnectionRefusedError),
+            ((2003, "Can't connect [WinError 10060] timed out"), OTRSTimeoutError),
+            ((2005, "Unknown MySQL server host"), OTRSHostUnreachableError),
+            ((3024, "Query execution was interrupted"), OTRSTimeoutError),
+            ((7777, "unexpected driver failure password=never-show"), OTRSDriverError),
+        )
+        for args, expected in cases:
+            with self.subTest(code=args[0]):
+                error = OTRSReadOnlyClient._mapped_error(DriverFailure(*args))
+                self.assertIsInstance(error, expected)
+                self.assertNotIn("never-show", error.safe_message)
+
+    def test_password_must_be_decrypted_plaintext_string_without_line_breaks(self):
+        for password in (b"encoded-bytes", "encoded\nvalue"):
+            with self.subTest(password_type=type(password).__name__):
+                with self.assertRaises(OTRSCredentialInvalidError) as caught:
+                    OTRSReadOnlyClient(host="db.example", username="reader", password=password)
+                self.assertNotIn("encoded", str(caught.exception))
 
     def test_sample_is_limited_and_sensitive_columns_are_masked(self):
         result = self.client.get_sample_rows("users", page_size=500)

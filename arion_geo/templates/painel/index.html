@@ -1,24 +1,97 @@
 {% extends "base.html" %}
-{% load static %}
-{% block title %}Visão geral · Arion Atacado Geo{% endblock %}
+{% load static humanize %}
+{% block title %}Vis&atilde;o geral &middot; ARION ATACADO GEO{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/painel/painel.css' %}">{% endblock %}
 {% block content %}
 <section class="overview-page" aria-labelledby="overview-title">
-  <div class="overview-hero">
-    <p class="section-kicker overview-kicker">ARION <span>/</span> NOC ATACADO</p>
-    <h1 id="overview-title">Visão geral</h1>
-    <p class="overview-lead">Sua central de acesso à operação do NOC Atacado.</p>
-    <div class="overview-summary" aria-label="Resumo da base CMDB">
-      <span><strong>{{ total_links|default:0 }}</strong> links</span><i aria-hidden="true">·</i>
-      <span><strong>{{ state_count|default:0 }}</strong> UFs</span><i aria-hidden="true">·</i>
-      <span><strong>{{ provider_count|default:0 }}</strong> provedor{% if provider_count != 1 %}es{% endif %}</span>
-    </div>
-    <p class="overview-updated">{% if latest_import %}Última atualização CMDB: {{ latest_import.created_at|date:"d/m/Y H:i" }}{% else %}Nenhuma importação registrada{% endif %}</p>
-    <nav class="overview-actions" aria-label="Ações para explorar a operação">
-      <article class="overview-action"><h2>Pesquisar um link</h2><p>Consulte circuitos, designações, operadora, ISP e projeto.</p><a href="{% url 'base_links:index' %}">Abrir Base <span aria-hidden="true">→</span></a></article>
-      <article class="overview-action"><h2>Investigar a operação</h2><p>Cruze indicadores, filtros, períodos e dimensões.</p><a href="{% url 'cockpit' %}">Abrir Cockpit <span aria-hidden="true">→</span></a></article>
-      <article class="overview-action"><h2>Explorar geograficamente</h2><p>Visualize a distribuição da operação pelo Brasil.</p><a href="{% url 'mapa:index' %}">Abrir Mapa <span aria-hidden="true">→</span></a></article>
-    </nav>
+  <div class="overview-container">
+    <header class="overview-hero">
+      <p class="section-kicker overview-kicker">ARION <span>/</span> NOC ATACADO</p>
+      <h1 id="overview-title">Vis&atilde;o geral</h1>
+      <p class="overview-lead">Sua central de acesso &agrave; opera&ccedil;&atilde;o do NOC Atacado.</p>
+      <div class="overview-summary" aria-label="Resumo da base CMDB">
+        <span><strong>{{ total_links|default:0|intcomma }}</strong> Links</span>
+        <i aria-hidden="true">&middot;</i>
+        <span><strong>{{ state_count|default:0|intcomma }}</strong> Estados</span>
+        <i aria-hidden="true">&middot;</i>
+        <span><strong>{{ provider_count|default:0|intcomma }}</strong> Provedores</span>
+      </div>
+    </header>
+
+    {% if can_view_operation %}
+    <section class="overview-group" aria-labelledby="overview-operation-title">
+      <header class="overview-group-heading">
+        <div><span class="overview-group-kicker">ACESSO OPERACIONAL</span><h2 id="overview-operation-title">Opera&ccedil;&atilde;o</h2></div>
+        <p>Explore a base e acompanhe a opera&ccedil;&atilde;o por diferentes perspectivas.</p>
+      </header>
+      <nav class="overview-module-grid" aria-label="M&oacute;dulos operacionais">
+        {% if can_view_base %}
+        <a class="overview-module-card" href="{% url 'base_links:index' %}">
+          <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5h16v14H4zM8 9h8M8 12.5h8M8 16h5"/></svg></span>
+          <span class="overview-module-copy"><strong>Base de Links</strong><span>Pesquise designa&ccedil;&otilde;es, circuitos, projetos, provedores e dados t&eacute;cnicos.</span></span>
+          <span class="overview-module-cta">Abrir Base <b aria-hidden="true">&rarr;</b></span>
+        </a>
+        {% endif %}
+        {% if can_view_cockpit %}
+        <a class="overview-module-card" href="{% url 'cockpit' %}">
+          <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16M8 4v4M15 10v4M10 16v4"/></svg></span>
+          <span class="overview-module-copy"><strong>Cockpit</strong><span>Analise tickets, per&iacute;odos, status, provedores, servi&ccedil;os e outras dimens&otilde;es.</span></span>
+          <span class="overview-module-cta">Abrir Cockpit <b aria-hidden="true">&rarr;</b></span>
+        </a>
+        {% endif %}
+        {% if can_view_map %}
+        <a class="overview-module-card" href="{% url 'mapa:index' %}">
+          <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></svg></span>
+          <span class="overview-module-copy"><strong>Mapa</strong><span>Explore geograficamente a distribui&ccedil;&atilde;o dos Links e da opera&ccedil;&atilde;o.</span></span>
+          <span class="overview-module-cta">Abrir Mapa <b aria-hidden="true">&rarr;</b></span>
+        </a>
+        {% endif %}
+        {% if can_view_rankings %}
+        <a class="overview-module-card" href="{% url 'rankings:index' %}">
+          <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v2a4 4 0 0 0 4 4M16 6h4v2a4 4 0 0 1-4 4M12 13v5M8 21h8M9 18h6"/></svg></span>
+          <span class="overview-module-copy"><strong>Rankings</strong><span>Compare provedores, Links afetados, reincid&ecirc;ncia e desempenho operacional.</span></span>
+          <span class="overview-module-cta">Abrir Rankings <b aria-hidden="true">&rarr;</b></span>
+        </a>
+        {% endif %}
+        {% if can_view_ari %}
+        <a class="overview-module-card" href="{% url 'ari:index' %}">
+          <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 2.4 5.4L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.6zM19 16v5M16.5 18.5h5"/></svg></span>
+          <span class="overview-module-copy"><strong>ARI I.A</strong><span>Utilize o assistente para apoiar an&aacute;lises e consultas da opera&ccedil;&atilde;o.</span></span>
+          <span class="overview-module-cta">Abrir ARI I.A <b aria-hidden="true">&rarr;</b></span>
+        </a>
+        {% endif %}
+      </nav>
+    </section>
+    {% endif %}
+
+    {% if can_view_admin_area %}
+    <section class="overview-group overview-group--admin" aria-labelledby="overview-admin-title">
+      <header class="overview-group-heading">
+        <div><span class="overview-group-kicker">ACESSO RESTRITO</span><h2 id="overview-admin-title">Administra&ccedil;&atilde;o</h2></div>
+        <p>Configura&ccedil;&otilde;es e controles dispon&iacute;veis conforme suas permiss&otilde;es.</p>
+      </header>
+      <nav class="overview-admin-grid" aria-label="M&oacute;dulos administrativos">
+        {% if can_view_integrations %}<a class="overview-admin-link" href="{% url 'configuracoes:integrations' %}"><span class="overview-admin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 7v5M16 7v5M6 12h12v2a6 6 0 0 1-12 0zM12 20v2"/></svg></span><span><strong>Integra&ccedil;&otilde;es</strong><small>Acompanhe CMDB, OTRS e a sa&uacute;de das fontes.</small></span><b aria-hidden="true">&rarr;</b></a>{% endif %}
+        {% if can_manage_users %}<a class="overview-admin-link" href="{% url 'configuracoes:users' %}"><span class="overview-admin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 20v-1a5.5 5.5 0 0 1 11 0v1zM17 8a3 3 0 0 1 0 6M17 16a4 4 0 0 1 3.5 4"/></svg></span><span><strong>Usu&aacute;rios</strong><small>Gerencie contas e acessos ao sistema.</small></span><b aria-hidden="true">&rarr;</b></a>{% endif %}
+        {% if can_manage_groups %}<a class="overview-admin-link" href="{% url 'configuracoes:groups' %}"><span class="overview-admin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 20v-1a5.5 5.5 0 0 1 11 0v1zM16 16a4 4 0 0 1 4.5 4"/></svg></span><span><strong>Grupos</strong><small>Gerencie permiss&otilde;es e grupos de acesso.</small></span><b aria-hidden="true">&rarr;</b></a>{% endif %}
+        {% if can_manage_scopes %}<a class="overview-admin-link" href="{% url 'configuracoes:scopes' %}"><span class="overview-admin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg></span><span><strong>Escopos</strong><small>Defina quais dados cada grupo pode visualizar.</small></span><b aria-hidden="true">&rarr;</b></a>{% endif %}
+        {% if can_view_audit %}<a class="overview-admin-link" href="{% url 'configuracoes:audit' %}"><span class="overview-admin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg></span><span><strong>Auditoria</strong><small>Consulte eventos e a&ccedil;&otilde;es administrativas.</small></span><b aria-hidden="true">&rarr;</b></a>{% endif %}
+        {% if can_view_documentation %}<a class="overview-admin-link" href="{% url 'configuracoes:documentation' %}"><span class="overview-admin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22zM4 5.5v16.5M8 7h8M8 11h8M8 15h6"/></svg></span><span><strong>Documenta&ccedil;&atilde;o</strong><small>Consulte arquitetura, integra&ccedil;&otilde;es, dados e funcionalidades.</small></span><b aria-hidden="true">&rarr;</b></a>{% endif %}
+        {% if can_view_system %}<a class="overview-admin-link" href="{% url 'configuracoes:system' %}"><span class="overview-admin-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg></span><span><strong>Sistema</strong><small>Acesse informa&ccedil;&otilde;es gerais da aplica&ccedil;&atilde;o.</small></span><b aria-hidden="true">&rarr;</b></a>{% endif %}
+      </nav>
+    </section>
+    {% endif %}
+
+    <section class="overview-group overview-group--account" aria-labelledby="overview-account-title">
+      <header class="overview-group-heading">
+        <div><span class="overview-group-kicker">PREFER&Ecirc;NCIAS</span><h2 id="overview-account-title">Conta</h2></div>
+      </header>
+      <a class="overview-account-link" href="{% url 'configuracoes:account' %}">
+        <span class="overview-account-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0 1 14 0z"/></svg></span>
+        <span class="overview-account-copy"><strong>Minha conta</strong><small>Consulte suas informa&ccedil;&otilde;es e prefer&ecirc;ncias de acesso.</small></span>
+        <span class="overview-account-cta">Abrir conta <b aria-hidden="true">&rarr;</b></span>
+      </a>
+    </section>
   </div>
 </section>
 {% endblock %}

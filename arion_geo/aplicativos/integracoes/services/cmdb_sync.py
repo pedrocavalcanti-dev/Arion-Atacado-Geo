@@ -72,13 +72,15 @@ def _safe_text(value, max_length):
 OPERATOR_FIELDS = (
     "source_config_item_id", "source_number", "name", "category", "cnpj",
     "business_hours", "phone", "whatsapp", "opening_email", "followup_email",
-    "portal_url", "portal_username", "escalation_1", "escalation_2", "escalation_3",
+    "portal_url", "escalation_1", "escalation_2", "escalation_3",
     "escalation_4", "escalation_5", "deployment_state", "deployment_state_type",
     "incident_state", "incident_state_type", "definition_id", "version_id",
     "last_version_id", "source_created_at",
 )
 LINK_FIELDS = (
     "source_config_item_id", "source_number", "name", "city", "state", "address",
+    "contracting_client_raw", "contracting_client", "business_project", "business_account",
+    "business_id", "business_identity_confidence", "business_identity_source",
     "circuit", "designation", "operator_designation", "identification", "link_type",
     "speed_raw", "ip_range", "equipment", "mac_address", "cnpj", "operator_cnpj",
     "contract_number", "business_hours", "isp_notes", "customer_id", "isp_raw",
@@ -103,7 +105,7 @@ class CMDBSyncService:
         unmapped = set()
         direct_fields = {"configitemid", "number", "name", "class", "curdeplstate", "curdeplstatetype", "curincistate", "curincistatetype", "deplstate", "deplstatetype", "incistate", "incistatetype", "definitionid", "versionid", "lastversionid", "createtime"}
         attribute_fields = {
-            "operadoras": {"categoriaoperadora", "cnpjoperadora", "horariooperadora", "telefoneoperadora", "operadorawhatsapp", "emailabertura", "emailacompanhamento", "portaloperadora", "usuarioportaloperadora", *(f"{i}escalonamentooperadora" for i in range(1, 6))},
+            "operadoras": {"categoriaoperadora", "cnpjoperadora", "horariooperadora", "telefoneoperadora", "operadorawhatsapp", "emailabertura", "emailacompanhamento", "portaloperadora", *(f"{i}escalonamentooperadora" for i in range(1, 6))},
             "linksdeinternet": {"cidade", "estado", "endereco", "circuito", "designacao", "designacaooperadora", "identificacao", "tipo", "velocidade", "rangeip", "equipamento", "macaddress", "cnpj", "cnpjoperadora", "numerocontrato", "horariofuncionamento", "observacaoisp", "customerid", "isp", "usuarioppoe"},
         }
         for class_name, model in self.CLASSES:
@@ -155,7 +157,6 @@ class CMDBSyncService:
             "opening_email": _safe_text(_value(direct, attrs, "EmailAbertura"), 300),
             "followup_email": _safe_text(_value(direct, attrs, "EmailAcompanhamento"), 300),
             "portal_url": _safe_text(_value(direct, attrs, "PortalOperadora"), 500),
-            "portal_username": _safe_text(_value(direct, attrs, "UsuarioPortalOperadora"), 300),
             **{f"escalation_{i}": _safe_text(_value(direct, attrs, f"{i}EscalonamentoOperadora"), 500) for i in range(1, 6)},
             "deployment_state": _safe_text(_value(direct, attrs, "CurDeplState", "DeplState"), 160),
             "deployment_state_type": _safe_text(_value(direct, attrs, "CurDeplStateType", "DeplStateType"), 100),
@@ -169,6 +170,8 @@ class CMDBSyncService:
 
     @staticmethod
     def _link(item, legacy_projects, operators_by_id, operators_by_name):
+        from .link_business_identity import classify_link_name
+
         direct, attrs = _item_fields(item)
         config_id = clean(_value(direct, attrs, "ConfigItemID"), 40)
         number = clean(_value(direct, attrs, "Number"), 40) or None
@@ -187,9 +190,11 @@ class CMDBSyncService:
             else:
                 method = CMDBLinkMirror.OperatorResolution.UNRESOLVED
         project = legacy_projects.get(config_id)
+        name = _safe_text(_value(direct, attrs, "Name"), 500)
+        business_identity = classify_link_name(name)
         return {
             "source_config_item_id": config_id, "source_number": number,
-            "name": _safe_text(_value(direct, attrs, "Name"), 500),
+            "name": name, **business_identity,
             "city": _safe_text(_value(direct, attrs, "Cidade"), 200),
             "state": _safe_text(_value(direct, attrs, "Estado"), 100),
             "address": _safe_text(_value(direct, attrs, "Endereco"), 500),

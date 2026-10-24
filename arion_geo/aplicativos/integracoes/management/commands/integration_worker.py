@@ -2,16 +2,26 @@
 import threading
 import time
 from datetime import timedelta
+from io import StringIO
 
 from django.core.management import BaseCommand, call_command
+from django.db import OperationalError
 from django.utils import timezone
 
-from aplicativos.integracoes.models import IntegrationSyncState
-from aplicativos.integracoes.services.sync_lock import Lease
+from aplicativos.integracoes.models import (
+    CMDBLinkMirror, CMDBOperatorMirror, IntegrationRun, IntegrationSyncState,
+    OTRSTicket, OTRSTicketConfigItem,
+)
+from aplicativos.integracoes.services.sync_lock import LEASE_SECONDS, Lease
 
 
 class Command(BaseCommand):
     help = "Executa sincronizações CMDB/OTRS em processo dedicado."
+
+    FAST_CADENCE = timedelta(minutes=2)
+    FULL_CADENCE = timedelta(minutes=30)
+    CMDB_CADENCE = timedelta(minutes=10)
+    RETRY_CADENCE = timedelta(minutes=2)
 
     def add_arguments(self, parser):
         parser.add_argument("--once", action="store_true", help="Avalia os jobs uma vez e encerra.")
@@ -26,19 +36,17 @@ class Command(BaseCommand):
         worker_stop = threading.Event()
         worker_heartbeat = threading.Thread(target=self._heartbeat, args=(worker, worker_stop), daemon=True)
         worker_heartbeat.start()
-        self.stdout.write("Worker de integrações iniciado (OTRS 1 min / full 30 min; CMDB 10 min).")
+        self.stdout.write(
+            "ARION Integration Worker\n\n"
+            "OTRS fast: 2 min\nOTRS full: 30 min\nCMDB:      10 min\n\n"
+            "Worker iniciado."
+        )
         try:
             while True:
                 if not worker.heartbeat():
                     self.stderr.write(self.style.ERROR("Worker lease lost; stopping to avoid duplicate scheduling."))
                     break
-                now = timezone.now()
-                self._due("cmdb", timedelta(minutes=10), now, self._cmdb)
-                state, _ = IntegrationSyncState.objects.get_or_create(key="otrs")
-                if state.change_cursor is None or state.last_full_success_at is None or state.last_full_success_at <= now - timedelta(minutes=30):
-                    self._due("otrs_full", timedelta(minutes=30), now, self._otrs_full)
-                else:
-                    self._due("otrs_fast", timedelta(minutes=1), now, self._otrs_fast)
+                self._schedule_once(timezone.now())
                 if options["once"]:
                     break
                 time.sleep(interval)
@@ -49,39 +57,70 @@ class Command(BaseCommand):
             worker_heartbeat.join(timeout=2)
             worker.release()
 
-    def _due(self, key, cadence, now, callback, force=False):
+    def _schedule_once(self, now):
+        cmdb_state, _ = IntegrationSyncState.objects.get_or_create(key="cmdb")
+        cmdb_run = IntegrationRun.objects.filter(
+            operation=IntegrationRun.Operation.CMDB_SYNC,
+        ).order_by("-started_at", "-pk").first()
+        if self._run_due(cmdb_run, cmdb_state.last_success_at, self.CMDB_CADENCE, now):
+            self._due("cmdb", now, self._cmdb)
+
+        otrs_state, _ = IntegrationSyncState.objects.get_or_create(key="otrs")
+        full_run = IntegrationRun.objects.filter(
+            operation=IntegrationRun.Operation.OTRS_FULL_SYNC,
+        ).order_by("-started_at", "-pk").first()
+        full_success = otrs_state.last_full_success_at
+        full_due = self._run_due(full_run, full_success, self.FULL_CADENCE, now)
+        if full_due:
+            self._due("otrs_full", now, self._otrs_full)
+            return  # FULL owns the OTRS lease for this pass; FAST never overlaps it.
+
+        fast_run = IntegrationRun.objects.filter(
+            operation=IntegrationRun.Operation.OTRS_FAST_SYNC,
+        ).order_by("-started_at", "-pk").first()
+        if self._run_due(fast_run, full_success, self.FAST_CADENCE, now):
+            self._due("otrs_fast", now, self._otrs_fast)
+
+    @staticmethod
+    def _cadence_due(last, cadence, now):
+        return last is None or last <= now - cadence
+
+    def _run_due(self, run, last_success, cadence, now):
+        if run is None:
+            return self._cadence_due(last_success, cadence, now)
+        if run.status == IntegrationRun.Status.FAILED:
+            return self._cadence_due(run.finished_at or run.started_at, self.RETRY_CADENCE, now)
+        if run.status in (IntegrationRun.Status.RUNNING, IntegrationRun.Status.PENDING):
+            return now >= run.started_at + timedelta(seconds=LEASE_SECONDS)
+        return self._cadence_due(run.finished_at or last_success or run.started_at, cadence, now)
+
+    def _due(self, key, now, callback):
         state, _ = IntegrationSyncState.objects.get_or_create(key="cmdb" if key == "cmdb" else "otrs")
-        last = state.last_started_at if key == "cmdb" else (state.last_full_success_at or state.last_started_at if key == "otrs_full" else state.last_started_at)
-        if key == "otrs_full" and state.last_full_success_at is None:
-            cadence = timedelta(minutes=1)
-        if not force and last and last > now - cadence:
-            return
         lease = Lease("cmdb" if key == "cmdb" else "otrs")
         if not lease.acquire():
-            self.stdout.write(f"{key}: SKIP (lease ativo).")
             return
         stop = threading.Event()
         heartbeat = threading.Thread(target=self._heartbeat, args=(lease, stop), daemon=True)
         heartbeat.start()
         start = timezone.now()
-        state.last_started_at = start
-        state.save(update_fields=("last_started_at", "updated_at"))
+        if key == "cmdb":
+            state.last_started_at = start
+            state.save(update_fields=("last_started_at", "updated_at"))
         try:
-            self.stdout.write(f"{key}: iniciando.")
-            details = callback(state)
+            details = callback(state) or {}
+            state.refresh_from_db()
             state.last_success_at = timezone.now()
             state.last_error_at = None
             state.last_error = ""
             state.last_duration_ms = int((timezone.now() - start).total_seconds() * 1000)
-            state.records_count = details.get("records")
+            if details.get("records") is not None:
+                state.records_count = details["records"]
             if key == "otrs_full":
                 state.last_full_success_at = state.last_success_at
-                state.change_cursor = details.get("cursor") or state.last_success_at
-            elif key == "otrs_fast":
-                state.change_cursor = details.get("cursor") or state.change_cursor
             state.save()
-            self.stdout.write(self.style.SUCCESS(f"{key}: concluído em {state.last_duration_ms} ms."))
+            self.stdout.write(self.style.SUCCESS(self._format_summary(key, details, state.last_duration_ms)))
         except Exception as exc:
+            state.refresh_from_db()
             state.last_error_at = timezone.now()
             state.last_error = f"Falha segura ({type(exc).__name__})"
             state.last_duration_ms = int((timezone.now() - start).total_seconds() * 1000)
@@ -93,28 +132,64 @@ class Command(BaseCommand):
             lease.release()
 
     @staticmethod
+    def _format_summary(key, details, duration):
+        label = {"otrs_fast": "OTRS FAST", "otrs_full": "OTRS FULL", "cmdb": "CMDB"}[key]
+        fields = [f"{name}={details[name]}" for name in ("tickets", "changed", "created", "updated", "relations", "links", "providers") if details.get(name) is not None]
+        if details.get("records") is not None and not fields:
+            fields.append(f"records={details['records']}")
+        fields.append(f"duração={duration}ms")
+        return f"[{label}] " + " ".join(fields)
+
+    @staticmethod
+    def _run_command(*args):
+        # Management commands emit detail-oriented diagnostics; keep the worker log to one summary per cycle.
+        call_command(*args, stdout=StringIO(), stderr=StringIO(), verbosity=0)
+
+    @classmethod
+    def _run_details(cls, operation):
+        run = IntegrationRun.objects.filter(operation=operation).order_by("-started_at", "-pk").first()
+        if not run:
+            return {}
+        details = {
+            "created": run.records_created,
+            "updated": run.records_updated,
+            "changed": run.records_created + run.records_updated,
+            "duration_ms": run.duration_ms,
+        }
+        if operation == IntegrationRun.Operation.CMDB_SYNC:
+            details.update(
+                links=CMDBLinkMirror.objects.filter(is_present_in_source=True).count(),
+                providers=CMDBOperatorMirror.objects.filter(is_present_in_source=True).count(),
+            )
+        else:
+            details.update(
+                tickets=OTRSTicket.objects.filter(is_present_in_queue=True).count(),
+                relations=OTRSTicketConfigItem.objects.filter(is_present_in_source=True).count(),
+            )
+        return details
+
+    @staticmethod
     def _heartbeat(lease, stop):
         while not stop.wait(20):
-            if not lease.heartbeat():
-                return
+            try:
+                if not lease.heartbeat():
+                    return
+            except OperationalError:
+                # SQLite may briefly reject this write while a mirror transaction is committing.
+                # The lease expires only after 180 s; retry on the next heartbeat interval.
+                continue
 
-    @staticmethod
-    def _cmdb(_state):
-        call_command("sincronizar_cmdb", "--apply", "--scheduler-lease", verbosity=0)
-        from aplicativos.integracoes.models import CMDBLinkMirror
-        return {"records": CMDBLinkMirror.objects.filter(is_present_in_source=True).count()}
+    @classmethod
+    def _cmdb(cls, _state):
+        cls._run_command("sincronizar_cmdb", "--apply", "--scheduler-lease")
+        return cls._run_details(IntegrationRun.Operation.CMDB_SYNC)
 
-    @staticmethod
-    def _otrs_full(_state):
-        call_command("sincronizar_otrs", "--apply", "--full", "--scheduler-lease", verbosity=0)
-        from aplicativos.integracoes.models import OTRSTicket
-        tickets = OTRSTicket.objects.filter(is_present_in_queue=True)
-        return {"records": tickets.count(), "cursor": tickets.order_by("-source_changed_at").values_list("source_changed_at", flat=True).first()}
+    @classmethod
+    def _otrs_full(cls, _state):
+        cls._run_command("sincronizar_otrs", "--apply", "--full", "--scheduler-lease")
+        return cls._run_details(IntegrationRun.Operation.OTRS_FULL_SYNC)
 
-    @staticmethod
-    def _otrs_fast(state):
-        call_command("sincronizar_otrs", "--apply", "--fast", "--scheduler-lease", verbosity=0)
-        from aplicativos.integracoes.models import OTRSTicket
-        tickets = OTRSTicket.objects.filter(is_present_in_queue=True)
-        return {"records": tickets.count(), "cursor": tickets.order_by("-source_changed_at").values_list("source_changed_at", flat=True).first()}
-
+    @classmethod
+    def _otrs_fast(cls, _state):
+        cls._run_command("sincronizar_otrs", "--apply", "--fast", "--scheduler-lease")
+        return cls._run_details(IntegrationRun.Operation.OTRS_FAST_SYNC)

@@ -1,90 +1,230 @@
+import calendar
 from datetime import date
 from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
-from django.views.decorators.http import require_GET
+from django.utils import timezone
 
+from aplicativos.auditoria.services import AuditService
 from aplicativos.configuracoes.permissions import access_required
 from aplicativos.integracoes.models import CMDBOperatorMirror
 from aplicativos.integracoes.services.analytics import LinkQueryService, PeriodService
-from .services import RankingService
+from .services import BEST_RANKING_MIN_LINKS, RankingService
 
-SORT_OPTIONS = (("tickets", "Mais tickets"), ("open_tickets", "Mais abertos"), ("affected_links", "Mais links afetados"), ("recurrence_links", "Mais reincidentes"), ("tickets_per_link", "Tickets por link"), ("links", "Mais links CMDB"))
+SORT_OPTIONS = (
+    ("risk_score", "Índice ARION"),
+    ("tickets", "Mais tickets"),
+    ("affected_rate", "Maior % afetados"),
+    ("recurrent_links", "Mais reincidentes"),
+    ("tickets_over_24h", "Mais >24h"),
+    ("backlog_current", "Maior backlog"),
+    ("links_total", "Mais links CMDB"),
+)
 SORT_KEYS = {key for key, _ in SORT_OPTIONS}
 PAGE_SIZES = (25, 50, 100)
 
 
 def _read_filters(request):
-    today = date.today()
+    today = timezone.localdate()
+    month = request.GET.get("month", "").strip()
     try:
-        start, end = PeriodService.parse(request.GET)
+        selected_month = PeriodService.parse_month(month) if month else today.replace(day=1)
     except ValueError:
-        start, end = None, None
-    start = start or today.replace(day=1)
-    end = end or today
-    sort = request.GET.get("sort", "tickets")
+        selected_month = today.replace(day=1)
+    month = selected_month.strftime("%Y-%m")
+    view = request.GET.get("view", "month").strip()
+    if view not in {"month", "3months", "custom"}:
+        view = "month"
+
+    if view == "custom":
+        try:
+            start, end = PeriodService.parse(request.GET)
+        except ValueError:
+            start, end = None, None
+        start = start or selected_month
+        end = end or today
+    else:
+        end_of_month = date(selected_month.year, selected_month.month, calendar.monthrange(selected_month.year, selected_month.month)[1])
+        end = min(today, end_of_month) if selected_month.year == today.year and selected_month.month == today.month else end_of_month
+        start = selected_month
+        if view == "3months":
+            # Use calendar months, including February and year boundaries.
+            month_index = selected_month.year * 12 + selected_month.month - 1 - 2
+            start = date(month_index // 12, month_index % 12 + 1, 1)
+
+    sort = request.GET.get("sort", "risk_score")
     if sort not in SORT_KEYS:
-        sort = "tickets"
+        sort = "risk_score"
     try:
         page_size = int(request.GET.get("page_size", 25))
     except (TypeError, ValueError):
         page_size = 25
     if page_size not in PAGE_SIZES:
         page_size = 25
-    return {"date_from": start.isoformat(), "date_to": end.isoformat(),
-            "operator": request.GET.get("operator", "").strip(),
-            "project": request.GET.get("project", "").strip(),
-            "q": request.GET.get("q", "").strip()[:100], "sort": sort, "page_size": page_size}
+    return {
+        "month": month, "view": view,
+        "ranking_view": request.GET.get("ranking_view", "risk").strip() if request.GET.get("ranking_view", "risk").strip() in {"risk", "best"} else "risk",
+        "date_from": start.isoformat(), "date_to": end.isoformat(),
+        "operator": request.GET.get("provider", request.GET.get("operator", "")).strip(),
+        "client": request.GET.get("client", "").strip(),
+        "project": request.GET.get("project", "").strip(),
+        "uf": request.GET.get("uf", "").strip().upper(),
+        "priority": request.GET.get("priority", "").strip(),
+        "reason": request.GET.get("reason", "").strip(),
+        "status": request.GET.get("status", "").strip().upper(),
+        "only_aged": request.GET.get("only_aged") in {"1", "true", "on"},
+        "only_recurrent": request.GET.get("only_recurrent") in {"1", "true", "on"},
+        "links_all": request.GET.get("links") == "all",
+        "q": request.GET.get("q", "").strip()[:100],
+        "sort": sort, "page_size": page_size,
+    }
 
 
 def _url(filters, **updates):
-    values = {key: value for key, value in filters.items() if value not in ("", None)}
+    values = {key: value for key, value in filters.items() if value not in ("", None, False)}
     values.update(updates)
+    if not values.get("links_all"):
+        values.pop("links_all", None)
+    if "links_all" in values:
+        values["links"] = "all"
+        values.pop("links_all", None)
+    values.pop("page_size", None)
     return "?" + urlencode(values)
 
 
-def _build(request, filters):
-    start, end = PeriodService.parse(filters)
-    return RankingService.build(request.user, date_from=start, date_to=end,
-        operator_id=filters["operator"], project=filters["project"], query=filters["q"])
+def _build(request, filters, *, detail_provider_id=None, detail_ticket_page=1, detail_ticket_page_size=10):
+    return RankingService.build(
+        request.user,
+        date_from=date.fromisoformat(filters["date_from"]),
+        date_to=date.fromisoformat(filters["date_to"]),
+        filters=filters,
+        detail_provider_id=detail_provider_id,
+        detail_ticket_page=detail_ticket_page,
+        detail_ticket_page_size=detail_ticket_page_size,
+    )
 
 
 @login_required
 @access_required("view_rankings")
 def index(request):
     filters = _read_filters(request)
-    operators, links, total_links, summary = _build(request, filters)
-    operators.sort(key=lambda row: (-row.get(filters["sort"], 0), row["name"].casefold()))
-    for index, item in enumerate(operators, 1):
-        item["ranking_position"] = index
-    page_obj = Paginator(operators, filters["page_size"]).get_page(request.GET.get("page"))
+    data = _build(request, filters)
+    providers = list(data["providers"])
+    if filters["ranking_view"] == "best":
+        providers.sort(key=lambda row: (row["risk_score"], -row["links_total"], row["name"].casefold()))
+        top_providers = [row for row in providers if row["links_total"] >= BEST_RANKING_MIN_LINKS][:3]
+    else:
+        providers.sort(key=lambda row: (-row.get(filters["sort"], 0), -row["risk_score"], row["name"].casefold()))
+        top_providers = providers[:3]
+    for position, item in enumerate(providers, 1):
+        item["ranking_position"] = position
+    page_obj = Paginator(providers, filters["page_size"]).get_page(request.GET.get("page"))
+
     scope_links = LinkQueryService.base(request.user)
+    operators = CMDBOperatorMirror.objects.filter(links__in=scope_links, is_present_in_source=True).distinct().order_by("name")
+    # Filter catalogs use canonical identity fields and the authorized link universe.
+    clients = list(scope_links.exclude(contracting_client="").values_list("contracting_client", flat=True).distinct().order_by("contracting_client"))
+    projects = list(scope_links.exclude(business_project="").values_list("business_project", flat=True).distinct().order_by("business_project"))
+    ufs = list(scope_links.exclude(state="").values_list("state", flat=True).distinct().order_by("state"))
+    portuguese_months = ("", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")
+    month_labels = []
+    for value in data["available_months"]:
+        year, month = value.split("-")
+        month_labels.append({"value": value, "label": f"{portuguese_months[int(month)]}/{year}"})
+    if not any(option["value"] == filters["month"] for option in month_labels):
+        year, month = filters["month"].split("-")
+        month_labels.insert(0, {"value": filters["month"], "label": f"{portuguese_months[int(month)]}/{year}"})
+
+    page_filters = filters.copy()
+    page_filters["links_all"] = False
+    sort_options = [{"value": key, "label": label, "url": _url(page_filters, sort=key), "active": key == filters["sort"]}
+                    for key, label in SORT_OPTIONS]
     return render(request, "rankings/index.html", {
-        "operators": operators, "page_obj": page_obj, "ranked_links": links[:100],
-        "top_operators": operators[:3], "leader": operators[0] if operators else None,
-        "total_links": total_links, "total_tickets": summary["tickets"], "open_tickets": summary["open_tickets"],
-        "operator_count": len(operators), "affected_links": sum(item["affected_links"] for item in operators),
+        **data,
+        "providers": providers,
+        "page_obj": page_obj,
+        "top_providers": top_providers,
+        "best_eligible_count": sum(row["links_total"] >= BEST_RANKING_MIN_LINKS for row in providers),
+        "ranked_links": data["ranked_links"],
         "filters": filters,
-        "sort_options": [{"value": key, "label": label, "url": _url(filters, sort=key), "active": key == filters["sort"]} for key, label in SORT_OPTIONS],
-        "operators_filter": CMDBOperatorMirror.objects.filter(links__in=scope_links).distinct().order_by("name"),
-        "projects": scope_links.exclude(legacy_project="").values_list("legacy_project", flat=True).distinct().order_by("legacy_project"),
+        "sort_options": sort_options,
+        "operators_filter": operators,
+        "clients": clients,
+        "projects": projects,
+        "ufs": ufs,
+        "month_options": month_labels,
         "page_sizes": PAGE_SIZES,
         "provider_detail_url_template": reverse("rankings:provider-detail", args=[0]),
         "base_url": reverse("base_links:index"),
+        "cockpit_url": reverse("cockpit"),
+        "export_pdf_url": reverse("rankings:export", args=["pdf"]) + _url(filters),
+        "export_xlsx_url": reverse("rankings:export", args=["xlsx"]) + _url(filters),
+        "ranking_risk_url": _url(filters, ranking_view="risk", sort="risk_score", page=1),
+        "ranking_best_url": _url(filters, ranking_view="best", sort="risk_score", page=1),
+        "full_links_url": _url(filters, links="all"),
+        "previous_page_url": _url(filters, page=page_obj.previous_page_number()) if page_obj.has_previous() else "",
+        "next_page_url": _url(filters, page=page_obj.next_page_number()) if page_obj.has_next() else "",
+        # Compatibility aliases used by existing focused tests and integrations.
+        "total_links": data["links_total"],
+        "total_tickets": data["tickets_valid"],
+        "open_tickets": data["backlog_current"],
+        "operator_count": data["provider_count"],
+        "affected_links": data["links_affected"],
     })
 
 
 @login_required
 @access_required("view_rankings")
-@require_GET
 def provider_detail(request, provider_id):
     filters = _read_filters(request)
-    operators, _links, _total, _summary = _build(request, filters)
-    item = next((row for row in operators if str(row["id"]) == str(provider_id)), None)
+    data = _build(request, filters, detail_provider_id=provider_id,
+                  detail_ticket_page=request.GET.get("ticket_page", 1),
+                  detail_ticket_page_size=request.GET.get("ticket_page_size", 10))
+    item = data.get("detail")
     if item is None:
-        return JsonResponse({"error": "Operadora nao encontrada no escopo atual."}, status=404)
+        return JsonResponse({"error": "Provedor não encontrado no escopo atual."}, status=404)
     return JsonResponse(item)
+
+
+@login_required
+@access_required("view_rankings")
+def export(request, file_format):
+    if file_format not in {"pdf", "xlsx"}:
+        return JsonResponse({"error": "Formato de exportacao invalido."}, status=404)
+    from .exports import build_pdf, build_xlsx
+
+    filters = _read_filters(request)
+    filters["links_all"] = True
+    data = _build(request, filters)
+    providers = list(data["providers"])
+    if filters["ranking_view"] == "best":
+        providers.sort(key=lambda row: (row["risk_score"], -row["links_total"], row["name"].casefold()))
+        podium = [row for row in providers if row["links_total"] >= BEST_RANKING_MIN_LINKS][:3]
+    else:
+        providers.sort(key=lambda row: (-row.get(filters["sort"], 0), -row["risk_score"], row["name"].casefold()))
+        podium = providers[:3]
+    generated_at = timezone.localtime()
+    generated_by = request.user.get_full_name() or request.user.get_username()
+    if file_format == "pdf":
+        content = build_pdf(data, filters, providers, podium, generated_at, generated_by)
+        content_type = "application/pdf"
+    else:
+        content = build_xlsx(data, filters, providers, podium, generated_at, generated_by)
+        content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    response = HttpResponse(content, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="arion-ranking-noc-atacado-{generated_at:%Y%m%d}.{file_format}"'
+    AuditService.record(
+        request=request, category="EXPORT", action=f"EXPORT_RANKINGS_{file_format.upper()}", module="Rankings",
+        description=f"Exportacao do Ranking {file_format.upper()}", result="SUCCESS",
+        metadata={
+            "format": file_format, "period_start": filters["date_from"], "period_end": filters["date_to"],
+            "view": filters["view"], "ranking_view": filters["ranking_view"],
+            "provider_count": len(providers), "link_count": len(data["ranked_links_all"]),
+            "ticket_rows": len(data["ticket_export_rows"]),
+        },
+    )
+    return response

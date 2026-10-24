@@ -1,4 +1,5 @@
 from datetime import datetime, timezone as datetime_timezone
+from unittest.mock import patch
 from django.test import TestCase as DjangoTestCase
 
 from .models import CMDBLinkMirror, CMDBOperatorMirror, OTRSStateMapping, OTRSTicket, OTRSTicketConfigItem
@@ -52,10 +53,12 @@ class CMDBMirrorSyncTests(DjangoTestCase):
         self.assertEqual(CMDBLinkMirror.objects.get(source_config_item_id="link-ci-3").operator_id, None)
         values = list(CMDBOperatorMirror.objects.values()) + list(CMDBLinkMirror.objects.values())
         self.assertNotIn(client.password, str(values))
+        self.assertNotIn("DO_NOT_PERSIST_PORTAL_USER", str(values))
         self.assertNotIn("LINK_SECRET", str(values))
         self.assertIn("futurefield", " ".join(captured.output))
         self.assertNotIn("UNMAPPED_SECRET_VALUE", " ".join(captured.output))
         self.assertFalse(any("password" in field.name.casefold() or "senha" in field.name.casefold() for field in CMDBOperatorMirror._meta.fields))
+        self.assertFalse(any(field.name == "portal_username" for field in CMDBOperatorMirror._meta.fields))
 
     def test_dry_run_does_not_write_mirrors_and_searches_without_limit(self):
         client = FakeCMDBClient()
@@ -112,6 +115,8 @@ class FakeOTRSReadOnlyClient:
             {"source_object_id": 4, "source_key": "ci-bad-type", "target_object_id": 1, "target_key": "100", "type_id": 4, "state_id": 1, "create_time": None},
         ]
         self.ticket = {"id": 100, "tn": "2026000000000100", "title": "Link service", "queue_id": queue_id, "state_id": self.states[0]["id"], "priority_id": 2, "type_id": 3, "service_id": 4, "sla_id": 5, "responsible_user_id": 13, "customer_id": "ACME", "timeout": 12, "until_time": 20, "escalation_time": -2, "escalation_update_time": 3, "escalation_response_time": 4, "escalation_solution_time": 5, "create_time": datetime(2025, 1, 1, tzinfo=datetime_timezone.utc), "change_time": datetime(2025, 1, 2, tzinfo=datetime_timezone.utc)}
+        self.dynamic_values = []
+        self.history_rows = []
 
     def get_all_columns(self, database=None):
         names = {
@@ -120,6 +125,8 @@ class FakeOTRSReadOnlyClient:
             "ticket_priority": "id name", "ticket_type": "id name", "service": "id name", "sla": "id name",
             "link_relation": "source_object_id source_key target_object_id target_key type_id state_id create_time",
             "link_object": "id name", "link_type": "id name", "link_state": "id name",
+            "dynamic_field": "id name field_type object_type", "dynamic_field_value": "object_id field_id value_text value_date",
+            "ticket_history": "ticket_id state_id history_type_id create_time", "ticket_history_type": "id name",
         }
         return [{"TABLE_NAME": table, "COLUMN_NAME": col} for table, fields in names.items() for col in fields.split()]
 
@@ -130,6 +137,18 @@ class FakeOTRSReadOnlyClient:
             return [{"id": 107, "name": "NOC - ATACADO"}]
         if "from `ticket_state_type`" in normalized:
             return [{"id": 1, "name": "open"}, {"id": 2, "name": "pending auto"}]
+        if "from `dynamic_field`" in normalized:
+            return [{"id": 101, "name": "CodigoFechamento", "field_type": "Dropdown", "object_type": "Ticket"}, {"id": 27, "name": "ticketResolvido", "field_type": "DateTime", "object_type": "Ticket"}, {"id": 129, "name": "RvalidacaoProcedenteImprocedente", "field_type": "Dropdown", "object_type": "Ticket"}]
+        if "from `dynamic_field_value`" in normalized:
+            ids = set(params[3:])
+            fields = set(params[:3])
+            return [row for row in self.dynamic_values if row["object_id"] in ids and row["field_id"] in fields]
+        if "from `ticket_history_type`" in normalized:
+            return [{"id": 27, "name": "StateUpdate"}]
+        if "from `ticket_history`" in normalized:
+            terminal_state_ids = {state["id"] for state in self.states if state["name"].casefold() in {"resolvido", "closed successful", "encerrado com viabilidade", "cancelado"}}
+            ticket_ids = set(params[1 + len(terminal_state_ids):])
+            return [row for row in self.history_rows if row["ticket_id"] in ticket_ids and row["state_id"] in terminal_state_ids]
         if "from `ticket_state`" in normalized:
             return self.states
         if "from `ticket_priority`" in normalized:
@@ -164,6 +183,7 @@ class OTRSMirrorSyncTests(DjangoTestCase):
         cases = {
             "em atendimento": (OTRSStateMapping.BusinessStatus.OPEN, True),
             "Pendente": (OTRSStateMapping.BusinessStatus.PENDING, True),
+            "agendado": (OTRSStateMapping.BusinessStatus.SCHEDULED, True),
             "resolvido": (OTRSStateMapping.BusinessStatus.RESOLVED, False),
             "closed successful": (OTRSStateMapping.BusinessStatus.CLOSED, False),
             "cancelado": (OTRSStateMapping.BusinessStatus.CANCELED, False),
@@ -174,7 +194,7 @@ class OTRSMirrorSyncTests(DjangoTestCase):
             with self.subTest(name=name):
                 status = OTRSSyncService._state_status(name)
                 self.assertEqual(status, expected)
-                self.assertEqual(status in {"OPEN", "PENDING"}, is_open)
+                self.assertEqual(status in {"OPEN", "PENDING", "SCHEDULED"}, is_open)
 
     def test_snapshot_upserts_dimensions_and_relations_and_excludes_invalid_relationships(self):
         client = FakeOTRSReadOnlyClient()
@@ -270,6 +290,23 @@ class OTRSMirrorSyncTests(DjangoTestCase):
         self.assertEqual(removed["relations"]["stale"], 1)
         self.assertFalse(relation.is_present_in_source)
 
+    def test_empty_fast_delta_advances_cursor_without_loading_all_local_tickets(self):
+        client = FakeOTRSReadOnlyClient(relations=[])
+        original_select = client.execute_select
+
+        def no_changed_tickets(sql, params=()):
+            if "from `ticket`" in sql.casefold():
+                client.select_queries_count += 1
+                return []
+            return original_select(sql, params)
+
+        client.execute_select = no_changed_tickets
+        cursor = datetime(2025, 1, 2, tzinfo=datetime_timezone.utc)
+        with patch.object(OTRSTicket.objects, "all", side_effect=AssertionError("FAST must not load every local ticket")):
+            result = OTRSSyncService(client).run(apply=True, changed_since=cursor)
+        self.assertEqual(result["tickets"]["found"], 0)
+        self.assertGreater(result["cursor"], cursor)
+
     def test_unknown_state_is_stored_unknown_and_closed_for_business_open(self):
         client = FakeOTRSReadOnlyClient(states=[{"id": 90, "name": "Estado Novo Qualquer", "type_id": 2}], relations=[])
         client.ticket["state_id"] = 90
@@ -278,4 +315,46 @@ class OTRSMirrorSyncTests(DjangoTestCase):
         self.assertEqual(ticket.business_status, OTRSStateMapping.BusinessStatus.UNKNOWN)
         self.assertFalse(ticket.is_business_open)
         self.assertTrue(result["warnings"])
+
+    def test_full_sync_imports_reason_and_terminal_history_date(self):
+        at = datetime(2026, 10, 12, 10, tzinfo=datetime_timezone.utc)
+        client = FakeOTRSReadOnlyClient(states=[{"id": 20, "name": "resolvido", "type_id": 2}], relations=[])
+        client.ticket["state_id"] = 20
+        client.dynamic_values = [
+            {"object_id": 100, "field_id": 101, "value_text": "PendenciaFinanceira", "value_date": None},
+            {"object_id": 100, "field_id": 27, "value_text": None, "value_date": at},
+            {"object_id": 100, "field_id": 129, "value_text": "Improcedente", "value_date": None},
+        ]
+        client.history_rows = [{"ticket_id": 100, "state_id": 20, "terminal_at": at}]
+        result = OTRSSyncService(client).run(apply=True)
+        ticket = OTRSTicket.objects.get(external_id=100)
+        self.assertEqual(ticket.closing_code_raw, "PendenciaFinanceira")
+        self.assertEqual(ticket.resolved_at, at)
+        self.assertEqual(ticket.terminal_state_at, at)
+        self.assertEqual(ticket.responsibility_raw, "Improcedente")
+        self.assertEqual(ticket.responsibility_normalized, "IMPROCEDENTE")
+        self.assertEqual(result["ticket_terminal_fields"]["terminal_at_filled"], 1)
+        self.assertEqual(result["ticket_terminal_fields"]["responsibility_filled"], 1)
+
+    def test_unrecognized_responsibility_keeps_raw_value_and_maps_to_indeterminate(self):
+        client = FakeOTRSReadOnlyClient()
+        client.dynamic_values = [{"object_id": 100, "field_id": 129, "value_text": "Em análise", "value_date": None}]
+        OTRSSyncService(client).run(apply=True)
+        ticket = OTRSTicket.objects.get(external_id=100)
+        self.assertEqual(ticket.responsibility_raw, "Em análise")
+        self.assertEqual(ticket.responsibility_normalized, "INDETERMINADO")
+
+    def test_fast_sync_updates_reason_and_empty_delta_is_idempotent(self):
+        OTRSSyncService(FakeOTRSReadOnlyClient()).run(apply=True)
+        cursor = datetime(2025, 1, 2, tzinfo=datetime_timezone.utc)
+        client = FakeOTRSReadOnlyClient()
+        client.dynamic_values = [{"object_id": 100, "field_id": 101, "value_text": "PendenciaFinanceira", "value_date": None}]
+        updated = OTRSSyncService(client).run(apply=True, changed_since=cursor)
+        self.assertEqual(updated["tickets"]["updated"], 1)
+        self.assertEqual(OTRSTicket.objects.get(external_id=100).closing_code_raw, "PendenciaFinanceira")
+        empty = FakeOTRSReadOnlyClient()
+        empty.execute_select = lambda sql, params=(): [] if "from `ticket`" in sql.casefold() else FakeOTRSReadOnlyClient.execute_select(empty, sql, params)
+        result = OTRSSyncService(empty).run(apply=True, changed_since=cursor)
+        self.assertEqual(result["tickets"]["found"], 0)
+        self.assertEqual(result["ticket_terminal_fields"]["closing_code_filled"], 0)
 

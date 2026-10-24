@@ -11,6 +11,7 @@ urlpatterns = [
     path("importar/", views.import_cmdb, name="import"),
     path("importar/confirmar/", views.confirm_import, name="confirm"),
     path("api/mapa/", views.map_aggregates, name="map-aggregates"),
+    path("api/mapa/uf/", views.map_state_detail, name="map-state-detail"),
     path("api/provedor/<int:pk>/", views.provider_detail, name="provider-detail"),
     path("api/<int:pk>/", views.detail, name="detail"),
 ]

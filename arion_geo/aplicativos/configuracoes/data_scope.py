@@ -1,4 +1,5 @@
 from .models import GroupDataScope
+from django.db.models import Q
 
 
 class DataScopeService:
@@ -65,11 +66,21 @@ class DataScopeService:
             for scope in scopes:
                 if scope.mode != GroupDataScope.Mode.CUSTOM:
                     continue
-                allowed_operator_names = scope.allowed_operators.values_list("name", flat=True)
-                allowed_project_names = scope.allowed_projects.values_list("name", flat=True)
+                allowed_operator_names = list(scope.allowed_operators.values_list("name", flat=True))
+                allowed_project_names = list(scope.allowed_projects.values_list("name", flat=True))
+                operator_scope = Q(pk__in=[])
+                for name in allowed_operator_names:
+                    operator_scope |= Q(contracting_client__iexact=name) | Q(contracting_client_raw__iexact=name)
+                project_scope = Q(pk__in=[])
+                for name in allowed_project_names:
+                    # Use legacy_project only when no parsed business project exists;
+                    # otherwise it could widen a scope across distinct projects.
+                    project_scope |= Q(business_project__iexact=name) | (
+                        Q(business_project="") & Q(legacy_project__iexact=name)
+                    )
                 queryset = queryset.filter(
-                    operator__name__in=allowed_operator_names,
-                    legacy_project__in=allowed_project_names,
+                    operator_scope,
+                    project_scope,
                 )
             return queryset
         for scope in scopes:

@@ -1,10 +1,11 @@
 import json
 import csv
+import logging
 from datetime import datetime
 from io import BytesIO, StringIO
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_protect
@@ -17,16 +18,46 @@ from aplicativos.auditoria.services import AuditService
 from .models import SavedAnalyticsView
 from .services.analytics import AnalyticsQueryService, DashboardAnalyticsService, STATE_NAMES
 
+logger = logging.getLogger(__name__)
+
 
 @login_required
 @access_required("view_dashboard")
 def index(request):
     links = LinkQueryService.base(request.user)
-    operators = links.exclude(operator__isnull=True).values("operator_id", "operator__name").annotate(value=Count("id"))
+    summary = links.aggregate(
+        total_links=Count("pk"),
+        state_count=Count("state", filter=Q(state__in=STATE_NAMES), distinct=True),
+        provider_count=Count(
+            "operator_id",
+            filter=Q(operator__isnull=False, operator__name__gt=""),
+            distinct=True,
+        ),
+    )
+    access = {
+        "can_view_base": request.user.has_perm("configuracoes.view_base"),
+        "can_view_cockpit": request.user.has_perm("configuracoes.view_cockpit"),
+        "can_view_map": request.user.has_perm("configuracoes.view_map"),
+        "can_view_rankings": request.user.has_perm("configuracoes.view_rankings"),
+        "can_view_ari": request.user.has_perm("configuracoes.view_ari"),
+        "can_view_integrations": request.user.has_perm("configuracoes.view_integrations"),
+        "can_manage_users": request.user.has_perm("configuracoes.manage_users"),
+        "can_manage_groups": request.user.has_perm("configuracoes.manage_groups"),
+        "can_manage_scopes": request.user.has_perm("configuracoes.manage_data_scopes"),
+        "can_view_audit": request.user.has_perm("configuracoes.view_audit_log"),
+        "can_view_documentation": request.user.has_perm("configuracoes.manage_groups"),
+        "can_view_system": request.user.has_perm("configuracoes.view_system_info"),
+    }
+    access["can_view_operation"] = any(access[key] for key in (
+        "can_view_base", "can_view_cockpit", "can_view_map", "can_view_rankings", "can_view_ari",
+    ))
+    access["can_view_admin_area"] = any(access[key] for key in (
+        "can_view_integrations", "can_manage_users", "can_manage_groups", "can_manage_scopes",
+        "can_view_audit", "can_view_documentation", "can_view_system",
+    ))
     return render(request, "painel/index.html", {
-        "total_links": links.count(), "state_count": links.exclude(state="").values("state").distinct().count(),
-        "provider_count": links.exclude(operator__isnull=True).values("operator_id").distinct().count(),
-        "latest_import": None, "operators": operators,
+        **summary,
+        **access,
     })
 
 
@@ -67,7 +98,20 @@ def dashboard(request):
 @login_required
 @access_required("view_cockpit")
 def cockpit(request):
-    return render(request, "painel/cockpit.html", {"can_save_views": request.user.has_perm("configuracoes.save_analytics_views")})
+    from datetime import date
+
+    from django.utils import timezone
+
+    now = timezone.localtime()
+    start_year, start_month = now.year, now.month - 11
+    while start_month <= 0:
+        start_month += 12
+        start_year -= 1
+    return render(request, "painel/cockpit.html", {
+        "can_save_views": request.user.has_perm("configuracoes.save_analytics_views"),
+        "default_start": date(start_year, start_month, 1).isoformat(),
+        "default_end": now.date().isoformat(),
+    })
 
 
 @login_required
@@ -87,234 +131,213 @@ def analytics_query(request):
         return api_error(request, "VALIDATION_ERROR", status=400)
 
 
-def _pdf_report(title, generated, filters, result):
+def _pdf_report(generated, generated_by, result, filter_rows):
+    from pathlib import Path
     from html import escape
-
+    from reportlab import __file__ as reportlab_file
+    from reportlab.graphics.charts.barcharts import HorizontalBarChart, VerticalBarChart
+    from reportlab.graphics.shapes import Drawing
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_LEFT, TA_RIGHT
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.pdfgen.canvas import Canvas
-    from reportlab.platypus import (
-        Flowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
-    )
+    from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-    ink = colors.HexColor("#1f3544")
-    muted = colors.HexColor("#6f7f89")
-    teal = colors.HexColor("#238a8c")
-    orange = colors.HexColor("#d38b4d")
-    line = colors.HexColor("#dce4e8")
-    pale = colors.HexColor("#f2f7f8")
-    white = colors.white
-    width, height = A4
-    content_width = width - 32 * mm
+    period_text = result["description"]["period"]
+    fonts = Path(reportlab_file).parent / "fonts"
+    if "ArionVera" not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont("ArionVera", str(fonts / "Vera.ttf")))
+        pdfmetrics.registerFont(TTFont("ArionVera-Bold", str(fonts / "VeraBd.ttf")))
+    ink, muted = colors.HexColor("#263746"), colors.HexColor("#687781")
+    line, pale, accent = colors.HexColor("#dce3e7"), colors.HexColor("#f2f5f6"), colors.HexColor("#287c83")
+    page_width, page_height = A4
+    content_width = page_width - 32 * mm
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="ReportTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=21, leading=25, textColor=ink, alignment=TA_LEFT, spaceAfter=5))
-    styles.add(ParagraphStyle(name="ReportMeta", parent=styles["Normal"], fontName="Helvetica", fontSize=9, leading=14, textColor=muted))
-    styles.add(ParagraphStyle(name="SectionHeading", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=ink, spaceBefore=7, spaceAfter=7))
-    styles.add(ParagraphStyle(name="CardLabel", parent=styles["Normal"], fontSize=8, leading=11, textColor=muted))
-    styles.add(ParagraphStyle(name="CardValue", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=15, leading=19, textColor=ink))
-    styles.add(ParagraphStyle(name="Cell", parent=styles["Normal"], fontSize=8, leading=11, textColor=ink))
-    styles.add(ParagraphStyle(name="CellRight", parent=styles["Cell"], alignment=TA_RIGHT))
-    styles.add(ParagraphStyle(name="SmallMeta", parent=styles["Normal"], fontSize=8, leading=12, textColor=muted))
+    styles.add(ParagraphStyle(name="ArionTitle", parent=styles["Title"], fontName="ArionVera-Bold", fontSize=19, leading=23, textColor=ink, alignment=TA_LEFT, spaceAfter=5))
+    styles.add(ParagraphStyle(name="ArionMeta", parent=styles["Normal"], fontName="ArionVera", fontSize=8.5, leading=12, textColor=muted))
+    styles.add(ParagraphStyle(name="ArionSection", parent=styles["Heading2"], fontName="ArionVera-Bold", fontSize=11, leading=14, textColor=ink, spaceBefore=9, spaceAfter=6, keepWithNext=True))
+    styles.add(ParagraphStyle(name="ArionCell", parent=styles["Normal"], fontName="ArionVera", fontSize=7.5, leading=9.5, textColor=ink, wordWrap="CJK"))
+    styles.add(ParagraphStyle(name="ArionRight", parent=styles["ArionCell"], alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(name="ArionSmall", parent=styles["Normal"], fontName="ArionVera", fontSize=7.5, leading=10, textColor=muted))
 
-    def safe(value):
-        return escape(str(value if value is not None else ""))
+    def para(value, style="ArionCell"):
+        return Paragraph(escape(str(value if value is not None else "")), styles[style])
 
-    def format_number(value):
-        if isinstance(value, float) and value.is_integer():
-            value = int(value)
-        return f"{value:,}".replace(",", ".") if isinstance(value, int) else str(value).replace(".", ",")
+    def fmt(value):
+        if isinstance(value, float):
+            return f"{value:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        if isinstance(value, int):
+            return f"{value:,}".replace(",", ".")
+        return str(value)
 
-    def short_label(value, limit=20):
-        value = str(value)
-        return value if len(value) <= limit else value[:limit - 1] + "…"
+    def table(rows, widths, *, repeat=1):
+        result_table = Table(rows, colWidths=widths, repeatRows=repeat, hAlign="LEFT", splitByRow=1)
+        result_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), pale), ("TEXTCOLOR", (0, 0), (-1, 0), ink),
+            ("LINEBELOW", (0, 0), (-1, 0), .7, line), ("LINEBELOW", (0, 1), (-1, -1), .35, line),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5), ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        return result_table
 
-    class EvolutionChart(Flowable):
-        def __init__(self, series):
-            super().__init__()
-            self.series = series
-            self.width = content_width
-            self.height = 172
+    def chart(spec):
+        horizontal = spec["type"] in {"horizontal_bar", "compact_distribution"}
+        chart_height = max(42 * mm, min(76 * mm, len(spec.get("values", [])) * 7 * mm + 18 * mm)) if horizontal else 61 * mm
+        drawing = Drawing(content_width, chart_height)
+        chart_obj = HorizontalBarChart() if horizontal else VerticalBarChart()
+        chart_obj.x, chart_obj.y = (76 if horizontal else 38), 12
+        chart_obj.width, chart_obj.height = content_width - (88 if horizontal else 54), chart_height - 22
+        chart_obj.data = [spec.get("values", [])]
+        chart_obj.categoryAxis.categoryNames = [str(label) for label in spec.get("labels", [])]
+        chart_obj.categoryAxis.labels.fontName = "ArionVera"
+        chart_obj.categoryAxis.labels.fontSize = 6.5 if horizontal else (5 if len(chart_obj.categoryAxis.categoryNames) > 18 else 6.5)
+        if not horizontal and len(chart_obj.categoryAxis.categoryNames) > 18:
+            chart_obj.categoryAxis.labels.angle = 45
+            chart_obj.categoryAxis.labels.boxAnchor = "ne"
+            chart_obj.categoryAxis.labels.dy = -18
+        chart_obj.valueAxis.labels.fontName = "ArionVera"
+        chart_obj.valueAxis.labels.fontSize = 7
+        chart_obj.valueAxis.valueMin = 0
+        chart_obj.valueAxis.valueMax = max([1, *chart_obj.data[0]])
+        chart_obj.valueAxis.valueStep = max(1, int(chart_obj.valueAxis.valueMax / 5))
+        chart_obj.bars[0].fillColor = accent
+        if horizontal:
+            chart_obj.categoryAxis.reverseDirection = True
+            chart_obj.barSpacing = 3
+        drawing.add(chart_obj)
+        return drawing
 
-        def draw(self):
-            canvas = self.canv
-            left, right, bottom, top = 40, self.width - 8, 35, self.height - 24
-            values = [float(point["value"]) for point in self.series]
-            maximum = max(values, default=0) or 1
-            canvas.setFont("Helvetica", 7)
-            for tick in range(4):
-                y = bottom + (top - bottom) * tick / 3
-                canvas.setStrokeColor(line)
-                canvas.setLineWidth(.45)
-                canvas.line(left, y, right, y)
-                canvas.setFillColor(muted)
-                canvas.drawRightString(left - 6, y - 2, format_number(round(maximum * tick / 3)))
-            if not self.series:
-                canvas.setFillColor(muted)
-                canvas.drawCentredString((left + right) / 2, self.height / 2, "Sem dados para o período selecionado")
-                return
-            coords = []
-            for index, point in enumerate(self.series):
-                x = left + (right - left) * index / max(1, len(self.series) - 1)
-                y = bottom + (top - bottom) * float(point["value"]) / maximum
-                coords.append((x, y, point))
-            path = canvas.beginPath()
-            path.moveTo(coords[0][0], coords[0][1])
-            for x, y, _ in coords[1:]:
-                path.lineTo(x, y)
-            canvas.setStrokeColor(teal)
-            canvas.setLineWidth(2)
-            canvas.drawPath(path)
-            for x, y, point in coords:
-                canvas.setFillColor(teal)
-                canvas.circle(x, y, 2.8, fill=1, stroke=0)
-                canvas.setFillColor(ink)
-                canvas.setFont("Helvetica", 6.5)
-                if len(coords) <= 12:
-                    canvas.drawCentredString(x, min(top + 7, y + 7), format_number(point["value"]))
-                canvas.setFillColor(muted)
-                canvas.drawCentredString(x, bottom - 13, str(point.get("label") or point.get("key", "")).replace("/26", ""))
-
-    class DistributionChart(Flowable):
-        def __init__(self, breakdown, detail):
-            super().__init__()
-            self.rows = [{"dimension": row["key"], "value": row["value"]} for row in breakdown[:8]]
-            self.shares = {row["dimension"]: row["share"] for row in detail}
-            self.width = content_width
-            self.height = max(54, 18 + 18 * len(self.rows))
-
-        def draw(self):
-            canvas = self.canv
-            bar_left, bar_width = 120, self.width - 224
-            maximum = max((float(row["value"]) for row in self.rows), default=0) or 1
-            for index, row in enumerate(self.rows):
-                y = self.height - 14 - index * 18
-                label = short_label(row["dimension"], 21)
-                canvas.setFont("Helvetica", 7.5)
-                canvas.setFillColor(ink)
-                canvas.drawString(0, y, label)
-                canvas.setFillColor(pale)
-                canvas.roundRect(bar_left, y - 2, bar_width, 7, 3, fill=1, stroke=0)
-                canvas.setFillColor(orange)
-                canvas.roundRect(bar_left, y - 2, max(2, bar_width * float(row["value"]) / maximum), 7, 3, fill=1, stroke=0)
-                canvas.setFillColor(ink)
-                canvas.drawRightString(self.width - 51, y, format_number(row["value"]))
-                canvas.setFillColor(muted)
-                canvas.drawRightString(self.width, y, f"{format_number(self.shares.get(row['dimension'], 0))}%")
+    def monthly_calendar(spec):
+        month_rows = [[para(day) for day in spec.get("weekdays", [])]]
+        for week in spec.get("weeks", []):
+            cells = []
+            for item in week:
+                if not item.get("inside_month"):
+                    cells.append("")
+                elif item.get("inside_query_period"):
+                    cells.append(Paragraph(f"<b>{item.get('day', '')}</b><br/>{fmt(item.get('value') or 0)}", styles["ArionCell"]))
+                else:
+                    cells.append(Paragraph(f"<font color='#8a969e'>{item.get('day', '')}<br/>fora do período</font>", styles["ArionSmall"]))
+            month_rows.append(cells)
+        calendar_table = Table(month_rows, colWidths=[content_width / 7] * 7, rowHeights=[8 * mm] + [13 * mm] * (len(month_rows) - 1), repeatRows=1)
+        calendar_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), pale), ("TEXTCOLOR", (0, 0), (-1, 0), ink),
+            ("GRID", (0, 0), (-1, -1), .35, line), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        return calendar_table
 
     class NumberedCanvas(Canvas):
         def __init__(self, *args, **kwargs):
-            kwargs["pageCompression"] = 0
             super().__init__(*args, **kwargs)
-            self._states = []
-
+            self.states = []
         def showPage(self):
-            self._states.append(dict(self.__dict__))
+            self.states.append(dict(self.__dict__))
             self._startPage()
-
         def save(self):
-            total = len(self._states)
-            for state in self._states:
+            total = len(self.states)
+            for state in self.states:
                 self.__dict__.update(state)
-                self.setFont("Helvetica", 8)
+                self.saveState()
+                self.setFont("ArionVera", 7)
                 self.setFillColor(muted)
-                self.drawRightString(width - 16 * mm, 11 * mm, f"Pagina {self._pageNumber} de {total}")
+                self.drawString(16 * mm, 10 * mm, f"ARION ATACADO GEO | NOC ATACADO | {generated} | {generated_by}")
+                self.drawRightString(page_width - 16 * mm, 10 * mm, f"P\u00e1gina {self._pageNumber} de {total}")
+                self.restoreState()
                 super().showPage()
             super().save()
 
-    def page_frame(canvas, doc):
-        canvas.saveState()
-        canvas.setFillColor(ink)
-        canvas.setFont("Helvetica-Bold", 8)
-        canvas.drawString(doc.leftMargin, height - 13 * mm, "ARION ATACADO GEO")
-        canvas.setFillColor(muted)
-        canvas.setFont("Helvetica", 8)
-        canvas.drawRightString(width - doc.rightMargin, height - 13 * mm, "RELATÓRIO DO COCKPIT")
-        canvas.setStrokeColor(line)
-        canvas.setLineWidth(.6)
-        canvas.line(doc.leftMargin, height - 16 * mm, width - doc.rightMargin, height - 16 * mm)
-        canvas.line(doc.leftMargin, 16 * mm, width - doc.rightMargin, 16 * mm)
-        canvas.setFillColor(muted)
-        canvas.setFont("Helvetica", 7)
-        canvas.drawString(doc.leftMargin, 11 * mm, f"Gerado em {generated} · Fonte conforme escopo de acesso")
-        canvas.restoreState()
+    def page_frame(canvas_obj, doc):
+        canvas_obj.saveState()
+        canvas_obj.setFont("ArionVera-Bold", 8)
+        canvas_obj.setFillColor(ink)
+        canvas_obj.drawString(doc.leftMargin, page_height - 13 * mm, "ARION ATACADO GEO")
+        canvas_obj.setFont("ArionVera", 8)
+        canvas_obj.setFillColor(muted)
+        canvas_obj.drawRightString(page_width - doc.rightMargin, page_height - 13 * mm, "NOC ATACADO / COCKPIT")
+        canvas_obj.setStrokeColor(line)
+        canvas_obj.line(doc.leftMargin, page_height - 16 * mm, page_width - doc.rightMargin, page_height - 16 * mm)
+        canvas_obj.restoreState()
 
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=16 * mm, leftMargin=16 * mm,
-                            topMargin=23 * mm, bottomMargin=23 * mm,
-                            title=f"Arion Atacado Geo - {title}", author="Arion Atacado Geo")
-    story = [
-        Paragraph("ANÁLISE OPERACIONAL", styles["ReportMeta"]),
-        Paragraph(safe(title), styles["ReportTitle"]),
-        Paragraph(f"Período: <b>{safe(result['period_from'])} a {safe(result['period_to'])}</b>"
-                  f" &nbsp;&nbsp; Comparação: <b>{safe(result['compare_to'] or 'Sem comparação')}</b>"
-                  f" &nbsp;&nbsp; Agrupamento: <b>{safe(result['group_by_label'])}</b>", styles["ReportMeta"]),
-        Paragraph(
-            (f"Comparação: {safe(format_number(result['comparison']['value']))} · "
-             f"diferença {safe(format_number(result['comparison']['difference']))} · "
-             f"{safe(format_number(result['comparison']['percent']))}%"
-             if result.get("comparison") and result["comparison"].get("percent") is not None
-             else "Comparação sem base percentual para este recorte."
-             if result.get("comparison") else ""), styles["SmallMeta"]),
-        Spacer(1, 5),
-        Paragraph(f"Filtros aplicados: {safe(filters)}", styles["SmallMeta"]),
-        Spacer(1, 8),
-        Paragraph("INDICADORES-CHAVE", styles["SectionHeading"]),
-    ]
-    cards = []
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm,
+                            topMargin=23 * mm, bottomMargin=18 * mm,
+                            title=f"ARION ATACADO GEO - {result['description']['title']}", author=generated_by)
+    story = [para("RELAT\u00d3RIO ANAL\u00cdTICO DO COCKPIT", "ArionMeta"),
+             para(result["description"]["title"], "ArionTitle"),
+             para(result["description"]["subtitle"], "ArionMeta"), Spacer(1, 4)]
+    meta_rows = [[para("M\u00e9trica"), para(result["metric_label"])],
+                 [para("Per\u00edodo"), para(period_text)],
+                 [para("Base temporal"), para(result.get("period_date_label", "data de cria\u00e7\u00e3o"))],
+                 [para("Visualizar por"), para(result["group_by_label"])],
+                 [para("Gerado por"), para(generated_by)], [para("Gerado em"), para(generated)],
+                 [para("Data Scope"), para("Aplicado antes dos filtros e agrega\u00e7\u00f5es")]]
+    story += [table(meta_rows, [43 * mm, content_width - 43 * mm], repeat=0), para("Filtros ativos", "ArionSection")]
+    if filter_rows:
+        story.append(table([[para("Filtro"), para("Valor")]] + [[para(key), para(value)] for key, value in filter_rows],
+                           [48 * mm, content_width - 48 * mm]))
+    story.append(para("A m\u00e9trica exclui tickets cancelados e estados n\u00e3o classificados.", "ArionSmall")
+                 if result["metric"] != "canceled_tickets" else para("Consulta espec\u00edfica de tickets cancelados.", "ArionSmall"))
+    if result.get("comparison"):
+        comparison = result["comparison"]
+        story.append(para(f"Per\u00edodo anterior ({comparison['previous_start']} a {comparison['previous_end']}): {fmt(comparison['previous_value'])}; varia\u00e7\u00e3o {fmt(comparison['absolute_change'])} ({fmt(comparison['percentage_change'])}%).", "ArionSmall"))
+    story.append(para("Resumo executivo", "ArionSection"))
+    kpi_rows = [[para("Indicador"), para("Valor", "ArionRight"), para("Varia\u00e7\u00e3o", "ArionRight")]]
     for item in result["kpis"]:
-        source = "Espelhos CMDB / OTRS"
-        cards.append([Paragraph(safe(item["label"]).upper(), styles["CardLabel"]),
-                      Paragraph(f"{safe(format_number(item['value']))}{safe(item.get('unit', ''))}", styles["CardValue"]),
-                      Paragraph(source, styles["CardLabel"])])
-    card_rows = [[None, None] for _ in range(len(cards) // 2)]
-    for row_index, row in enumerate(card_rows):
-        first = row_index * 2
-        card_width = content_width / 2 - 18
-        row[:] = [Table([[value] for value in cards[first]], colWidths=[card_width]),
-                  Table([[value] for value in cards[first + 1]], colWidths=[card_width])]
-    if len(cards) % 2:
-        lone = Table([[value] for value in cards[-1]], colWidths=[content_width / 2 - 18])
-        card_rows.append([lone, ""])
-    if card_rows:
-        card_table = Table(card_rows, colWidths=[content_width / 2] * 2, hAlign="LEFT")
-        card_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), pale), ("BOX", (0, 0), (-1, -1), .5, line),
-            ("INNERGRID", (0, 0), (-1, -1), .5, white), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 9), ("RIGHTPADDING", (0, 0), (-1, -1), 9),
-            ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ]))
-        story.extend([card_table, Paragraph("EVOLUÇÃO NO PERÍODO", styles["SectionHeading"]), EvolutionChart(result["series"])])
-    if not result["kpis"]:
-        story.append(Paragraph("Nenhum indicador disponível para esta consulta.", styles["SmallMeta"]))
-    story.extend([Spacer(1, 3), Paragraph(f"DISTRIBUIÇÃO · {safe(result['group_by_label'])}", styles["SectionHeading"])])
-    if result["breakdown"]:
-        story.append(DistributionChart(result["breakdown"], result["detail"]))
-    else:
-        story.append(Paragraph("Nenhum resultado para a dimensão selecionada.", styles["SmallMeta"]))
-
-    story.extend([Spacer(1, 3), Paragraph("DETALHAMENTO", styles["SectionHeading"])])
-    detail_data = [[Paragraph(safe(result["group_by_label"]), styles["Cell"]),
-                    Paragraph(safe(result["metric_label"]), styles["CellRight"]),
-                    Paragraph("Participação", styles["CellRight"])]]
-    detail_data.extend([[Paragraph(safe(row["dimension"]), styles["Cell"]),
-                         Paragraph(safe(format_number(row["value"])), styles["CellRight"]),
-                         Paragraph(f"{safe(format_number(row['share']))}%", styles["CellRight"])]
-                        for row in result["detail"]])
-    table = Table(detail_data, colWidths=[content_width - 80 * mm, 40 * mm, 40 * mm], repeatRows=1, hAlign="LEFT")
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), pale), ("TEXTCOLOR", (0, 0), (-1, 0), ink),
-        ("LINEBELOW", (0, 0), (-1, 0), .8, line), ("LINEBELOW", (0, 1), (-1, -1), .4, line),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 7),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 7), ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-    ]))
-    story.append(table)
+        trend = item.get("trend")
+        trend_text = ""
+        if trend:
+            trend_text = f"{fmt(trend['absolute_change'])} {trend['unit']}" if trend["unit"] else f"{fmt(trend['percentage_change'])}%"
+        kpi_rows.append([para(item["label"]), para(fmt(item["value"]), "ArionRight"), para(trend_text, "ArionRight")])
+    story.append(table(kpi_rows, [content_width - 65 * mm, 30 * mm, 35 * mm]))
+    quality = result.get("provider_quality", {})
+    if quality.get("unresolved"):
+        story.append(para(f"Qualidade dos v\u00ednculos CMDB: {fmt(quality['unresolved'])} tickets sem provedor identificado; cobertura de {fmt(quality['coverage_percent'])}%.", "ArionSmall"))
+    chart_specs = result.get("chart_specs", [])
+    temporal_spec = next((item for item in chart_specs if item.get("type") == "temporal_overview"), None)
+    calendar_spec = next((item for item in chart_specs if item.get("type") == "monthly_calendar"), None)
+    story.append(PageBreak())
+    if temporal_spec:
+        story.append(para("Evolu\u00e7\u00e3o geral do per\u00edodo", "ArionSection"))
+        if temporal_spec.get("subtitle"):
+            story.append(para(temporal_spec["subtitle"], "ArionSmall"))
+        story.append(chart(temporal_spec))
+    if calendar_spec:
+        story.append(para(calendar_spec.get("title", "Calend\u00e1rio mensal"), "ArionSection"))
+        summary = calendar_spec.get("summary", {})
+        story.append(para(f"{fmt(summary.get('total', 0))} {calendar_spec.get('unit', 'tickets')} · m\u00e9dia por dia {fmt(summary.get('average_per_day', 0))} · maior dia {summary.get('peak_day') or 'sem ocorr\u00eancias'} ({fmt(summary.get('peak_value', 0))}) · {fmt(summary.get('days_with_occurrence', 0))} dias com ocorr\u00eancia", "ArionSmall"))
+        story.append(monthly_calendar(calendar_spec))
+    dimension_specs = [item for item in chart_specs if item.get("type") in {"ranking", "horizontal_bar", "compact_distribution"}]
+    if dimension_specs:
+        story.append(PageBreak())
+        story.append(para("Ranking e dimens\u00f5es complementares", "ArionSection"))
+    for spec in dimension_specs:
+        story.append(para(spec["title"], "ArionSection"))
+        if spec.get("subtitle"):
+            story.append(para(spec["subtitle"], "ArionSmall"))
+        if spec["type"] == "ranking":
+            dimension_label = "Provedor" if spec.get("dimension") == "provider" else "UF" if spec.get("dimension") == "uf" else result["group_by_label"]
+            ranking = [[para("Posi\u00e7\u00e3o"), para(dimension_label), para(spec.get("unit", "Tickets"), "ArionRight"), para("Participa\u00e7\u00e3o", "ArionRight")]]
+            ranking += [[para(i + 1), para(row["label"]), para(fmt(row["value"]), "ArionRight"), para(f"{fmt(row['share'])}%", "ArionRight")]
+                        for i, row in enumerate(spec.get("details", []))]
+            story.append(table(ranking, [20 * mm, content_width - 78 * mm, 28 * mm, 30 * mm]))
+        else:
+            story.append(chart(spec))
+    story.append(PageBreak())
+    story.append(para("ANEXO - TICKETS DO RESULTADO", "ArionSection"))
+    ticket_table = [[para("Ticket"), para("Data base"), para("Status"), para("Motivo"), para("Provedor"), para("UF"), para("Prioridade")]]
+    ticket_table += [[para(row["ticket"]), para(row["base_date"]), para(row["status"]), para(row["reason"]),
+                      para(row["provider"]), para(row["uf"]), para(row["priority"])] for row in result.get("tickets", [])]
+    widths = [25 * mm, 24 * mm, 22 * mm, 34 * mm, content_width - 25*mm - 24*mm - 22*mm - 34*mm - 14*mm - 20*mm, 14*mm, 20*mm]
+    story.append(table(ticket_table, widths))
     doc.build(story, onFirstPage=page_frame, onLaterPages=page_frame, canvasmaker=NumberedCanvas)
     return buffer.getvalue()
-
 
 def _safe_spreadsheet_text(value):
     text = str(value)
@@ -335,42 +358,110 @@ def analytics_export(request):
             raise ValueError("A consulta deve ser um objeto JSON.")
         export_format = payload.pop("format", "csv")
         if export_format not in ("csv", "xlsx", "pdf"):
-            raise ValueError("Formato de exportação inválido.")
-        result = AnalyticsQueryService().query(payload, user=request.user)
-        generated = datetime.now().astimezone().strftime("%d/%m/%Y %H:%M")
-        filters = ", ".join(f"{key}: {value}" for key, value in payload.get("filters", {}).items() if value not in (None, "", "all")) or "Sem filtros adicionais"
-        filters = f"Metrica: {result['metric_label']}; {filters}"
+            raise ValueError("Formato de exporta\u00e7\u00e3o inv\u00e1lido.")
+        payload["ticket_page"] = 1
+        payload["ticket_page_size"] = 100
+        payload.pop("ticket_search", None)
+        result = AnalyticsQueryService().query(payload, user=request.user, include_all_rows=True)
+        from django.utils import timezone
+        from django.utils.text import slugify
+        generated_at = timezone.localtime()
+        generated = generated_at.strftime("%d/%m/%Y %H:%M")
+        today = generated_at.strftime("%Y-%m-%d")
+        generated_by = request.user.get_username()
+        filter_labels = {
+            "status": "Status", "source_state": "Situa\u00e7\u00e3o OTRS", "provider": "Provedor", "uf": "UF",
+            "sla": "SLA", "priority": "Prioridade", "service": "Servi\u00e7o", "termination_reason": "Motivo",
+        }
+        raw_filters = result["normalized_query"]["filters"]
+        options = result["options"]
+        period_text = result["description"]["period"]
+        filter_rows = [("Per\u00edodo", period_text), ("Base temporal", result["period_date_label"]),
+                       ("M\u00e9trica", result["metric_label"])]
+        for key, label in filter_labels.items():
+            selected = raw_filters.get(key)
+            if selected in (None, "", "all"):
+                continue
+            if key == "priority" and selected == "high-critical":
+                display = "Alto / Cr\u00edtico"
+            else:
+                values = options.get(key, [])
+                choice = next((item for item in values if isinstance(item, dict) and str(item.get("value")) == str(selected)), None)
+                display = choice.get("label", selected) if choice else selected
+            filter_rows.append((label, display))
+        filter_rows += [("Visualizar por", result["group_by_label"]), ("Escopo de dados", "Aplicado pelo servidor")]
+        if result.get("comparison"):
+            comp = result["comparison"]
+            filter_rows.append(("Per\u00edodo comparado", f"{comp['previous_start']} a {comp['previous_end']}"))
+        if result["metric"] != "canceled_tickets" and raw_filters.get("status") not in {"CANCELED", "UNKNOWN"}:
+            filter_rows.append(("Regra operacional", "A m\u00e9trica exclui tickets cancelados e estados n\u00e3o classificados"))
+        group_slug = slugify(result["group_by"]) or "resultado"
+        ticket_headers = ["ticket", "data_base", "created_at", "status", "otrs_state", "closing_reason", "provider", "uf",
+                          "priority", "sla", "source", "config_item", "number", "designation", "circuit"]
+        def ticket_values(row):
+            links = row.get("links", [])
+            fields = ("config_item_id", "number", "designation", "circuit")
+            flattened = [" | ".join(str(link.get(field) or "") for link in links) for field in fields]
+            base = [row.get("ticket"), row.get("base_date"), row.get("created_at"), row.get("status"), row.get("source_state"),
+                    row.get("reason"), row.get("provider"), row.get("uf"), row.get("priority"), row.get("sla"), row.get("source")]
+            return base + flattened
         if export_format == "csv":
             buffer = StringIO(newline="")
             writer = csv.writer(buffer, delimiter=";")
-            writer.writerow([result["group_by_label"], result["metric_label"], "Participação (%)"])
-            writer.writerows((_safe_spreadsheet_text(row["dimension"]), row["value"], row["share"]) for row in result["detail"])
+            writer.writerow(ticket_headers)
+            for row in result["tickets"]:
+                writer.writerow([_safe_spreadsheet_text(value or "") for value in ticket_values(row)])
             response = HttpResponse("\ufeff" + buffer.getvalue(), content_type="text/csv; charset=utf-8")
-            filename = "arion-cockpit.csv"
+            filename = f"arion-cockpit-tickets-{today}.csv"
         elif export_format == "xlsx":
             from openpyxl import Workbook
             from openpyxl.styles import Font
             workbook = Workbook()
             summary = workbook.active
             summary.title = "Resumo"
-            summary.append(["ARION ATACADO GEO - Cockpit"])
-            summary.append(["Gerado em", generated])
-            summary.append(["Métrica", result["metric_label"]])
-            summary.append(["Período", f"{result['period_from']} a {result['period_to']}"])
-            summary.append(["Comparação", result["compare_to"] or "Sem comparação"])
-            summary.append(["Agrupamento", result["group_by_label"]])
-            summary.append(["Filtros", filters])
-            summary.append([])
-            summary.append(["Indicador", "Valor", "Fonte"])
-            for item in result["kpis"]:
-                summary.append([item["label"], item["value"], "Espelhos CMDB / OTRS"])
+            summary.append(["ARION ATACADO GEO - NOC ATACADO - Cockpit"])
             summary["A1"].font = Font(bold=True, size=14)
-            data = workbook.create_sheet("Dados")
-            data.append([result["group_by_label"], result["metric_label"], "Participação (%)"])
+            summary.append(["An\u00e1lise", _safe_spreadsheet_text(result["description"]["title"])])
+            summary.append(["Gerado por", _safe_spreadsheet_text(generated_by)])
+            summary.append(["Gerado em", generated])
+            summary.append(["M\u00e9trica", result["metric_label"]])
+            summary.append(["Per\u00edodo", _safe_spreadsheet_text(period_text)])
+            summary.append(["Base temporal", result["period_date_label"]])
+            summary.append(["Resultado", result["value"]])
+            summary.append(["Tickets do resultado", result["ticket_result_total"]])
+            if result.get("comparison"):
+                comp = result["comparison"]
+                summary.append(["Per\u00edodo anterior", _safe_spreadsheet_text(f"{comp['previous_start']} a {comp['previous_end']}")])
+                summary.append(["Valor anterior", comp["previous_value"]])
+                summary.append(["Varia\u00e7\u00e3o percentual", comp["percentage_change"]])
+            summary.append([])
+            summary.append(["Filtros ativos", "Valor"])
+            summary.append(["Escopo de dados", "Aplicado pelo servidor"])
+            for label, value in filter_rows:
+                summary.append([_safe_spreadsheet_text(label), _safe_spreadsheet_text(value)])
+            summary.append([])
+            summary.append(["Indicador", "Valor", "Varia\u00e7\u00e3o"])
+            for item in result["kpis"]:
+                trend = item.get("trend")
+                text = ""
+                if trend:
+                    text = f"{trend['absolute_change']} {trend['unit']}" if trend["unit"] else f"{trend['percentage_change']}%"
+                summary.append([item["label"], item["value"], text])
+            quality = result.get("provider_quality", {})
+            summary.append(["Com provedor identificado", quality.get("identified", 0)])
+            summary.append(["Sem provedor identificado", quality.get("unresolved", 0)])
+            summary.append(["Cobertura de provedor (%)", quality.get("coverage_percent", 0)])
+            distribution = workbook.create_sheet("Distribui\u00e7\u00e3o")
+            distribution.append([result["group_by_label"], result["metric_label"], "Participa\u00e7\u00e3o (%)"])
             for row in result["detail"]:
-                data.append([_safe_spreadsheet_text(row["dimension"]), row["value"], row["share"]])
-            data.freeze_panes = "A2"
-            data.auto_filter.ref = data.dimensions
+                distribution.append([_safe_spreadsheet_text(row["dimension"]), row["value"], row["share"]])
+            tickets_sheet = workbook.create_sheet("Tickets")
+            tickets_sheet.append(ticket_headers)
+            for row in result["tickets"]:
+                tickets_sheet.append([_safe_spreadsheet_text(value or "") for value in ticket_values(row)])
+            for sheet in (distribution, tickets_sheet):
+                sheet.freeze_panes = "A2"
+                sheet.auto_filter.ref = sheet.dimensions
             for sheet in workbook:
                 for column in sheet.columns:
                     letter = column[0].column_letter
@@ -378,16 +469,22 @@ def analytics_export(request):
             output = BytesIO()
             workbook.save(output)
             response = HttpResponse(output.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            filename = "arion-cockpit.xlsx"
+            filename = f"arion-cockpit-completo-{today}.xlsx"
         else:
-            response = HttpResponse(_pdf_report(result["metric_label"], generated, filters, result), content_type="application/pdf")
-            filename = "arion-cockpit.pdf"
+            response = HttpResponse(_pdf_report(generated, generated_by, result, filter_rows), content_type="application/pdf")
+            filename = f"arion-cockpit-analitico-{today}.pdf"
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        AuditService.record(request=request, category="EXPORT", action=f"EXPORT_{export_format.upper()}", module="Cockpit", description=f"Cockpit export {export_format.upper()}", result="SUCCESS", metadata={"format": export_format, "filters": payload.get("filters", {}), "period_from": result.get("period_from"), "period_to": result.get("period_to"), "group_by": result.get("group_by_label"), "rows": len(result.get("detail", []))})
+        AuditService.record(request=request, category="EXPORT", action=f"EXPORT_{export_format.upper()}", module="Cockpit",
+                            description=f"Cockpit export {export_format.upper()}", result="SUCCESS",
+                            metadata={"format": export_format, "filters": raw_filters, "start": result["start_date"],
+                                      "end": result["end_date"], "group_by": result["group_by_label"],
+                                      "ticket_rows": len(result["tickets"])})
         return response
     except (ValueError, TypeError, json.JSONDecodeError):
         return api_error(request, "VALIDATION_ERROR", status=400)
-
+    except Exception:
+        logger.exception("Cockpit export failed (format=%s)", locals().get("export_format", "unknown"))
+        return api_error(request, "EXPORT_FAILED", status=500)
 
 @login_required
 @access_required("view_cockpit")
@@ -411,7 +508,7 @@ def saved_views(request):
             name, config = str(payload.get("name", "")).strip(), payload.get("configuration")
             if not name or len(name) > 80 or not isinstance(config, dict):
                 raise ValueError("Informe um nome e uma configuração válida.")
-            allowed = {"metric", "group_by", "period", "period_from", "period_to", "compare_to", "filters"}
+            allowed = {"metric", "group_by", "period", "period_from", "period_to", "start", "end", "compare_to", "filters", "detail_page"}
             if set(config) - allowed:
                 raise ValueError("Configuração inválida.")
             row, created = SavedAnalyticsView.objects.update_or_create(user=request.user, name=name, defaults={"configuration": config})

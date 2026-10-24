@@ -82,10 +82,8 @@
 
 /* ---------- Grade principal (12 colunas) ---------- */
 .dashboard-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
-.trend-panel { grid-column: span 7; }
-.operator-panel { grid-column: span 5; }
-.states-panel { grid-column: span 12; }
-.providers-panel { grid-column: span 5; }
+.trend-panel { grid-column: span 12; }
+.states-panel, .providers-panel { grid-column: span 6; }
 .region-panel { grid-column: span 5; }
 .reasons-panel { grid-column: span 7; }
 .recurrence-panel { grid-column: span 5; }
@@ -177,8 +175,17 @@
 .state-rank > strong small { margin-left: 4px; color: var(--text-muted); font-size: 9px; font-weight: 400; }
 .state-bar { grid-column: 3 / -1; height: 3px; overflow: hidden; border-radius: 4px; background: var(--track-bg); }
 .state-bar b { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--accent-blue) 35%, transparent), var(--accent-blue)); transition: width 850ms var(--ease-out); }
-.dashboard-state-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
-.dashboard-state-grid .state-rank { grid-template-columns: 18px 20px minmax(55px, 1fr) auto auto; column-gap: 8px; }
+.dashboard-state-grid { grid-template-columns: 1fr; }
+.dashboard-state-grid .state-rank { grid-template-columns: 18px 20px minmax(0, 1fr) auto; column-gap: 8px; }
+.dashboard-state-grid .state-code-badge { display: none; }
+.provider-ranking { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.provider-rank { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 8px; margin: 0 -10px; padding: 9px 10px 10px; border-radius: 10px; transition: background 160ms ease; }
+.provider-rank:hover { background: var(--track-bg); }
+.provider-name { overflow: hidden; color: var(--text-primary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.provider-rank > strong { min-width: 74px; color: var(--text-primary); font-size: 13px; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+.provider-rank > strong small { margin-left: 4px; color: var(--text-muted); font-size: 9px; font-weight: 400; }
+.provider-rank .state-bar { grid-column: 2 / -1; }
+.provider-empty { padding: 14px 0; color: var(--text-muted); font-size: 11px; }
 
 /* ---------- Chamados por região ---------- */
 .rank-list { display: grid; gap: 17px; }
@@ -238,9 +245,8 @@ html[data-theme="light"] .kpi-operators .op-dot { box-shadow: 0 0 0 2px #fff; }
 /* ---------- Responsivo ---------- */
 @media (max-width: 1180px) {
   .trend-panel { grid-column: span 12; }
-  .states-panel { grid-column: span 12; }
-  .operator-panel { grid-column: span 12; }
-  .providers-panel, .region-panel, .reasons-panel { grid-column: span 6; }
+  .states-panel, .providers-panel { grid-column: span 6; }
+  .region-panel, .reasons-panel { grid-column: span 6; }
   .recurrence-panel { grid-column: span 12; }
 }
 @media (max-width: 980px) {
@@ -264,7 +270,6 @@ html[data-theme="light"] .kpi-operators .op-dot { box-shadow: 0 0 0 2px #fff; }
   .recurrence-body { align-items: flex-start; flex-direction: column; }
   .chart-legend { gap: 9px; font-size: 9px; }
   .trend-chart { grid-template-columns: 30px minmax(0, 1fr); }
-  .dashboard-state-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dash-card { animation: none; }

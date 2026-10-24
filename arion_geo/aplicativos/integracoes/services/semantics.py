@@ -18,12 +18,9 @@ class LinkSemantics:
     def from_link(cls, link):
         provider = getattr(link, "operator", None)
         return cls(
-            # The only project value currently persisted is a frozen XLSX-era value.
-            project_name=None,
-            project_is_official=False,
-            # DesignacaoOperadora is sparse/free text and has not been confirmed as
-            # the contracted macro operator, so never substitute the ISP here.
-            contract_operator_name=None,
+            project_name=(link.business_project.strip() or None),
+            project_is_official=bool(link.business_project and link.business_identity_confidence in {"HIGH", "MEDIUM"}),
+            contract_operator_name=(link.contracting_client.strip() or None),
             provider_name=(provider.name.strip() if provider and provider.name.strip() else UNCLASSIFIED),
             provider_config_item_id=(provider.source_config_item_id if provider else ((link.isp_raw or "").strip() if str(link.isp_raw or "").strip().isdigit() else "")),
             isp_raw=(link.isp_raw or "").strip(),

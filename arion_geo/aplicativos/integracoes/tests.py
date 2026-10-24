@@ -1,4 +1,7 @@
 from unittest.mock import Mock, patch
+import json
+import tempfile
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
@@ -8,7 +11,12 @@ from django.urls import reverse
 
 from aplicativos.auditoria.models import AuditEvent
 from .models import Integration, IntegrationRun
-from .services.errors import SecretStorageUnavailable
+from .services.errors import (
+    OTRSAuthenticationError,
+    OTRSCredentialDecryptionError,
+    OTRSCredentialMissingError,
+    SecretStorageUnavailable,
+)
 from .services.secrets import TestSecretProtector
 
 
@@ -20,6 +28,12 @@ class IntegrationPermissionTests(TestCase):
         self.assertEqual(response.status_code, 403)
         response = self.client.post(reverse("configuracoes:integracoes:cmdb-test"))
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.client.post(reverse("configuracoes:integracoes:arion-save"), {
+            "engine": "sqlite", "database": "arion.sqlite3",
+        }).status_code, 403)
+        self.assertEqual(self.client.post(reverse("configuracoes:integracoes:arion-test"), {
+            "engine": "sqlite", "database": "arion.sqlite3",
+        }).status_code, 403)
 
     def test_view_permission_does_not_grant_manage_or_run(self):
         user = get_user_model().objects.create_user(username="integration-viewer", password="safe-password-1")
@@ -32,6 +46,12 @@ class IntegrationPermissionTests(TestCase):
         self.assertEqual(self.client.get(reverse("configuracoes:integracoes:cmdb")).status_code, 200)
         self.assertEqual(self.client.post(reverse("configuracoes:integracoes:cmdb-test")).status_code, 403)
         self.assertEqual(self.client.post(reverse("configuracoes:integracoes:save-config", args=["cmdb"])).status_code, 403)
+        self.assertEqual(self.client.post(reverse("configuracoes:integracoes:arion-save"), {
+            "engine": "sqlite", "database": "arion.sqlite3",
+        }).status_code, 403)
+        self.assertEqual(self.client.post(reverse("configuracoes:integracoes:arion-test"), {
+            "engine": "sqlite", "database": "arion.sqlite3",
+        }).status_code, 403)
 
 
 class IntegrationConfigurationTests(TestCase):
@@ -39,6 +59,107 @@ class IntegrationConfigurationTests(TestCase):
         self.user = get_user_model().objects.create_superuser(username="integration-admin", email="admin@example.com", password="safe-password-1")
         self.client.force_login(self.user)
         self.protector = TestSecretProtector()
+
+    @patch("aplicativos.integracoes.services.arion_database.config_path")
+    def test_arion_configuration_page_offers_only_sqlite_and_mysql(self, database_config_path):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_config_path.return_value = Path(temp_dir) / "var" / "database-config.json"
+            response = self.client.get(reverse("configuracoes:integracoes:arion"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Banco atualmente ativo")
+        self.assertContains(response, "Testar conexão")
+        self.assertContains(response, "Salvar configuração")
+        self.assertContains(response, 'value="sqlite"')
+        self.assertContains(response, 'value="mysql"')
+        self.assertNotContains(response, 'value="mariadb"')
+        self.assertNotContains(response, "MariaDB Workbench")
+
+    @patch("aplicativos.integracoes.services.arion_database.config_path")
+    def test_arion_sqlite_config_is_saved_outside_main_database_and_restart_is_required(self, database_config_path):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_file = Path(temp_dir) / "var" / "database-config.json"
+            database_config_path.return_value = config_file
+            response = self.client.post(reverse("configuracoes:integracoes:arion-save"), {
+                "engine": "sqlite", "database": "portable.sqlite3",
+            }, follow=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "após reiniciar a aplicação e o worker")
+            self.assertTrue(config_file.exists())
+            stored = json.loads(config_file.read_text(encoding="utf-8"))
+            self.assertEqual(stored, {"engine": "sqlite", "database": "portable.sqlite3"})
+
+    @patch("aplicativos.integracoes.services.arion_database.get_secret_protector")
+    @patch("aplicativos.integracoes.services.arion_database.config_path")
+    def test_arion_mysql_config_encrypts_secret_and_test_does_not_save_it(self, database_config_path, get_protector):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_file = Path(temp_dir) / "var" / "database-config.json"
+            database_config_path.return_value = config_file
+            get_protector.return_value = self.protector
+            saved = self.client.post(reverse("configuracoes:integracoes:arion-save"), {
+                "engine": "mysql", "host": "127.0.0.1", "port": "3306", "mysql_database": "arion_geo",
+                "user": "arion", "password": "private-db-password", "timeout": "10",
+            })
+            self.assertEqual(saved.status_code, 302)
+            raw = config_file.read_text(encoding="utf-8")
+            self.assertNotIn("private-db-password", raw)
+            self.assertIn(self.protector.protect("private-db-password"), raw)
+
+            with patch("aplicativos.integracoes.views.password_for_connection_test", return_value="private-db-password") as password, \
+                 patch("aplicativos.integracoes.views.test_mysql_connection", return_value={"database": "arion_geo", "version": "8.4.2"}) as test_connection:
+                response = self.client.post(reverse("configuracoes:integracoes:arion-test"), {
+                    "engine": "mysql", "host": "127.0.0.1", "port": "3306", "mysql_database": "arion_geo",
+                    "user": "arion", "password": "", "timeout": "10",
+                })
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "Conexão OK")
+            self.assertContains(response, "MySQL 8.x")
+            self.assertNotContains(response, "private-db-password")
+            password.assert_called_once()
+            test_connection.assert_called_once()
+
+    @patch("aplicativos.integracoes.views.get_secret_protector")
+    def test_otrs_client_receives_decrypted_plaintext_and_normalized_connection_options(self, get_protector):
+        get_protector.return_value = self.protector
+        integration = Integration.objects.create(
+            key="otrs", name="OTRS MySQL", kind="MySQL", username="otrs-reader",
+            secret_ciphertext=self.protector.protect("a-private-password"),
+            config={"host": "200.174.198.133", "port": "3306", "database": "otrs", "timeout": 10},
+        )
+
+        from .views import _otrs_client
+        client = _otrs_client(integration)
+
+        self.assertEqual(client.host, "200.174.198.133")
+        self.assertEqual(client.port, 3306)
+        self.assertIs(type(client.port), int)
+        self.assertEqual(client.database, "otrs")
+        self.assertEqual(client.username, "otrs-reader")
+        self.assertEqual(client.password, "a-private-password")
+        self.assertIs(type(client.password), str)
+        self.assertEqual(client.timeout, 10)
+
+    @patch("aplicativos.integracoes.views.get_secret_protector")
+    def test_otrs_dpapi_failure_is_reported_as_decryption_failure(self, get_protector):
+        get_protector.return_value.unprotect.side_effect = SecretStorageUnavailable()
+        integration = Integration.objects.create(
+            key="otrs", name="OTRS MySQL", kind="MySQL", username="otrs-reader",
+            secret_ciphertext="unreadable-ciphertext", config={"host": "db.example", "database": "otrs"},
+        )
+
+        from .views import _otrs_client
+        with self.assertRaises(OTRSCredentialDecryptionError) as caught:
+            _otrs_client(integration)
+        self.assertNotIn("unreadable-ciphertext", caught.exception.safe_message)
+
+    @patch("aplicativos.integracoes.views.get_secret_protector")
+    def test_otrs_missing_credentials_have_a_specific_safe_error(self, get_protector):
+        integration = Integration.objects.create(
+            key="otrs", name="OTRS MySQL", kind="MySQL", config={"host": "db.example"},
+        )
+        from .views import _otrs_client
+        with self.assertRaises(OTRSCredentialMissingError):
+            _otrs_client(integration)
+        get_protector.assert_not_called()
 
     @patch("aplicativos.integracoes.views.get_secret_protector")
     def test_password_is_encrypted_and_never_returned_or_audited(self, get_protector):
@@ -181,3 +302,41 @@ class IntegrationConfigurationTests(TestCase):
         self.assertFalse(integration.enabled)
         self.assertNotIn("secret", run.message)
         self.assertTrue(AuditEvent.objects.filter(action="INTEGRATION_TESTED", result="SUCCESS").exists())
+
+    @patch("aplicativos.integracoes.views._otrs_client")
+    def test_otrs_test_connection_runs_even_when_integration_is_disabled(self, client_factory):
+        integration = Integration.objects.create(
+            key="otrs", name="OTRS MySQL", kind="MySQL", username="reader",
+            secret_ciphertext=self.protector.protect("secret"),
+            config={"host": "db.example", "port": 3306, "database": "otrs"}, enabled=False,
+        )
+        client_factory.return_value.test_connection.return_value = True
+        client_factory.return_value.list_databases.return_value = ["otrs"]
+
+        response = self.client.post(reverse("configuracoes:integracoes:otrs-test"))
+
+        self.assertEqual(response.status_code, 302)
+        run = IntegrationRun.objects.get(integration=integration, operation=IntegrationRun.Operation.TEST)
+        self.assertEqual(run.status, IntegrationRun.Status.SUCCESS)
+        integration.refresh_from_db()
+        self.assertFalse(integration.enabled)
+        self.assertEqual(integration.accessible_databases, ["otrs"])
+
+    @patch("aplicativos.integracoes.views._otrs_client")
+    def test_otrs_access_denied_keeps_specific_safe_message(self, client_factory):
+        integration = Integration.objects.create(
+            key="otrs", name="OTRS MySQL", kind="MySQL", username="reader",
+            secret_ciphertext=self.protector.protect("secret"), config={"host": "db.example"},
+        )
+        client_factory.return_value.test_connection.side_effect = OTRSAuthenticationError(
+            "Access denied; password=must-not-leak",
+        )
+
+        self.client.post(reverse("configuracoes:integracoes:otrs-test"))
+
+        run = IntegrationRun.objects.get(integration=integration, operation=IntegrationRun.Operation.TEST)
+        integration.refresh_from_db()
+        self.assertEqual(run.status, IntegrationRun.Status.FAILED)
+        self.assertEqual(run.message, OTRSAuthenticationError.safe_message)
+        self.assertNotIn("must-not-leak", run.message)
+        self.assertNotIn("must-not-leak", integration.last_error)
