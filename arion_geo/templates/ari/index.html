@@ -93,4 +93,4 @@
 {{ initial_messages|json_script:"ari-initial-messages" }}
 {% endblock %}
 
-{% block extra_js %}<script src="{% static 'js/ari/ari.js' %}" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% arion_js 'js/ari/ari.js' %}" defer></script>{% endblock %}

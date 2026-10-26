@@ -12,16 +12,17 @@ GROUP_AUDITOR = "Consulta / Auditoria"
 
 MODULE_PERMISSIONS = (
     "view_dashboard", "view_cockpit", "save_analytics_views", "view_map",
-    "view_rankings", "view_base", "view_ari", "import_cmdb", "export_base",
+    "view_rankings", "view_base", "view_operational_tickets", "manage_operational_tickets",
+    "view_ari", "import_cmdb", "export_base",
 )
 ADMIN_PERMISSIONS = ("manage_users", "manage_groups", "manage_data_scopes", "view_audit_log", "view_integrations", "manage_integrations", "run_integrations", "inspect_integrations", "view_system_info")
 ALL_ACCESS_PERMISSIONS = MODULE_PERMISSIONS + ADMIN_PERMISSIONS
 
 ROLE_PERMISSIONS = {
     GROUP_SYSTEM_ADMIN: ALL_ACCESS_PERMISSIONS,
-GROUP_MANAGER: ("view_dashboard", "view_cockpit", "save_analytics_views", "view_map", "view_rankings", "view_base", "view_ari"),
-GROUP_ANALYST: ("view_dashboard", "view_cockpit", "save_analytics_views", "view_map", "view_rankings", "view_base", "view_ari"),
-GROUP_AUDITOR: ("view_dashboard", "view_cockpit", "view_map", "view_rankings", "view_base", "view_ari", "view_audit_log"),
+GROUP_MANAGER: ("view_dashboard", "view_cockpit", "save_analytics_views", "view_map", "view_rankings", "view_base", "view_operational_tickets", "manage_operational_tickets", "view_ari"),
+GROUP_ANALYST: ("view_dashboard", "view_cockpit", "save_analytics_views", "view_map", "view_rankings", "view_base", "view_operational_tickets", "manage_operational_tickets", "view_ari"),
+GROUP_AUDITOR: ("view_dashboard", "view_cockpit", "view_map", "view_rankings", "view_base", "view_operational_tickets", "view_ari", "view_audit_log"),
 }
 
 PERMISSION_LABELS = {
@@ -31,6 +32,8 @@ PERMISSION_LABELS = {
     "view_map": ("Mapa", "Visualizar"),
     "view_rankings": ("Rankings", "Visualizar"),
     "view_base": ("Base", "Visualizar"),
+    "view_operational_tickets": ("Chamados", "Visualizar fila operacional"),
+    "manage_operational_tickets": ("Chamados", "Gerenciar acompanhamento interno"),
     "import_cmdb": ("Base", "Importar / atualizar CMDB"),
     "export_base": ("Base", "Exportar"),
     "manage_users": ("Administração", "Gerenciar usuários"),

@@ -39,6 +39,14 @@ O tipo tecnico nao representa sozinho a semantica de negocio: `resolvido` e `Enc
 
 O estado atual informa a situação, mas não explica sozinho o motivo. Foi localizado um Dynamic Field estruturado `CodigoFechamento` (`Dropdown`, objeto Ticket): preenchido em **10.310 tickets (86,1%)**, com **54 valores distintos**. `DetalheCodFechamento` é `Text`, preenchido em **7.432 (62,1%)**, com **4.675 valores distintos**; sua cardinalidade e natureza livre tornam inadequado agrupá-lo ou expô-lo como filtro sem normalização e revisão de privacidade.
 
+Reconsulta do catalogo confirmou que o mesmo `dynamic_field` ID 101 `CodigoFechamento` foi alterado em lugar em agosto/2026; nao foi criado um novo campo de motivo. O mirror tem 54 raws, 48 categorias canonicas depois de seis variantes excedentes agrupadas explicitamente. `FalhaMassiva` e `Defeito Massivo` compoem a mesma categoria confirmada `Falha Massiva`; o raw continua preservado. Inventario mensal completo, labels de catalogo e casos ambiguos estao em [OTRS-MOTIVOS-FECHAMENTO.md](OTRS-MOTIVOS-FECHAMENTO.md).
+
+## Reclassificacao TELMEX no mirror local
+
+Antes da reclassificacao, 80 links presentes tinham `business_project=TELMEX`; nenhum tinha `contracting_client=TELMEX`, pois a regra do cliente ja canonizava o token como Claro. Em 25/10/2026, `classificar_identidade_cmdb --apply` recalculou os campos derivados dos 3.437 nomes originais: Projeto TELMEX caiu para 0, sem editar `CMDBLinkMirror.name` nem escrever no CMDB. Depois, 273 nomes contendo TELMEX estao sob Cliente Claro; 192 preservam o contexto derivado `CLARO / TELMEX`, 174 dos 273 tem Projeto Bradesco. O total Claro/Bradesco e 288. Tokens regionais `CLARO.UF` nao sao promovidos a Projeto.
+
+Nos titulos OTRS, `TicketBusinessIdentityService` aplica a mesma regra em runtime: TELMEX/Claro e Cliente, Bradesco e Projeto quando explicito; titulo `CLARO - TELMEX` preserva o contexto raw combinado sem alterar o titulo do OTRS. Nenhum titulo foi regravado no mirror.
+
 Opções seguras de `CodigoFechamento` encontradas na busca por categorias de encerramento:
 
 | Fonte/campo | Valor categórico | Tickets |

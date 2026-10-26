@@ -25,31 +25,38 @@
         <p>Explore a base e acompanhe a opera&ccedil;&atilde;o por diferentes perspectivas.</p>
       </header>
       <nav class="overview-module-grid" aria-label="M&oacute;dulos operacionais">
+        {% if can_view_chamados %}
+        <a class="overview-module-card" href="{% url 'chamados:index' %}">
+          <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v4a2 2 0 0 0 0 4v4H5v-4a2 2 0 0 0 0-4zM12 7.5v1.5M12 11.5V13M12 15.5V17"/></svg></span>
+          <span class="overview-module-copy"><strong>Chamados</strong><span>Acompanhe a fila ativa, aging, respons&aacute;veis e andamento operacional dos chamados.</span></span>
+          <span class="overview-module-cta">Abrir Chamados <b aria-hidden="true">&rarr;</b></span>
+        </a>
+        {% endif %}
         {% if can_view_base %}
         <a class="overview-module-card" href="{% url 'base_links:index' %}">
           <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5h16v14H4zM8 9h8M8 12.5h8M8 16h5"/></svg></span>
-          <span class="overview-module-copy"><strong>Base de Links</strong><span>Pesquise designa&ccedil;&otilde;es, circuitos, projetos, provedores e dados t&eacute;cnicos.</span></span>
+          <span class="overview-module-copy"><strong>Base de Links</strong><span>Pesquise designa&ccedil;&otilde;es, circuitos, projetos, provedores e dados t&eacute;cnicos da base.</span></span>
           <span class="overview-module-cta">Abrir Base <b aria-hidden="true">&rarr;</b></span>
         </a>
         {% endif %}
         {% if can_view_cockpit %}
         <a class="overview-module-card" href="{% url 'cockpit' %}">
           <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16M8 4v4M15 10v4M10 16v4"/></svg></span>
-          <span class="overview-module-copy"><strong>Cockpit</strong><span>Analise tickets, per&iacute;odos, status, provedores, servi&ccedil;os e outras dimens&otilde;es.</span></span>
+          <span class="overview-module-copy"><strong>Cockpit</strong><span>Analise chamados, per&iacute;odos, motivos, provedores e outras dimens&otilde;es operacionais.</span></span>
           <span class="overview-module-cta">Abrir Cockpit <b aria-hidden="true">&rarr;</b></span>
         </a>
         {% endif %}
         {% if can_view_map %}
         <a class="overview-module-card" href="{% url 'mapa:index' %}">
           <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></svg></span>
-          <span class="overview-module-copy"><strong>Mapa</strong><span>Explore geograficamente a distribui&ccedil;&atilde;o dos Links e da opera&ccedil;&atilde;o.</span></span>
+          <span class="overview-module-copy"><strong>Mapa</strong><span>Explore geograficamente a distribui&ccedil;&atilde;o da base e das ocorr&ecirc;ncias da opera&ccedil;&atilde;o.</span></span>
           <span class="overview-module-cta">Abrir Mapa <b aria-hidden="true">&rarr;</b></span>
         </a>
         {% endif %}
         {% if can_view_rankings %}
         <a class="overview-module-card" href="{% url 'rankings:index' %}">
           <span class="overview-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v2a4 4 0 0 0 4 4M16 6h4v2a4 4 0 0 1-4 4M12 13v5M8 21h8M9 18h6"/></svg></span>
-          <span class="overview-module-copy"><strong>Rankings</strong><span>Compare provedores, Links afetados, reincid&ecirc;ncia e desempenho operacional.</span></span>
+          <span class="overview-module-copy"><strong>Rankings</strong><span>Compare provedores por impacto, reincid&ecirc;ncia, aging e desempenho operacional.</span></span>
           <span class="overview-module-cta">Abrir Rankings <b aria-hidden="true">&rarr;</b></span>
         </a>
         {% endif %}

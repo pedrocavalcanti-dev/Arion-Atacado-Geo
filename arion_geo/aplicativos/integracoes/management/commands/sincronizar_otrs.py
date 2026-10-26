@@ -134,9 +134,9 @@ class Command(BaseCommand):
             f"IMPROCEDENTE={responsibility.get('IMPROCEDENTE', 0)}; "
             f"INDETERMINADO={responsibility.get('INDETERMINADO', 0)}."
         )
-        from aplicativos.painel.services.analytics import normalize_closing_reason
+        from aplicativos.integracoes.services.closing_reason import ClosingReasonCanonicalizer
         coded = current.exclude(closing_code_raw="")
-        reasons = {normalize_closing_reason(value) for value in coded.values_list("closing_code_raw", flat=True).distinct()}
+        reasons = {ClosingReasonCanonicalizer.key(value) for value in coded.values_list("closing_code_raw", flat=True).distinct()}
         self.stdout.write(f"Fechamento local: CodigoFechamento preenchido={coded.count()}; motivos distintos normalizados={len(reasons)}; ticketResolvido={current.filter(resolved_at__isnull=False).count()}; data terminal StateUpdate={current.filter(terminal_state_at__isnull=False).count()}; cancelamento datado={current.filter(canceled_at__isnull=False).count()}.")
         statuses = {row["business_status"]: row["total"] for row in current.values("business_status").annotate(total=Count("id"))}
         self.stdout.write(f"Snapshot local: tickets atuais na fila={current.count()}.")

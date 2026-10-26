@@ -9,6 +9,8 @@ venv/
 
 # Environment
 .env
+.env.*
+!.env.example
 
 # Django
 arion_geo/db.sqlite3
@@ -38,3 +40,24 @@ private_media/
 
 # Runtime/local database configuration
 var/
+node_modules/
+npm-debug.log*
+*.map
+arion_geo/static/arion_build/
+arion_geo/static/.arion-build-*/
+
+# Local Cloudflare Tunnel material
+.cloudflared/
+*.cf-tunnel-token
+*.tunnel-token
+*.tunnel-credentials.json
+deploy/windows/cloudflare/config.yml
+deploy/windows/cloudflare/*.json
+
+# Database exports and local backups
+*.sql
+*.bak
+*.dump
+*.pem
+*.p12
+*.pfx

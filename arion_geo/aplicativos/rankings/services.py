@@ -11,8 +11,9 @@ from django.utils import timezone
 
 from aplicativos.integracoes.models import OTRSTicketConfigItem
 from aplicativos.integracoes.services.analytics import LinkQueryService, TicketQueryService
+from aplicativos.integracoes.services.closing_reason import ClosingReasonCanonicalizer
 from aplicativos.integracoes.services.semantics import provider_label
-from aplicativos.painel.services.analytics import AnalyticsQueryService, normalize_closing_reason
+from aplicativos.painel.services.analytics import AnalyticsQueryService
 
 
 VALID_STATES = AnalyticsQueryService.OPERATIONAL_VALID_STATES
@@ -20,9 +21,10 @@ BACKLOG_STATES = ("OPEN", "PENDING", "SCHEDULED")
 TERMINAL_STATES = ("RESOLVED", "CLOSED")
 SMALL_SAMPLE_LINK_THRESHOLD = 5
 BEST_RANKING_MIN_LINKS = 5
+BEST_RANKING_MIN_TICKETS = 3
 RESPONSIBILITY_REVIEW_MIN_TICKETS = 6
 RESPONSIBILITY_REVIEW_IMPROCEDENT_RATE = 0.60
-RANKING_WEIGHTS = {
+RANKING_WEIGHTS_V1 = {
     "proportional": {
         "affected_rate": 0.25,
         "tickets_per_100_links": 0.20,
@@ -38,6 +40,13 @@ RANKING_WEIGHTS = {
         "backlog_current": 0.10,
     },
     "score": {"proportional": 0.70, "impact": 0.30},
+}
+RANKING_WEIGHTS = {
+    "impact_noc": 0.30,
+    "affected_base": 0.20,
+    "recurrent": 0.20,
+    "over_24h": 0.20,
+    "backlog_current": 0.10,
 }
 
 PRIORITY_GROUPS = {
@@ -74,16 +83,18 @@ def _next_month(day):
     return (day.replace(day=28) + timedelta(days=4)).replace(day=1)
 
 
-def _score_band(score):
+def _score_band(score, *, no_occurrences=False):
+    if no_occurrences or score == 0:
+        return "Sem ocorrências", "no-occurrences"
     if score >= 80:
         return "Crítico", "critical"
     if score >= 60:
-        return "Alto risco", "high"
+        return "Alto", "high"
     if score >= 40:
-        return "Atenção", "attention"
+        return "Moderado", "attention"
     if score >= 20:
-        return "Atenção baixa", "low-attention"
-    return "Muito bom", "good"
+        return "Baixo", "low-attention"
+    return "Muito baixo", "good"
 
 
 def _percentile_scores(items, key):
@@ -104,26 +115,83 @@ def _percentile_scores(items, key):
     return scores
 
 
-def _apply_scores(rows):
-    proportional_keys = tuple(RANKING_WEIGHTS["proportional"])
-    impact_keys = tuple(RANKING_WEIGHTS["impact"])
+def _apply_scores_v1(rows):
+    """Keep the former index available for same-snapshot historical studies."""
+    proportional_keys = tuple(RANKING_WEIGHTS_V1["proportional"])
+    impact_keys = tuple(RANKING_WEIGHTS_V1["impact"])
     normalized = {}
     for key in (*proportional_keys, *impact_keys):
         normalized[key] = _percentile_scores(rows, key)
     for index, row in enumerate(rows):
-        proportional = sum(normalized[key][index] * weight for key, weight in RANKING_WEIGHTS["proportional"].items())
-        impact = sum(normalized[key][index] * weight for key, weight in RANKING_WEIGHTS["impact"].items())
-        row["proportional_score"] = round(proportional, 1)
-        row["impact_score"] = round(impact, 1)
-        row["risk_score"] = round(
-            proportional * RANKING_WEIGHTS["score"]["proportional"]
-            + impact * RANKING_WEIGHTS["score"]["impact"], 1,
+        proportional = sum(normalized[key][index] * weight for key, weight in RANKING_WEIGHTS_V1["proportional"].items())
+        impact = sum(normalized[key][index] * weight for key, weight in RANKING_WEIGHTS_V1["impact"].items())
+        row["proportional_score_v1"] = round(proportional, 1)
+        row["impact_score_v1"] = round(impact, 1)
+        row["risk_score_v1"] = round(
+            proportional * RANKING_WEIGHTS_V1["score"]["proportional"]
+            + impact * RANKING_WEIGHTS_V1["score"]["impact"], 1,
         )
-        row["normalized_components"] = {
-            key: round(normalized[key][index], 1)
-            for key in (*proportional_keys, *impact_keys)
+    return rows
+
+
+def _nearest_rank_p95(values):
+    """Nearest-rank P95. Empty/zero distributions stay zero without a score floor."""
+    ordered = sorted(max(0.0, float(value or 0)) for value in values)
+    if not ordered:
+        return 0.0
+    index = max(0, min(len(ordered) - 1, (95 * len(ordered) + 99) // 100 - 1))
+    return ordered[index]
+
+
+def _apply_scores(rows, *, normalization_rows=None):
+    """Apply ARION V2 using the current provider set and robust P95 caps."""
+    reference_rows = rows if normalization_rows is None else normalization_rows
+    p95_tickets = _nearest_rank_p95(row.get("tickets", 0) for row in reference_rows)
+    p95_affected = _nearest_rank_p95(row.get("links_affected", 0) for row in reference_rows)
+    for row in rows:
+        tickets = max(0, row.get("tickets", 0) or 0)
+        links_total = max(0, row.get("links_total", 0) or 0)
+        affected = max(0, row.get("links_affected", 0) or 0)
+        recurrent = max(0, row.get("recurrent_links", 0) or 0)
+        eligible = max(0, row.get("eligible_tickets", 0) or 0)
+        over_24h = max(0, row.get("tickets_over_24h", 0) or 0)
+        backlog = max(0, row.get("backlog_current", 0) or 0)
+
+        ticket_impact = min(tickets / p95_tickets, 1.0) if p95_tickets else 0.0
+        affected_impact = min(affected / p95_affected, 1.0) if p95_affected else 0.0
+        impact_noc = 30 * (0.60 * ticket_impact + 0.40 * affected_impact)
+        affected_base = 20 * min(affected / links_total, 1.0) if links_total else 0.0
+        recurrent_score = 20 * min(recurrent / affected, 1.0) if affected else 0.0
+        over_24h_score = 20 * min(over_24h / eligible, 1.0) if eligible else 0.0
+        backlog_score = 10 * min(backlog / max(tickets, 1), 1.0)
+
+        components = {
+            "impact_noc": round(impact_noc, 1),
+            "affected_base": round(affected_base, 1),
+            "recurrent": round(recurrent_score, 1),
+            "over_24h": round(over_24h_score, 1),
+            "backlog_current": round(backlog_score, 1),
         }
-        row["risk_label"], row["risk_class"] = _score_band(row["risk_score"])
+        row["impact_noc_score"] = components["impact_noc"]
+        row["affected_base_score"] = components["affected_base"]
+        row["recurrent_score"] = components["recurrent"]
+        row["over_24h_score"] = components["over_24h"]
+        row["backlog_score"] = components["backlog_current"]
+        row["risk_components"] = components
+        row["impact_score"] = row["impact_noc_score"]
+        row["proportional_score"] = round(sum(components[key] for key in (
+            "affected_base", "recurrent", "over_24h", "backlog_current",
+        )), 1)
+        row["risk_score"] = round(sum(components.values()), 1)
+        row["tickets_per_link"] = round(tickets / links_total, 2) if links_total else 0.0
+        row["risk_eligible"] = tickets >= 1 or backlog > 0
+        row["best_eligible"] = tickets >= 1 and (
+            links_total >= BEST_RANKING_MIN_LINKS or tickets >= BEST_RANKING_MIN_TICKETS
+        )
+        row["no_occurrence"] = tickets == 0 and backlog == 0
+        row["risk_label"], row["risk_class"] = _score_band(
+            row["risk_score"], no_occurrences=row["no_occurrence"],
+        )
     return rows
 
 
@@ -132,7 +200,9 @@ class RankingService:
 
     @classmethod
     def build(cls, user, *, date_from, date_to, filters=None, now=None, detail_provider_id=None, detail_ticket_page=1, detail_ticket_page_size=10):
-        filters = filters or {}
+        filters = dict(filters or {})
+        if filters.get("reason"):
+            filters["reason"] = ClosingReasonCanonicalizer.key(filters["reason"])
         now = now or timezone.now()
         links_qs = LinkQueryService.base(user)
         if filters.get("operator"):
@@ -325,8 +395,13 @@ class RankingService:
             history_periods.append((cursor, min(month_end, date_to)))
             cursor = _next_month(cursor)
         history_maps = [raw_for(start, end) for start, end in history_periods if start <= end]
+        def rows_in_active_filter(provider_rows):
+            return [row for row in provider_rows.values()
+                    if (not filters.get("only_aged") or row["tickets_over_24h"])
+                    and (not filters.get("only_recurrent") or row["recurrent_links"])]
+
         for month_rows in history_maps:
-            _apply_scores(list(month_rows.values()))
+            _apply_scores(list(month_rows.values()), normalization_rows=rows_in_active_filter(month_rows))
         history_by_provider = defaultdict(list)
         month_labels = []
         for (history_start_day, _), month_rows in zip(history_periods, history_maps):
@@ -337,9 +412,9 @@ class RankingService:
         rows = list(current_rows_map.values())
         trend_rows = list(trend_rows_map.values())
         previous_rows = list(previous_rows_map.values())
-        _apply_scores(rows)
-        _apply_scores(trend_rows)
-        _apply_scores(previous_rows)
+        _apply_scores(rows, normalization_rows=rows_in_active_filter(current_rows_map))
+        _apply_scores(trend_rows, normalization_rows=rows_in_active_filter(trend_rows_map))
+        _apply_scores(previous_rows, normalization_rows=rows_in_active_filter(previous_rows_map))
         trend_by_id = {row["id"]: row for row in trend_rows}
         previous_by_id = {row["id"]: row for row in previous_rows}
         for row in rows:
@@ -364,8 +439,6 @@ class RankingService:
             row["projects"] = sorted({link.business_project for link in row["links_for_provider"] if link.business_project})
             row["clients"] = sorted({link.contracting_client for link in row["links_for_provider"] if link.contracting_client})
             row["states"] = sorted({link.state for link in row["links_for_provider"] if link.state})
-            row["risk_components"] = {key: round(row[key] * 100, 1) if key.endswith("rate") else round(row[key], 1)
-                                       for key in RANKING_WEIGHTS["proportional"]}
             row["trend_delta"] = delta
 
         def sort_key(row):
@@ -376,7 +449,10 @@ class RankingService:
             return row
 
         rows = [row for row in rows if sort_key(row)]
-        rows.sort(key=lambda row: (-row["risk_score"], -row["proportional_score"], row["name"].casefold()))
+        rows.sort(key=lambda row: (
+            -row["risk_score"], -row["impact_noc_score"], -row["tickets"],
+            -row["links_affected"], row["name"].casefold(),
+        ))
         for position, row in enumerate(rows, 1):
             row["ranking_position"] = position
 
@@ -463,8 +539,10 @@ class RankingService:
             "filter_options": cls._filter_options(links, tickets.values()),
             "scoring": {
                 "weights": RANKING_WEIGHTS,
+                "weights_v1": RANKING_WEIGHTS_V1,
                 "small_sample_threshold": SMALL_SAMPLE_LINK_THRESHOLD,
                 "best_ranking_min_links": BEST_RANKING_MIN_LINKS,
+                "best_ranking_min_tickets": BEST_RANKING_MIN_TICKETS,
             },
         }
 
@@ -475,9 +553,7 @@ class RankingService:
         if filters.get("priority"):
             queryset = queryset.filter(priority_name=filters["priority"])
         if filters.get("reason"):
-            ids = [ticket.pk for ticket in queryset.only("pk", "closing_code_raw")
-                   if normalize_closing_reason(ticket.closing_code_raw) == filters["reason"]]
-            queryset = queryset.filter(pk__in=ids)
+            queryset = queryset.filter(closing_code_raw__in=ClosingReasonCanonicalizer.raw_values(filters["reason"]))
         return queryset
 
     @staticmethod
@@ -502,14 +578,18 @@ class RankingService:
 
     @staticmethod
     def _filter_options(links, tickets):
+        tickets = list(tickets)
+        raw_reasons = {
+            ticket.closing_code_raw for ticket in tickets
+            if ticket.closing_code_raw and ticket.business_status in TERMINAL_STATES
+        }
         return {
             "clients": sorted({link.contracting_client for link in links if link.contracting_client}, key=str.casefold),
             "projects": sorted({link.business_project for link in links if link.business_project}, key=str.casefold),
             "ufs": sorted({link.state for link in links if link.state}, key=str.casefold),
             "priorities": sorted({ticket.priority_name for ticket in tickets if ticket.priority_name}, key=str.casefold),
             "statuses": VALID_STATES,
-            "reasons": sorted({normalize_closing_reason(ticket.closing_code_raw) for ticket in tickets
-                               if ticket.closing_code_raw and ticket.business_status in TERMINAL_STATES}, key=str.casefold),
+            "reasons": [item["label"] for item in ClosingReasonCanonicalizer.options(raw_reasons)],
         }
 
     @staticmethod
@@ -616,7 +696,7 @@ class RankingService:
                 "backlog": ticket_id in row["backlog_ticket_ids"],
                 "in_period": in_period,
                 "on_recurrent_link": recurrent_link,
-                "reason": normalize_closing_reason(ticket.closing_code_raw),
+                "reason": ClosingReasonCanonicalizer.display(ticket.closing_code_raw),
                 "closing_code_raw": ticket.closing_code_raw,
                 "responsibility_raw": ticket.responsibility_raw,
                 "responsibility_class": normalized,
@@ -669,7 +749,7 @@ class RankingService:
                         proc_counts[label].add(ticket_id)
                     elif ticket.responsibility_normalized == "IMPROCEDENTE":
                         improc_counts[label].add(ticket_id)
-                reason = normalize_closing_reason(ticket.closing_code_raw)
+                reason = ClosingReasonCanonicalizer.display(ticket.closing_code_raw)
                 if reason and ticket.business_status in TERMINAL_STATES:
                     reason_counts[reason].add(ticket_id)
             if ticket_ids:

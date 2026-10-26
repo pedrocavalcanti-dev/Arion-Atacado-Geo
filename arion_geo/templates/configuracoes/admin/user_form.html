@@ -4,4 +4,4 @@
 {% block settings_title %}{{ page_title }}{% endblock %}
 {% block settings_description %}{% if user_object %}Atualize os dados da conta e seu perfil de acesso.{% else %}Crie a conta e associe-a ao perfil de acesso adequado.{% endif %}{% endblock %}
 {% block settings_content %}{% include "configuracoes/admin/_user_form_fields.html" %}{% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'js/configuracoes/user-form.js' %}" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% arion_js 'js/configuracoes/user-form.js' %}" defer></script>{% endblock %}

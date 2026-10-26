@@ -1,58 +1,59 @@
-# Documentação — ARION ATACADO GEO
+﻿# Documentação oficial — ARION ATACADO GEO
 
-Índice oficial da documentação do projeto.
+Esta pasta é a fonte Markdown da Central web em `/configuracoes/documentacao/`. Produto: **ARION ATACADO GEO**; operação atendida: **NOC ATACADO**. OTRS e CMDB permanecem fontes oficiais; o banco ARION contém mirrors e dados próprios.
 
-## Comece aqui
+## Começar
 
-- [Projeto](PROJETO.md) — finalidade, módulos e princípios.
-- [Estado Atual](ESTADO-ATUAL.md) — capacidades existentes hoje.
-- [Arquitetura](ARQUITETURA.md) — desenho técnico e regras compartilhadas.
-- [Fontes de Dados](FONTES-DE-DADOS.md) — origem REAL e DEMO e uso do escopo.
+- [Projeto](PROJETO.md)
+- [Estado Atual](ESTADO-ATUAL.md)
+- [Arquitetura](ARQUITETURA.md)
+- [Fontes de Dados](FONTES-DE-DADOS.md)
 
 ## Funcionalidades
 
-- [Autenticação e Sessão](funcionalidades/autenticacao.md) — login e sessão Django.
-- [ARI](funcionalidades/ari.md) — conversas, anexos e Preview.
-- [Auditoria](funcionalidades/auditoria.md) — eventos funcionais e consulta.
-- [Base de Links](funcionalidades/base.md) — espelho CMDB, busca e importação.
-- [Cockpit](funcionalidades/cockpit.md) — análise, Saved Views e exports.
-- [Configurações](funcionalidades/configuracoes.md) — central administrativa.
-- [Dashboard](funcionalidades/dashboard.md) — visão executiva.
-- [Integrações](funcionalidades/integracoes.md) — conectores e sincronização dos espelhos CMDB/OTRS.
-- [Mapa Operacional](funcionalidades/mapa.md) — visualização por UF.
-- [Ranking de Provedores](funcionalidades/ranking-provedores.md) — comparação REAL/DEMO.
-- [Tratamento Global de Erros](funcionalidades/tratamento-global-erros.md) — handlers, API e logging.
-- [Usuários, Grupos e Escopos](funcionalidades/usuarios-grupos-escopos.md) — RBAC e Data Scope.
+- [Autenticação e Sessão](funcionalidades/autenticacao.md)
+- [Dashboard](funcionalidades/dashboard.md)
+- [Chamados](funcionalidades/chamados.md)
+- [Cockpit](funcionalidades/cockpit.md)
+- [Mapa Operacional](funcionalidades/mapa.md)
+- [Ranking de Provedores](funcionalidades/rankings.md)
+- [Base de Links](funcionalidades/base.md)
+- [ARI](funcionalidades/ari.md)
+
+## Dados e Integrações
+
+- [Banco de Dados e Modelos](BANCO-DE-DADOS.md)
+- [OTRS](OTRS.md)
+- [CMDB](CMDB.md)
+- [Worker e Sincronização](WORKER-E-SINCRONIZACAO.md)
+- [Dicionário de Dados](DICIONARIO-DE-DADOS.md)
+
+## Administração
+
+- [Configurações](funcionalidades/configuracoes.md)
+- [Integrações](funcionalidades/integracoes.md)
+- [Usuários, Grupos e Escopos](funcionalidades/usuarios-grupos-escopos.md)
+- [Auditoria](funcionalidades/auditoria.md)
+- [Tratamento Global de Erros](funcionalidades/tratamento-global-erros.md)
 
 ## Segurança e operação
 
-- [Banco de Dados](BANCO-DE-DADOS.md) — models, chaves e relações do espelho local.
-- [Segurança](SEGURANCA.md) — controles atuais e limites de implantação.
-- [Testes e QA](TESTES-E-QA.md) — comandos e cobertura existente.
-- [Implantação e Produção](IMPLANTACAO-E-PRODUCAO.md) — configuração atual e dependências de ambiente.
+- [Segurança](SEGURANCA.md)
+- [Testes e QA](TESTES-E-QA.md)
+- [Implantação e Produção](IMPLANTACAO-E-PRODUCAO.md)
 
-## Interface
+## Padrões
 
-- [Diretrizes de Interface](DIRETRIZES-DE-INTERFACE.md) — temas, responsividade e padrões visuais.
+- [Diretrizes de Interface](DIRETRIZES-DE-INTERFACE.md)
 
-## Desenvolvimento atual
+## Estudos e tarefas
 
-- [Tarefa atual](tarefas/ATUAL.md) — estado da tarefa de desenvolvimento registrada.
+`estudos/` contém snapshots e pesquisas datadas; não substituem contratos da referência normativa. `tarefas/ATUAL.md` é uma nota histórica de tarefa concluída, não estado de capacidade atual.
 
-## Banco e sincronização
+## Ordem sugerida
 
-O [modelo do banco](BANCO-DE-DADOS.md) documenta os espelhos CMDB e OTRS. Os
-consumidores existentes ainda não foram migrados; Base XLSX, Dashboard, Cockpit,
-Rankings, Mapa, ARI e Chamados continuam usando as fontes anteriores.
-
-## Ordem recomendada de leitura
-
-1. [Projeto](PROJETO.md)
-2. [Estado Atual](ESTADO-ATUAL.md)
-3. [Arquitetura](ARQUITETURA.md)
-4. [Fontes de Dados](FONTES-DE-DADOS.md)
-5. [Banco de Dados](BANCO-DE-DADOS.md)
-6. [Segurança](SEGURANCA.md)
-7. [Funcionalidades](funcionalidades/)
-8. [Testes e QA](TESTES-E-QA.md)
-9. [Implantação e Produção](IMPLANTACAO-E-PRODUCAO.md)
+1. Projeto e Estado Atual.
+2. Arquitetura e Fontes de Dados.
+3. Banco, OTRS, CMDB e Worker.
+4. Chamados, Cockpit, Mapa e Rankings.
+5. Data Scope, Segurança, Testes e Implantação.

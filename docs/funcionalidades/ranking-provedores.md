@@ -1,3 +1,3 @@
-# Rankings de provedores e links
+﻿# Ranking de Provedores
 
-Consulte a especificação atual do módulo, incluindo o Índice de Risco ARION V1, universo de tickets, Aging >24h, tendência, períodos, filtros e regras de escopo em [`rankings.md`](rankings.md).
+A especificação funcional completa do módulo, incluindo o índice ARION V2, universos, visões, filtros, períodos e Data Scope, está em [Rankings operacionais](rankings.md). Esta página é uma ponte histórica mantida para compatibilidade de links.

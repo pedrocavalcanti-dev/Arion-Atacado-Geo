@@ -1,5 +1,6 @@
 """Whitelisted Markdown documents and a safe renderer for the internal portal."""
 import html
+import hashlib
 import re
 import unicodedata
 from pathlib import Path
@@ -10,28 +11,35 @@ from django.urls import reverse
 
 DOCS_ROOT = (Path(settings.BASE_DIR).parent / "docs").resolve()
 DOCUMENTS = {
-    "projeto": ("Projeto", "Visão geral do Arion", "Começar", "PROJETO.md"),
-    "estado-atual": ("Estado Atual", "Estado funcional do sistema", "Começar", "ESTADO-ATUAL.md"),
-    "arquitetura": ("Arquitetura", "Estrutura e regras compartilhadas", "Começar", "ARQUITETURA.md"),
-    "fontes-de-dados": ("Fontes de Dados", "Origem e classificação dos dados", "Começar", "FONTES-DE-DADOS.md"),
-    "autenticacao": ("Autenticação e Sessão", "Login e sessão", "Funcionalidades", "funcionalidades/autenticacao.md"),
-    "dashboard": ("Dashboard", "Visão executiva", "Funcionalidades", "funcionalidades/dashboard.md"),
-    "cockpit": ("Cockpit", "Análise operacional", "Funcionalidades", "funcionalidades/cockpit.md"),
-    "mapa": ("Mapa Operacional", "Visão geográfica", "Funcionalidades", "funcionalidades/mapa.md"),
-    "ranking-provedores": ("Ranking de Provedores", "Análise por provedor", "Funcionalidades", "funcionalidades/ranking-provedores.md"),
-    "base": ("Base de Links", "Espelho CMDB e importação", "Funcionalidades", "funcionalidades/base.md"),
-    "ari": ("ARI", "Conversas e artifacts", "Funcionalidades", "funcionalidades/ari.md"),
-    "configuracoes": ("Configurações", "Central administrativa", "Administração", "funcionalidades/configuracoes.md"),
-    "integracoes": ("Integrações", "Conectores CMDB e OTRS", "Administração", "funcionalidades/integracoes.md"),
-    "usuarios-grupos-escopos": ("Usuários, Grupos e Escopos", "RBAC e Data Scope", "Administração", "funcionalidades/usuarios-grupos-escopos.md"),
-    "auditoria": ("Auditoria", "Rastreabilidade administrativa", "Administração", "funcionalidades/auditoria.md"),
-    "tratamento-global-erros": ("Tratamento Global de Erros", "Respostas e logging", "Administração", "funcionalidades/tratamento-global-erros.md"),
-    "seguranca": ("Segurança", "Controles de acesso e proteção", "Segurança e operação", "SEGURANCA.md"),
-    "testes-e-qa": ("Testes e QA", "Comandos e cobertura de testes", "Segurança e operação", "TESTES-E-QA.md"),
-    "implantacao-e-producao": ("Implantação e Produção", "Configuração por ambiente", "Segurança e operação", "IMPLANTACAO-E-PRODUCAO.md"),
-    "diretrizes-de-interface": ("Diretrizes de Interface", "Padrões visuais e acessibilidade", "Padrões", "DIRETRIZES-DE-INTERFACE.md"),
+    # title, description, category, Markdown path, explicit search terms
+    "projeto": ("Projeto", "Objetivo, público e limites do ARION ATACADO GEO", "Começar", "PROJETO.md", "produto NOC Atacado operação inteligência operacional"),
+    "estado-atual": ("Estado Atual", "Matriz verificável de módulos, fontes e capacidades", "Começar", "ESTADO-ATUAL.md", "status feature matrix ativo backlog snapshot"),
+    "arquitetura": ("Arquitetura", "Aplicativos, camadas, fluxos e relações entre fontes", "Começar", "ARQUITETURA.md", "apps services views templates worker desenho fluxo"),
+    "fontes-de-dados": ("Fontes de Dados", "Fontes oficiais, mirrors, escopo e freshness", "Começar", "FONTES-DE-DADOS.md", "CMDB OTRS MySQL espelho mirror read-only Data Scope"),
+    "autenticacao": ("Autenticação e Sessão", "Login, sessão Django e proteção de rotas", "Funcionalidades", "funcionalidades/autenticacao.md", "login logout sessão CSRF senha Django"),
+    "dashboard": ("Dashboard", "Indicadores executivos e recortes usados", "Funcionalidades", "funcionalidades/dashboard.md", "visão geral KPI painel chamados gráficos links provedores"),
+    "chamados": ("Chamados", "Fila NOC e acompanhamento local no ARION", "Funcionalidades", "funcionalidades/chamados.md", "TicketTracking ticket status nota evento prioridade recorrência fila NOC"),
+    "cockpit": ("Cockpit", "Análise operacional, consultas, views e exportações", "Funcionalidades", "funcionalidades/cockpit.md", "AnalyticsQuery Saved Views CSV filtros evidências séries"),
+    "mapa": ("Mapa Operacional", "Agregações por UF, modos e critérios geográficos", "Funcionalidades", "funcionalidades/mapa.md", "mapa UF chamadas reincidência motivos geografia"),
+    "ranking-provedores": ("Ranking de Provedores", "Índice V2, risco e desempenho por Provider/ISP", "Funcionalidades", "funcionalidades/rankings.md", "provedor ISP risco performance Ranking V2"),
+    "base": ("Base de Links", "Links e Providers/ISP do espelho CMDB", "Funcionalidades", "funcionalidades/base.md", "links provider operadora ISP ConfigItemID CMDB busca exportação"),
+    "ari": ("ARI", "Conversas, anexos e artefatos Preview", "Funcionalidades", "funcionalidades/ari.md", "assistente IA intelligence artificial preview artifacts LLM"),
+    "banco-de-dados": ("Banco de Dados e Modelos", "Banco local, schema, chaves e relacionamentos", "Dados e Integrações", "BANCO-DE-DADOS.md", "banco database MySQL SQLite models migrations schema tabelas ConfigItemID OTRSTicketConfigItem CMDBLinkMirror external_id ticket_number closing_code_raw GroupDataScope IntegrationLease CodigoFechamento FalhaMassiva TELMEX Provider DPAPI source_config_item_id"),
+    "otrs": ("OTRS", "Leitura da fila, estados, relações e Dynamic Fields", "Dados e Integrações", "OTRS.md", "OTRS ticket tn ticket.id ticket.tn ticket_number external_id Dynamic Field CodigoFechamento closing_code_raw FalhaMassiva status link_relation ConfigItemID"),
+    "cmdb": ("CMDB", "Objetos ConfigItem, identidade de negócio e mirror", "Dados e Integrações", "CMDB.md", "CMDB ServiceUp ConfigItemID source_config_item_id Number Links de internet Operadoras Provider ISP TELMEX projeto conta identidade confiança"),
+    "worker": ("Worker e Sincronização", "Cadências, FAST/FULL, leases e freshness", "Dados e Integrações", "WORKER-E-SINCRONIZACAO.md", "worker integration_worker FAST FULL cadência lease heartbeat cursor IntegrationLease IntegrationRun retry SyncState"),
+    "dicionario-de-dados": ("Dicionário de Dados", "Campos centrais, origens, chaves e semântica", "Dados e Integrações", "DICIONARIO-DE-DADOS.md", "TicketTracking CMDBLinkMirror OTRSTicketConfigItem ConfigItemID external_id ticket_number closing_code_raw source_config_item_id CodigoFechamento GroupDataScope IntegrationLease"),
+    "configuracoes": ("Configurações", "Conta, aparência e administração interna", "Administração", "funcionalidades/configuracoes.md", "Central Configurações preferências appearance UserPreference"),
+    "integracoes": ("Integrações", "Conectores, estado operacional e diagnóstico", "Administração", "funcionalidades/integracoes.md", "integrações conector status IntegrationRun CMDB OTRS"),
+    "usuarios-grupos-escopos": ("Usuários, Grupos e Escopos", "RBAC Django e Data Scope aplicado no backend", "Administração", "funcionalidades/usuarios-grupos-escopos.md", "RBAC permissions groups Data Scope ALL CUSTOM Operadora Projeto"),
+    "auditoria": ("Auditoria", "Eventos administrativos e sanitização", "Administração", "funcionalidades/auditoria.md", "AuditEvent AuditService histórico metadata sanitização"),
+    "tratamento-global-erros": ("Tratamento Global de Erros", "Handlers HTTP, APIs e diagnóstico", "Administração", "funcionalidades/tratamento-global-erros.md", "500 404 JSON CSRF middleware logging"),
+    "seguranca": ("Segurança", "Acesso, escopo, credenciais e limites", "Segurança e operação", "SEGURANCA.md", "security segredo credenciais read-only autorização sanitização"),
+    "testes-e-qa": ("Testes e QA", "Suítes, verificações e troubleshooting de testes", "Segurança e operação", "TESTES-E-QA.md", "test pytest Django check makemigrations QA SQLite MySQL"),
+    "implantacao-e-producao": ("Implantação e Produção", "Configuração web, banco e worker", "Segurança e operação", "IMPLANTACAO-E-PRODUCAO.md", "deploy produção Windows MySQL worker DPAPI"),
+    "diretrizes-de-interface": ("Diretrizes de Interface", "Tokens, componentes, temas e acessibilidade", "Padrões", "DIRETRIZES-DE-INTERFACE.md", "CSS tema claro escuro responsividade acessibilidade"),
 }
-CATEGORY_ORDER = ("Começar", "Funcionalidades", "Administração", "Segurança e operação", "Padrões")
+CATEGORY_ORDER = ("Começar", "Funcionalidades", "Dados e Integrações", "Administração", "Segurança e operação", "Padrões")
 
 
 def _slugify(value):
@@ -58,13 +66,42 @@ def _document_url(target):
 def _document_match(target_path):
     stem = Path(target_path.replace("\\", "/")).stem.casefold()
     for slug, item in DOCUMENTS.items():
-        if Path(item[3]).stem.casefold() == stem:
+        if Path(item[3]).stem.casefold() == stem or (slug == "ranking-provedores" and stem == "ranking-provedores"):
             return slug, item
     return None
 
 
 def _inline(text):
     """Escape source HTML first, then add only a small safe inline Markdown subset."""
+    badge_labels = {
+        "OTRS", "CMDB", "ARION", "MIRROR", "RAW", "DERIVADO", "READ-ONLY",
+        "LOCAL", "REMOTE", "LEGACY", "OPERATIONAL", "RECONSTRUÍVEL",
+        "PERSISTENTE", "SEGURANÇA",
+    }
+    badges = {}
+
+    def stash_badge(match):
+        label = match.group(1).upper()
+        if label not in badge_labels:
+            return match.group(0)
+        token = f"DOCSBADGETOKEN{len(badges)}"
+        tone = {
+            "READ-ONLY": "readonly",
+            "LEGACY": "legacy",
+            "DERIVADO": "derived",
+            "MIRROR": "mirror",
+            "REMOTE": "remote",
+            "RECONSTRUÍVEL": "reconstructible",
+            "PERSISTENTE": "persistent",
+            "SEGURANÇA": "security",
+            "ARION": "local",
+            "LOCAL": "local",
+            "OPERATIONAL": "local",
+        }.get(label, "source")
+        badges[token] = f'<span class="docs-badge docs-badge--{tone}">{label}</span>'
+        return token
+
+    text = re.sub(r"\{\{badge:([\w-]+)\}\}", stash_badge, text)
     escaped = html.escape(text, quote=False)
     escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
     escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
@@ -86,7 +123,10 @@ def _inline(text):
             return f'<a href="{html.escape(internal, quote=True)}">{label}</a>'
         return label
 
-    return pattern.sub(replace_link, escaped)
+    rendered = pattern.sub(replace_link, escaped)
+    for token, badge in badges.items():
+        rendered = rendered.replace(token, badge)
+    return rendered
 
 
 def render_markdown(source):
@@ -94,6 +134,7 @@ def render_markdown(source):
     lines = source.splitlines()
     output, headings, used_ids = [], [], set()
     i = 0
+    dictionary_table_pending = False
 
     def heading(level, title):
         base = _slugify(title) or "secao"
@@ -120,17 +161,28 @@ def render_markdown(source):
             klass = f' class="language-{html.escape(language, quote=True)}"' if re.fullmatch(r"[\w+-]+", language) else ""
             block = f"<pre><code{klass}>{html.escape(chr(10).join(code))}</code></pre>"
             if language.casefold() == "mermaid":
+                diagram = _render_flowchart(chr(10).join(code))
+                toolbar = (
+                    '<div class="docs-diagram-toolbar"><button type="button" class="docs-diagram-expand" '
+                    'data-docs-diagram-expand aria-haspopup="dialog">'
+                    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4m8-4h4v4M2 10v4h4m8-4v4h-4"/></svg>'
+                    '<span>Ampliar</span></button></div>'
+                    if diagram else ""
+                )
                 output.append(
-                    '<section class="docs-mermaid-source" aria-label="Diagrama de fluxo">'
-                    '<div><p class="docs-code-kicker">DIAGRAMA DE FLUXO</p>'
-                    '<p class="docs-mermaid-note">Visualização gráfica ainda não disponível.</p></div>'
-                    '<details><summary>Ver código Mermaid</summary>' + block + "</details></section>"
+                    '<section class="docs-diagram" aria-label="Diagrama">'
+                    + toolbar
+                    + (diagram or '<p class="docs-diagram-note">Diagrama textual não renderizado; consulte o código fonte.</p>')
+                    + '<details class="docs-diagram-source"><summary>Ver código do diagrama</summary>' + block + "</details></section>"
                 )
             else:
                 output.append(block)
         elif line.startswith("# ") or line.startswith("## ") or line.startswith("### "):
             level = len(line) - len(line.lstrip("#"))
-            output.append(heading(level, line[level:].strip()))
+            title = line[level:].strip()
+            output.append(heading(level, title))
+            if level == 2 and _slugify(title) == "indice-de-campos":
+                dictionary_table_pending = True
         elif line.lstrip().startswith("|") and i + 1 < len(lines) and is_table_separator(lines[i + 1]):
             header = [cell.strip() for cell in line.strip().strip("|").split("|")]
             i += 2
@@ -138,7 +190,10 @@ def render_markdown(source):
             while i < len(lines) and lines[i].lstrip().startswith("|"):
                 rows.append([cell.strip() for cell in lines[i].strip().strip("|").split("|")])
                 i += 1
-            output.append("<div class=\"doc-table-wrap\"><table><thead><tr>" + "".join(f"<th scope=\"col\">{_inline(cell)}</th>" for cell in header) + "</tr></thead><tbody>" + "".join("<tr>" + "".join(f"<td>{_inline(cell)}</td>" for cell in row) + "</tr>" for row in rows) + "</tbody></table></div>")
+            table_class = "doc-table-wrap docs-dictionary-index" if dictionary_table_pending else "doc-table-wrap"
+            row_attribute = ' data-doc-dictionary-row=""' if dictionary_table_pending else ""
+            output.append(f'<div class="{table_class}"><table><thead><tr>' + "".join(f"<th scope=\"col\">{_inline(cell)}</th>" for cell in header) + "</tr></thead><tbody>" + "".join("<tr" + row_attribute + ">" + "".join(f"<td>{_inline(cell)}</td>" for cell in row) + "</tr>" for row in rows) + "</tbody></table></div>")
+            dictionary_table_pending = False
             continue
         elif re.match(r"\s*[-*+] ", line):
             items = []
@@ -160,7 +215,12 @@ def render_markdown(source):
             while i < len(lines) and lines[i].startswith(">"):
                 quote.append(_inline(lines[i].removeprefix("> ").removeprefix(">")))
                 i += 1
-            output.append("<blockquote>" + "".join(f"<p>{part}</p>" for part in quote if part) + "</blockquote>")
+            label = re.match(r"<strong>(Fonte da verdade|Informação|Atenção|Importante|Segurança|Somente leitura|Backlog):</strong>", quote[0], re.I) if quote else None
+            if label:
+                kind = {"fonte da verdade": "source-of-truth", "informação": "info", "atenção": "attention", "importante": "important", "segurança": "security", "somente leitura": "readonly", "backlog": "backlog"}[label.group(1).casefold()]
+                output.append(f'<aside class="docs-callout docs-callout--{kind}" role="note">' + "".join(f"<p>{part}</p>" for part in quote if part) + "</aside>")
+            else:
+                output.append("<blockquote>" + "".join(f"<p>{part}</p>" for part in quote if part) + "</blockquote>")
             continue
         elif not line.strip():
             pass
@@ -187,13 +247,132 @@ def render_markdown(source):
     return "\n".join(output), headings
 
 
+def _render_flowchart(source):
+    """Render simple Mermaid flowcharts without scaling labels to fit SVG boxes."""
+    lines = [line.strip() for line in source.splitlines() if line.strip()]
+    if not lines or not re.fullmatch(r"(?:flowchart|graph)\s+(?:LR|TD|TB)", lines[0], re.I):
+        return ""
+    vertical = lines[0].upper().endswith((" TD", " TB"))
+    edges = []
+    pattern = re.compile(r"^([A-Za-z0-9_-]+)\s*(?:\[([^]]+)\]|\(([^)]+)\)|\{([^}]+)\})?\s*-->(?:\|([^|]+)\|)?\s*([A-Za-z0-9_-]+)\s*(?:\[([^]]+)\]|\(([^)]+)\)|\{([^}]+)\})?$")
+    labels = {}
+    for line in lines[1:]:
+        match = pattern.fullmatch(line)
+        if not match:
+            return ""
+        left, left_box, left_round, left_diamond, edge_label, right, right_box, right_round, right_diamond = match.groups()
+        labels[left] = left_box or left_round or left_diamond or labels.get(left, left)
+        labels[right] = right_box or right_round or right_diamond or labels.get(right, right)
+        edges.append((left, right, edge_label or ""))
+    order = []
+    for left, right, _ in edges:
+        for node in (left, right):
+            if node not in order:
+                order.append(node)
+    if not order:
+        return ""
+
+    # Longest-path layers keep siblings side by side and make forks compact.
+    depth = {node: 0 for node in order}
+    for _ in range(len(order) - 1):
+        changed = False
+        for left, right, _ in edges:
+            candidate = depth[left] + 1
+            if candidate > depth[right]:
+                depth[right] = candidate
+                changed = True
+        if not changed:
+            break
+    layers = {}
+    for node in order:
+        layers.setdefault(depth[node], []).append(node)
+
+    box_width, box_height = 168, 64
+    step_x, step_y = 200, 86
+    padding = 16
+    max_layer_size = max(map(len, layers.values()))
+    max_depth = max(layers)
+    if vertical:
+        width = padding * 2 + (max_layer_size - 1) * step_x + box_width
+        height = padding * 2 + max_depth * step_y + box_height
+        positions = {
+            node: (padding + (max_layer_size - len(nodes)) * step_x // 2 + row * step_x,
+                   padding + layer * step_y)
+            for layer, nodes in layers.items()
+            for row, node in enumerate(nodes)
+        }
+    else:
+        width = padding * 2 + max_depth * step_x + box_width
+        height = padding * 2 + (max_layer_size - 1) * step_y + box_height
+        positions = {
+            node: (padding + layer * step_x,
+                   padding + (max_layer_size - len(nodes)) * step_y // 2 + row * step_y)
+            for layer, nodes in layers.items()
+            for row, node in enumerate(nodes)
+        }
+
+    def wrapped_label(value, limit=21, maximum=3):
+        words, output, current = value.split(), [], ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if current and len(candidate) > limit:
+                output.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            output.append(current)
+        if len(output) > maximum:
+            output = output[:maximum]
+            output[-1] = output[-1].rstrip(" .…") + "…"
+        return output
+
+    nodes = []
+    for node in order:
+        x, y = positions[node]
+        label_lines = wrapped_label(labels[node])
+        first_y = y + (box_height / 2) + (len(label_lines) - 1) * -7
+        tspans = "".join(
+            f'<tspan x="{x + box_width / 2}" dy="{0 if index == 0 else 15}">{html.escape(part)}</tspan>'
+            for index, part in enumerate(label_lines)
+        )
+        nodes.append(
+            f'<g class="docs-diagram-node"><rect x="{x}" y="{y}" width="{box_width}" height="{box_height}" rx="9"/>'
+            f'<text x="{x + box_width / 2}" y="{first_y}" text-anchor="middle">{tspans}</text></g>'
+        )
+    if vertical:
+        arrows = "".join(
+            f'<path class="docs-diagram-edge" d="M {positions[left][0] + box_width / 2} {positions[left][1] + box_height} '
+            f'V {positions[left][1] + box_height + 12} H {positions[right][0] + box_width / 2} '
+            f'V {positions[right][1] - 7}" marker-end="url(#docs-arrow)"/>'
+            for left, right, _ in edges
+        )
+    else:
+        arrows = "".join(
+            f'<path class="docs-diagram-edge" d="M {positions[left][0] + box_width} {positions[left][1] + box_height / 2} '
+            f'H {positions[left][0] + box_width + 12} V {positions[right][1] + box_height / 2} '
+            f'H {positions[right][0] - 7}" marker-end="url(#docs-arrow)"/>'
+            for left, right, _ in edges
+        )
+    descriptions = [f"{labels[left]} to {labels[right]}" + (f": {label}" if label else "") for left, right, label in edges]
+    aria = html.escape("; ".join(descriptions), quote=True)
+    orientation_class = " docs-diagram-svg--vertical" if vertical else " docs-diagram-svg--horizontal"
+    marker_id = "docs-arrow-" + hashlib.sha1(source.encode("utf-8")).hexdigest()[:10]
+    return (
+        f'<svg class="docs-diagram-svg{orientation_class}" width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
+        f'preserveAspectRatio="xMidYMid meet" role="img" aria-label="{aria}" xmlns="http://www.w3.org/2000/svg">'
+        f'<defs><marker id="{marker_id}" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z"/></marker></defs>'
+        f'{arrows.replace("docs-arrow", marker_id)}{"".join(nodes)}</svg>'
+    )
+
+
 class DocumentationService:
     """Render versioned Markdown files from ``docs/``, the portal's source of truth."""
 
     @classmethod
     def navigation(cls):
         return [
-            {"slug": slug, "title": data[0], "description": data[1], "category": data[2]}
+            {"slug": slug, "title": data[0], "description": data[1], "category": data[2], "search_terms": data[4]}
             for slug, data in DOCUMENTS.items()
         ]
 
@@ -210,7 +389,7 @@ class DocumentationService:
         path = (DOCS_ROOT / data[3]).resolve()
         if not path.is_relative_to(DOCS_ROOT) or not path.is_file():
             return None
-        source = path.read_text(encoding="utf-8")
+        source = path.read_text(encoding="utf-8-sig")
         body, headings = render_markdown(source)
         # The portal heading uses the first Markdown H1 where one is present.
         title = headings[0][0] if headings and headings[0][2] == 1 else data[0]
@@ -227,8 +406,8 @@ class DocumentationService:
             record = cls.get(doc["slug"])
             if record is None:
                 continue
-            raw = (DOCS_ROOT / DOCUMENTS[doc["slug"]][3]).read_text(encoding="utf-8")
-            haystack = f"{doc['title']}\n{doc['description']}\n{raw}"
+            raw = (DOCS_ROOT / DOCUMENTS[doc["slug"]][3]).read_text(encoding="utf-8-sig")
+            haystack = f"{doc['title']}\n{doc['description']}\n{doc['search_terms']}\n{raw}"
             position = haystack.casefold().find(needle)
             if position < 0:
                 continue

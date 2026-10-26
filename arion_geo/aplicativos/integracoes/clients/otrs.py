@@ -20,14 +20,17 @@ from aplicativos.integracoes.services.errors import (
 )
 
 
-SENSITIVE_PARTS = ("password", "passwd", "token", "secret", "session", "cookie", "auth", "credential", "apikey", "privatekey")
+SENSITIVE_PARTS = (
+    "password", "passwd", "token", "secret", "session", "cookie", "auth", "credential",
+    "apikey", "privatekey", "customeruser", "article", "body", "internalnote", "notebody",
+)
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9_$]+$")
 _WRITE_OR_SIDE_EFFECT = re.compile(
     r"\b(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE|REPLACE|RENAME|GRANT|REVOKE|CALL|LOAD|INTO|OUTFILE|DUMPFILE|LOCK|UNLOCK|SLEEP|GET_LOCK|RELEASE_LOCK)\b|\bFOR\s+UPDATE\b",
     re.IGNORECASE,
 )
 _FORBIDDEN_DATA = re.compile(
-    r"\b(pw|password|passwd|pwd|secret|token|credential|session|cookie|auth|body|html_body|mime_content|attachment_content)\b",
+    r"\b(pw|password|passwd|pwd|secret|token|credential|session|cookie|auth|body|html_body|mime_content|attachment_content|article\w*|customer_user|internal_note|note_body)\b",
     re.IGNORECASE,
 )
 
@@ -138,7 +141,10 @@ class OTRSReadOnlyClient:
         statement = str(sql or "").strip()
         if not statement or not re.match(r"^SELECT\b", statement, re.IGNORECASE):
             raise OTRSDatabaseError()
-        if ";" in statement or _WRITE_OR_SIDE_EFFECT.search(statement) or _FORBIDDEN_DATA.search(statement):
+        normalized_statement = re.sub(r"[^A-Za-z0-9]", "", statement).casefold()
+        forbidden_parts = (*SENSITIVE_PARTS, "pw", "pwd", "htmlbody", "mimecontent", "attachmentcontent")
+        if (";" in statement or _WRITE_OR_SIDE_EFFECT.search(statement) or _FORBIDDEN_DATA.search(statement)
+                or any(part in normalized_statement for part in forbidden_parts)):
             raise OTRSDatabaseError()
         if re.search(r"\bSELECT\s+\*", statement, re.IGNORECASE):
             raise OTRSDatabaseError()
@@ -180,6 +186,9 @@ class OTRSReadOnlyClient:
     def get_sample_rows(self, table_name, *, database=None, page=1, page_size=25):
         selected = self._validated_database(database)
         table = self._validated_table(table_name, selected)
+        normalized_table = "".join(char.lower() for char in table if char.isalnum())
+        if "article" in normalized_table or "customeruser" in normalized_table:
+            raise OTRSDatabaseError()
         try:
             page = max(1, min(int(page), 10000))
             page_size = max(1, min(int(page_size), self.MAX_PAGE_SIZE))

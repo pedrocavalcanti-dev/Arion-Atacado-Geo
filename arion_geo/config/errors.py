@@ -178,8 +178,8 @@ def csrf_failure(request, reason=""):
     reference = _request_id(request) or "indisponível"
     user_id = _safe_user_id(request)
     logger.warning(
-        "CSRF validation failed request_id=%s user_id=%s method=%s path=%s reason=%s",
-        reference, user_id, request.method, request.path_info, reason,
+        "CSRF validation failed request_id=%s user_id=%s method=%s path=%s",
+        reference, user_id, request.method, request.path_info,
     )
     return responder(request, "CSRF_FAILED")
 

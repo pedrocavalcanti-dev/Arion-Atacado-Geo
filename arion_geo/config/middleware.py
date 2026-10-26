@@ -69,3 +69,26 @@ class RequestErrorMiddleware:
 
         response["X-Request-ID"] = request.request_id
         return response
+
+
+class ProductionSecurityHeadersMiddleware:
+    """Apply conservative browser policy and prevent shared caching of user data."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response.setdefault("Permissions-Policy", settings.PERMISSIONS_POLICY)
+
+        content_type = response.get("Content-Type", "").split(";", 1)[0].strip().casefold()
+        if settings.ARION_CSP_REPORT_ONLY and content_type == "text/html":
+            response.setdefault("Content-Security-Policy-Report-Only", settings.CONTENT_SECURITY_POLICY_REPORT_ONLY)
+
+        user = getattr(request, "user", None)
+        is_authenticated = bool(user and user.is_authenticated)
+        static_prefix = settings.STATIC_URL.rstrip("/") + "/"
+        is_static = request.path_info.startswith(static_prefix)
+        if is_authenticated or not is_static:
+            response["Cache-Control"] = "private, no-store"
+        return response

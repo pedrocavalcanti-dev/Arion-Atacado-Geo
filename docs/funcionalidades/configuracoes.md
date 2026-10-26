@@ -1,4 +1,4 @@
-# Configurações
+﻿# Configurações
 
 ## Visão geral
 
@@ -15,7 +15,7 @@ A Central de Configurações concentra preferências da conta e administração 
 | Escopos de dados | `manage_data_scopes` | Configurar `GroupDataScope` por grupo. |
 | Auditoria | `view_audit_log` | Consultar e exportar eventos. |
 
-O acesso não depende apenas de ocultar itens do menu: rotas verificam autenticação e permission. Usuário autenticado sem permission recebe 403 real. A camada global de erros fornece a resposta HTML; detalhes estão em [ARQUITETURA.md](../ARQUITETURA.md#tratamento-global-de-erros).
+O acesso não depende apenas de ocultar itens do menu: rotas verificam autenticação e permission. Usuário autenticado sem permission recebe 403 real. A camada global de erros fornece a resposta HTML; detalhes estão em [Tratamento Global de Erros](tratamento-global-erros.md).
 
 ## URLs e componentes
 

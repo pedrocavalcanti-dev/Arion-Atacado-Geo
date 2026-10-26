@@ -20,8 +20,10 @@ from django.views.generic import RedirectView
 
 from aplicativos.autenticacao.views import home
 from aplicativos.painel.views import cockpit, dashboard
+from .views import health
 
 urlpatterns = [
+    path('health/', health, name='health'),
     path('favicon.ico', RedirectView.as_view(url='/static/favicon/arion.svg', permanent=True), name='favicon'),
     path('admin/', admin.site.urls),
     path('', home, name='home'),
@@ -29,6 +31,7 @@ urlpatterns = [
     path('mapa/', include('aplicativos.mapa.urls')),
     path('rankings/', include('aplicativos.rankings.urls')),
     path('base/', include('aplicativos.base_links.urls')),
+    path('chamados/', include('aplicativos.chamados.urls')),
     path('dashboard/', dashboard, name='dashboard'),
     path('cockpit/', cockpit, name='cockpit'),
     path('api/analytics/', include('aplicativos.painel.analytics_urls')),

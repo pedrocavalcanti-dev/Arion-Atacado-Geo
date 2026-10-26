@@ -264,6 +264,40 @@ class OTRSReadOnlyClientTests(TestCase):
         sample_params = [params for connection in self.connections for query, params in connection.queries if query.startswith("SELECT * FROM")][0]
         self.assertEqual(sample_params, (50, 0))
 
+    def test_sample_blocks_customer_user_and_article_tables_before_reading_rows(self):
+        from unittest.mock import patch
+
+        for table in ("customer_user", "article", "article_data_mime"):
+            with self.subTest(table=table), patch.object(self.client, "_validated_table", return_value=table):
+                with self.assertRaises(OTRSDatabaseError):
+                    self.client.get_sample_rows(table)
+        self.assertFalse(any(query.startswith("SELECT * FROM") for connection in self.connections for query, _ in connection.queries))
+
+    def test_select_query_blocks_customer_and_article_content_fields(self):
+        for query in (
+            "SELECT customer_user FROM ticket",
+            "SELECT a_body FROM article_data_mime",
+            "SELECT internal_note FROM ticket_history",
+        ):
+            with self.subTest(query_name=query.split()[1]), self.assertRaises(OTRSDatabaseError):
+                self.client.execute_select(query)
+        self.assertFalse(self.connections)
+
+    def test_sample_masks_customer_user_article_body_and_internal_note_columns(self):
+        result = OTRSReadOnlyClient._sanitize_row({
+            "customer_user": "customer@example.invalid",
+            "article_id": 12,
+            "a_body": "private OTRS article",
+            "internal_note": "private note",
+            "note_body": "private note body",
+            "login": "reader",
+        })
+        for key in ("customer_user", "article_id", "a_body", "internal_note", "note_body"):
+            self.assertEqual(result[key], "••••••")
+        self.assertEqual(result["login"], "reader")
+        self.assertNotIn("customer@example.invalid", str(result))
+        self.assertNotIn("private OTRS article", str(result))
+
     def test_table_identifier_must_be_discovered_and_supported(self):
         with self.assertRaises(OTRSDatabaseError):
             self.client.get_sample_rows("users; DROP TABLE users")

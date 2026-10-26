@@ -15,11 +15,11 @@ def _safe_cell(value):
 
 
 def _view_label(filters):
-    return "3 meses" if filters["view"] == "3months" else "Período personalizado" if filters["view"] == "custom" else "Mensal"
+    return "Consolidado 3 meses" if filters["view"] == "3months" else "Período personalizado" if filters["view"] == "custom" else "Visão do mês"
 
 
 def _ranking_label(filters):
-    return "Melhor desempenho" if filters["ranking_view"] == "best" else "Maior risco"
+    return {"best": "Melhor desempenho observado", "stable": "Sem ocorrências"}.get(filters["ranking_view"], "Maior risco")
 
 
 def _filter_labels(filters):
@@ -39,8 +39,9 @@ def _filter_labels(filters):
 
 def _provider_values(row):
     return [
-        row.get("name"), row.get("risk_score"), row.get("risk_label"), row.get("proportional_score"),
-        row.get("impact_score"), row.get("links_total"), row.get("tickets"), row.get("tickets_per_100_links"),
+        row.get("name"), row.get("risk_score"), row.get("risk_label"), row.get("impact_noc_score"),
+        row.get("affected_base_score"), row.get("recurrent_score"), row.get("over_24h_score"),
+        row.get("backlog_score"), row.get("links_total"), row.get("tickets"), row.get("tickets_per_link"),
         row.get("links_affected"), row.get("affected_rate_pct"), row.get("recurrent_links"),
         row.get("recurrent_rate_pct"), row.get("tickets_over_24h"), row.get("over_24h_rate_pct"),
         row.get("backlog_current"), row.get("high_critical_tickets"), row.get("procedentes"),
@@ -85,24 +86,25 @@ def build_xlsx(data, filters, providers, podium, generated_at, generated_by):
     summary.append(["Indicadores", "Valor"])
     for label, value in (
         ("Provedores analisados", len(providers)), ("Links CMDB", data["links_total"]),
-        ("Tickets válidos", data["tickets_valid"]), ("Links afetados", data["links_affected"]),
-        ("Links reincidentes", data["links_recurrent"]), ("Tickets ARION >24h", data["tickets_over_24h"]),
+        ("Chamados válidos", data["tickets_valid"]), ("Links afetados", data["links_affected"]),
+        ("Links reincidentes", data["links_recurrent"]), ("Chamados ARION >24h", data["tickets_over_24h"]),
         ("Backlog atual", data["backlog_current"]),
     ):
         summary.append([label, value])
     summary.append([])
-    summary.append(["Índice ARION V1", "Percentis por componente no conjunto filtrado; risco proporcional 70% + impacto absoluto 30%."])
-    summary.append(["Responsabilidade", "Procedência é informação do fechamento OTRS e não altera o índice V1."])
+    summary.append(["Índice ARION V2", "Impacto no NOC 30%; base afetada 20%; reincidência 20%; chamados ARION acima de 24h 20%; backlog atual 10%."])
+    summary.append(["Impacto no NOC", "Componente absoluto usa 60% chamados e 40% links afetados, normalizados pelo P95 do recorte filtrado."])
+    summary.append(["Responsabilidade", "Procedência é informação do fechamento OTRS e não altera o Índice ARION V2."])
     summary.append(["ARION >24h", "Indicador operacional provisório; não representa necessariamente SLA contratual."])
-    summary.append(["Exposição", "Tickets por Provider podem se sobrepor; abas Links e Tickets respeitam o Data Scope."])
+    summary.append(["Exposição", "Chamados por provedor podem se sobrepor; abas Links e Tickets respeitam o Data Scope."])
     summary.append([])
     summary.append(["Pódio · " + _ranking_label(filters)])
-    summary.append(["Posição", "Provedor / ISP", "Índice ARION", "Links", "Tickets"])
+    summary.append(["Posição", "Provedor / ISP", "Índice ARION V2", "Nível", "Links", "Chamados"])
     for position, row in enumerate(podium, 1):
-        summary.append([position, _safe_cell(row["name"]), row["risk_score"], row["links_total"], row["tickets"]])
+        summary.append([position, _safe_cell(row["name"]), row["risk_score"], row["risk_label"], row["links_total"], row["tickets"]])
 
     ranking = workbook.create_sheet("Ranking")
-    ranking_headers = ["Pos.", "Provedor / ISP", "Índice ARION", "Faixa", "Risco proporcional", "Impacto absoluto", "Links", "Tickets", "Tickets / 100 links", "Links afetados", "% afetados", "Reincidentes", "Taxa reincidência %", "ARION >24h", "Taxa >24h %", "Backlog", "Alto/Crítico", "Procedentes", "Improcedentes", "Indeterminados", "Procedência %", "Improcedentes %", "Tendência"]
+    ranking_headers = ["Pos.", "Provedor / ISP", "Índice ARION V2", "Nível", "Impacto no NOC /30", "Base afetada /20", "Reincidência /20", "ARION >24h /20", "Backlog atual /10", "Links", "Chamados", "Chamados / link", "Links afetados", "% base afetada", "Reincidentes", "Taxa de reincidência %", "Chamados >24h", "Taxa >24h %", "Backlog", "Alta / crítica", "Procedentes", "Improcedentes", "Indeterminados", "Procedência %", "Improcedentes %", "Tendência"]
     ranking.append(ranking_headers)
     for position, row in enumerate(providers, 1):
         ranking.append([position, *[_safe_cell(value) for value in _provider_values(row)], row.get("trend_label", "")])
@@ -113,12 +115,12 @@ def build_xlsx(data, filters, providers, podium, generated_at, generated_by):
         provider_sheet.append([position, *[_safe_cell(value) for value in _provider_values(row)], row.get("trend_label", "")])
 
     links_sheet = workbook.create_sheet("Links")
-    links_sheet.append(["Link", "ConfigItemID", "Number", "Provedor / ISP", "Cliente", "Projeto", "UF", "Tickets", "Reincidente", "ARION >24h"])
+    links_sheet.append(["Link", "ConfigItemID", "Number", "Provedor / ISP", "Cliente", "Projeto", "UF", "Chamados", "Reincidente", "ARION >24h"])
     for row in data["ranked_links_all"]:
         links_sheet.append([_safe_cell(row.get(key)) for key in ("name", "config_item_id", "number", "provider", "client", "project", "state", "tickets")] + ["Sim" if row.get("recurrent") else "Não", row.get("over_24h", 0)])
 
     tickets_sheet = workbook.create_sheet("Tickets")
-    tickets_sheet.append(["Ticket", "Provedor / ISP", "Cliente", "Projeto", "UF", "ConfigItemID", "Link", "Status", "Prioridade", "Origem no recorte", "Criado em", "Terminal em", "Duração (horas)", "ARION >24h", "Motivo", "Procedência raw", "Classificação"])
+    tickets_sheet.append(["Chamado", "Provedor / ISP", "Cliente", "Projeto", "UF", "ConfigItemID", "Link", "Status", "Prioridade", "Origem no recorte", "Criado em", "Terminal em", "Duração (horas)", "ARION >24h", "Motivo", "Procedência raw", "Classificação"])
     for item in data["ticket_export_rows"]:
         tickets_sheet.append([_safe_cell(value) for value in _ticket_values(item)])
 
@@ -203,29 +205,29 @@ def build_pdf(data, filters, providers, podium, generated_at, generated_by):
     ]
     story += [table(metadata, [30 * mm, 220 * mm], header=False), Spacer(1, 5 * mm), p("Indicadores do recorte", "ArionReportSection")]
     kpis = [
-        [p("Provedores"), p("Links CMDB"), p("Tickets válidos"), p("Links afetados"), p("Reincidentes"), p("ARION >24h"), p("Backlog")],
+        [p("Provedores"), p("Links CMDB"), p("Chamados válidos"), p("Links afetados"), p("Reincidentes"), p("ARION >24h"), p("Backlog")],
         [p(len(providers)), p(data["links_total"]), p(data["tickets_valid"]), p(data["links_affected"]), p(data["links_recurrent"]), p(data["tickets_over_24h"]), p(data["backlog_current"])],
     ]
     story.append(table(kpis, [35 * mm] * 7))
-    story += [p(f"Top 3 · {mode}", "ArionReportSection")]
-    top_rows = [[p("Pos."), p("Provedor / ISP"), p("Índice ARION"), p("Faixa"), p("Links"), p("Tickets")]]
+    story += [p(f"Top {10 if filters['ranking_view'] == 'stable' else 3} · {mode}", "ArionReportSection")]
+    top_rows = [[p("Pos."), p("Provedor / ISP"), p("Índice ARION V2"), p("Nível"), p("Links"), p("Chamados"), p("Impacto / 30")]]
     for position, row in enumerate(podium, 1):
-        top_rows.append([p(position), p(row["name"]), p(f"{row['risk_score']:.1f} / 100"), p(row["risk_label"]), p(row["links_total"]), p(row["tickets"])])
-    story.append(table(top_rows, [15 * mm, 90 * mm, 31 * mm, 38 * mm, 25 * mm, 25 * mm]))
+        top_rows.append([p(position), p(row["name"]), p(f"{row['risk_score']:.1f} / 100"), p(row["risk_label"]), p(row["links_total"]), p(row["tickets"]), p(f"{row['impact_noc_score']:.1f} / 30")])
+    story.append(table(top_rows, [13 * mm, 73 * mm, 28 * mm, 34 * mm, 19 * mm, 20 * mm, 25 * mm]))
     story += [p("Ranking completo · primeiros 20", "ArionReportSection")]
-    headers = ["Pos.", "Provedor / ISP", "Índice", "Faixa", "Links", "Tickets", "% afetados", "Reinc.", ">24h", "Backlog", "Procedentes", "Improcedentes"]
+    headers = ["Pos.", "Provedor / ISP", "Índice V2", "Nível", "Links", "Chamados", "Chamados/link", "Impacto/30", "Base/20", "Reincid./20", ">24h/20", "Backlog/10"]
     rows = [[p(value) for value in headers]]
     for position, row in enumerate(providers[:20], 1):
-        rows.append([p(position), p(row["name"]), p(f"{row['risk_score']:.1f}"), p(row["risk_label"]), p(row["links_total"]), p(row["tickets"]), p(f"{row['affected_rate_pct']:.1f}%"), p(row["recurrent_links"]), p(row["tickets_over_24h"]), p(row["backlog_current"]), p(row.get("procedentes", 0)), p(row.get("improcedentes", 0))])
-    story.append(table(rows, [12 * mm, 56 * mm, 17 * mm, 25 * mm, 16 * mm, 17 * mm, 20 * mm, 17 * mm, 14 * mm, 17 * mm, 22 * mm, 24 * mm]))
+        rows.append([p(position), p(row["name"]), p(f"{row['risk_score']:.1f}"), p(row["risk_label"]), p(row["links_total"]), p(row["tickets"]), p(f"{row['tickets_per_link']:.2f}"), p(f"{row['impact_noc_score']:.1f}"), p(f"{row['affected_base_score']:.1f}"), p(f"{row['recurrent_score']:.1f}"), p(f"{row['over_24h_score']:.1f}"), p(f"{row['backlog_score']:.1f}")])
+    story.append(table(rows, [11 * mm, 50 * mm, 16 * mm, 24 * mm, 13 * mm, 15 * mm, 19 * mm, 17 * mm, 15 * mm, 17 * mm, 15 * mm, 18 * mm]))
     unique_tickets = {}
     for item in data["ticket_export_rows"]:
         unique_tickets.setdefault(item["external_id"], item)
     proc = sum(item.get("responsibility_class") == "PROCEDENTE" for item in unique_tickets.values())
     improc = sum(item.get("responsibility_class") == "IMPROCEDENTE" for item in unique_tickets.values())
     indeterminate = sum(item.get("responsibility_class") == "INDETERMINADO" for item in unique_tickets.values())
-    story += [p("Responsabilidade observada", "ArionReportSection"), p(f"Tickets relacionados no ranking (deduplicados por ID): {len(unique_tickets)} · Procedentes: {proc} · Improcedentes: {improc} · Indeterminados: {indeterminate}. O campo vem do fechamento OTRS, não prova culpa do Provider e ainda não altera o Índice ARION V1.", "ArionReportSmall")]
-    story += [Spacer(1, 4 * mm), p("Índice ARION V1 é uma métrica operacional interna; não representa SLA contratual nem penalização financeira. ARION >24h é provisório. Procedência/Improcedência é exibida para análise e não altera o índice.", "ArionReportSmall")]
+    story += [p("Responsabilidade observada", "ArionReportSection"), p(f"Chamados relacionados no ranking (deduplicados por ID): {len(unique_tickets)} · Procedentes: {proc} · Improcedentes: {improc} · Indeterminados: {indeterminate}. O campo vem do fechamento OTRS, não prova culpa do Provider e não altera o Índice ARION V2.", "ArionReportSmall")]
+    story += [Spacer(1, 4 * mm), p("Índice ARION V2 é uma métrica operacional interna; não representa SLA contratual nem penalização financeira. O componente de impacto usa 60% de chamados e 40% de links afetados normalizados pelo P95 do recorte. ARION >24h é provisório. Procedência/Improcedência é exibida para análise e não altera o índice.", "ArionReportSmall")]
 
     def footer(canvas, doc):
         canvas.saveState()

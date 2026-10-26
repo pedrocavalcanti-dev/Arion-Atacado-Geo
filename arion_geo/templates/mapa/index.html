@@ -13,5 +13,5 @@
 {% endblock %}
 {% block extra_js %}
   {% if mapbox_token %}<script src="https://api.mapbox.com/mapbox-gl-js/v3.33.0/mapbox-gl.js" defer></script>{% endif %}
-  <script src="{% static 'js/mapa/mapa-real.js' %}" defer></script>
+  <script src="{% arion_js 'js/mapa/mapa-real.js' %}" defer></script>
 {% endblock %}

@@ -371,7 +371,7 @@ def map_state_detail(request):
     from aplicativos.integracoes.services.ticket_business_identity import TicketBusinessIdentityService
     from aplicativos.integracoes.models import OTRSTicketConfigItem, OTRSStateMapping
     from aplicativos.integracoes.services.analytics import PeriodService, TicketQueryService
-    from aplicativos.painel.services.analytics import normalize_closing_reason
+    from aplicativos.integracoes.services.closing_reason import ClosingReasonCanonicalizer
 
     code = (request.GET.get("uf") or "").strip().upper()
     if code not in {"AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"}:
@@ -418,9 +418,9 @@ def map_state_detail(request):
             relations = relations.exclude(ticket__terminal_state_at__isnull=True).exclude(ticket__closing_code_raw="")
             reason = (params.get("reason") or "").strip()
             if reason:
-                raw_codes = [value for value in relations.values_list("ticket__closing_code_raw", flat=True).distinct()
-                             if normalize_closing_reason(value) == reason]
-                relations = relations.filter(ticket__closing_code_raw__in=raw_codes)
+                relations = relations.filter(
+                    ticket__closing_code_raw__in=ClosingReasonCanonicalizer.raw_values(reason),
+                )
         if start:
             relations = relations.filter(**{f"{date_field}__gte": start_at})
         if end:
@@ -447,7 +447,7 @@ def map_state_detail(request):
                 "created_at": ticket.source_created_at.isoformat() if ticket.source_created_at else None,
                 "changed_at": ticket.source_changed_at.isoformat() if ticket.source_changed_at else None,
                 "terminal_at": ticket.terminal_state_at.isoformat() if ticket.terminal_state_at else None,
-                "closing_reason": normalize_closing_reason(ticket.closing_code_raw),
+                "closing_reason": ClosingReasonCanonicalizer.display(ticket.closing_code_raw),
                 "link": relation.cmdb_link.source_number or relation.cmdb_link.name,
                 "city": relation.cmdb_link.city,
                 "title": ticket.title[:500], "priority": ticket.priority_name,

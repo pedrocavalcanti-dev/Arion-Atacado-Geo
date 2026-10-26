@@ -1,39 +1,40 @@
-# ARION ATACADO GEO
+﻿# Projeto — ARION ATACADO GEO
 
-## Apresentação
+> **Identidade:** Produto: **ARION ATACADO GEO**. Operação atendida: **NOC ATACADO**. A operação não altera o nome do produto.
 
-O ARION ATACADO GEO é uma plataforma Django de inteligência operacional para o NOC Atacado. Centraliza consulta, análise, exploração e visualização de dados para apoiar o trabalho diário. O sistema mantém uma camada local de consulta sobre dados operacionais e não substitui os sistemas de registro oficiais.
+## Objetivo e público
 
-## Objetivos e princípios
+O ARION ATACADO GEO é uma plataforma Django de inteligência operacional. Reúne a base de links da CMDB, os chamados sincronizados do OTRS e o acompanhamento local da equipe. Dashboard, Cockpit, Mapa e Rankings reutilizam espelhos locais para cruzar chamado, Link, Provider/ISP, Cliente, Projeto e UF conforme as limitações das fontes disponíveis.
 
-O Arion reduz a fragmentação das consultas, reúne visões operacionais, apresenta indicadores e dá suporte a análises interativas. A CMDB/OTRS permanece fonte oficial; o banco local é espelho sincronizado, cache operacional e camada analítica. Métricas demonstrativas são identificadas como DEMO e não devem ser confundidas com métricas reais.
+O sistema reduz a fragmentação entre consultas e facilita a leitura consolidada de fila, impacto, recorrência e distribuição geográfica. É uma ferramenta de exploração operacional diária; não substitui OTRS/CMDB como registro técnico nem BI/relatórios formais.
 
-```mermaid
-flowchart LR
-    C[CMDB: fonte oficial] --> B[Base local do Arion]
-    B --> M[Base, Dashboard, Cockpit, Mapa e Ranking]
-    O[OTRS: fonte oficial de tickets] -. integração futura .-> B
-    B --> A[ARI: interface Preview]
-    O -. métricas futuras .-> A
-```
+Usuários reais: analistas NOC, gestores, administradores de sistema e usuários de consulta/auditoria. O acesso deriva de Django Groups e Permissions; Data Scope restringe linhas operacionais no backend. Não há role separada chamada “apresentação”.
 
-## Módulos
+## Fontes oficiais e papel do banco local
 
-| Módulo | Finalidade | Estado |
+OTRS é o registro oficial dos chamados e CMDB é a fonte oficial dos itens de configuração. O ARION não grava alterações nesses sistemas: OTRS é acessado em MySQL somente leitura e CMDB por operações de leitura de ConfigItems. O banco ARION contém mirrors sincronizados, preferências e dados próprios da aplicação, além de camadas analíticas.
+
+Status ARION, responsável, prioridade interna, notas e eventos criados em Chamados pertencem ao ARION; não alteram o ticket OTRS. A freshness depende do `integration_worker`; as telas usam a última cópia local disponível.
+
+## Módulos e limites
+
+| Área | Capacidade | Limite |
 |---|---|---|
-| Início | Acesso às áreas autorizadas. | Implementado. |
-| Base de Links | Consulta e atualização do espelho CMDB. | XLSX operacional. |
-| Dashboard | Visão executiva CMDB e indicadores demonstrativos. | Implementado; métricas de tickets DEMO. |
-| Cockpit | Consulta analítica, filtros, Saved Views e exportações. | Implementado; métricas operacionais DEMO. |
-| Mapa | Agregações geográficas por UF. | CMDB real e indicadores DEMO. |
-| Ranking de Provedores | Compara provedores com atributos CMDB e performance DEMO. | Implementado. |
-| ARI | Conversas, anexos e artifacts demonstrativos. | Preview sem LLM integrado. |
-| Configurações e Auditoria | Conta, acesso, escopos e rastreabilidade. | Implementado conforme permissões. |
+| Dashboard | Links, tickets e séries de período. | Distingue estado atual de coortes por data de criação. |
+| Chamados | Fila NOC, filtros e acompanhamento interno. | Não altera ticket, artigo ou nota no OTRS. |
+| Cockpit | Analytics, views salvas e exports. | Consulta mirrors locais e respeita Data Scope. |
+| Mapa e Rankings | Agregações geográficas e análise de Provider/ISP. | Não são relatório oficial de SLA nem prova de causalidade. |
+| Base | Links e Providers/ISP do mirror CMDB. | Importação XLSX antiga não é ingestão operacional normal. |
+| ARI | Conversas, anexos e artifacts em Preview. | Não anunciar integração LLM como disponível. |
+| Administração | Conta, grupos, escopos, integrações e auditoria. | Operações exigem permissions backend. |
 
-## Segurança e tecnologia
+## Princípios
 
-O sistema usa autenticação Django, Groups/Permissions (RBAC) e Data Scope aplicado no backend. `GroupDataScope` limita dados CMDB por grupo. A aplicação usa Python 3.12, Django 5.2, templates, CSS e JavaScript vanilla; SQLite está configurado no desenvolvimento atual. Integrações reais com API CMDB e tickets OTRS são futuras.
+- A fonte oficial continua sendo OTRS/CMDB; o mirror é projeção local reconstruível.
+- Views operacionais não consultam uma fonte remota em cada request.
+- Data Scope é aplicado antes de filtros, agregações, paginação e exportação.
+- Cliente/Projeto derivados do nome CMDB mantêm origem e confiança explícitas.
+- Não apresentar métrica não suportada como SLA ou verdade oficial.
+- Estudos e contagens pontuais ficam em `docs/estudos/`, fora da referência normativa.
 
-## Documentação
-
-Comece pelo [índice oficial](README.md), depois consulte [Estado Atual](ESTADO-ATUAL.md), [Arquitetura](ARQUITETURA.md) e [Fontes de Dados](FONTES-DE-DADOS.md).
+Leia [Estado Atual](ESTADO-ATUAL.md), [Arquitetura](ARQUITETURA.md), [Fontes de Dados](FONTES-DE-DADOS.md), [Banco](BANCO-DE-DADOS.md), [Chamados](funcionalidades/chamados.md) e [Implantação](IMPLANTACAO-E-PRODUCAO.md). A Central web usa estas páginas versionadas como fonte.

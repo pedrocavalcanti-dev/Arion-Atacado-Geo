@@ -81,10 +81,25 @@ class LinkBusinessIdentityTests(SimpleTestCase):
         self.assertEqual((vivo_diversos.contracting_client, vivo_diversos.business_project), ("Vivo", "Diversos"))
         self.assertEqual((unknown.contracting_client, unknown.business_project), ("", "Diversos"))
 
-    def test_region_like_projects_are_not_canonicalized_without_a_rule(self):
+    def test_region_like_tokens_are_not_promoted_to_projects(self):
         for raw in ("Claro.al", "Claro.mt", "Claro.pr"):
             with self.subTest(raw=raw):
-                self.assertEqual(LinkBusinessIdentityService.parse(f"CLARO - {raw} - BD1000001").business_project, raw)
+                self.assertEqual(LinkBusinessIdentityService.parse(f"CLARO - {raw} - BD1000001").business_project, "")
+
+    def test_telmex_is_client_context_never_project_and_regional_prefix_is_not_project(self):
+        cases = (
+            ("TELMEX - BRADESCO - BD000123", "TELMEX", "Claro", "Bradesco"),
+            ("CLARO - TELMEX - BRADESCO - BD000123", "CLARO / TELMEX", "Claro", "Bradesco"),
+            ("BRADESCO - TELMEX - BD000123", "TELMEX", "Claro", "Bradesco"),
+            ("TELMEX - CLARO.BA.BLIVR000123", "TELMEX", "Claro", ""),
+        )
+        for name, raw_client, client, project in cases:
+            with self.subTest(name=name):
+                result = LinkBusinessIdentityService.parse(name)
+                self.assertEqual((result.contracting_client_raw, result.contracting_client, result.business_project),
+                                 (raw_client, client, project))
+                if "TELMEX" in name and "BRADESCO" in name:
+                    self.assertEqual(result.business_account, "")
 
     def test_unstructured_address_name_remains_ambiguous(self):
         result = LinkBusinessIdentityService.parse("AEROPORTO DE MANAUS - AVENIDA TORQUATO TAPAJÓS - AM")

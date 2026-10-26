@@ -413,6 +413,10 @@
       if (temporaryTicketDay) payload.ticket_day = temporaryTicketDay;
       const result = await post(page.dataset.queryUrl, payload, controller.signal);
       if (requestId !== latestRequest) return;
+      const normalizedReason = result.normalized_query?.filters?.termination_reason;
+      if (normalizedReason && queryState.filters.termination_reason !== "all") {
+        queryState.filters.termination_reason = normalizedReason;
+      }
       renderOptions(result.options); renderKpis(result.kpis || []); renderSeries(result); renderBreakdown(result); renderTickets(result);
       writeURL();
       queryState.detail_page = result.detail_page || 1;

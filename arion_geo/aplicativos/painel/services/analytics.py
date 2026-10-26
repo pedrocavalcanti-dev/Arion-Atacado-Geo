@@ -9,6 +9,7 @@ from django.db.models import Case, CharField, Count, Value, When
 
 from aplicativos.integracoes.models import OTRSTicket, OTRSTicketConfigItem, OTRSStateMapping
 from aplicativos.integracoes.services.analytics import LinkQueryService, PeriodService, TicketQueryService
+from aplicativos.integracoes.services.closing_reason import ClosingReasonCanonicalizer
 
 STATE_NAMES = {
     "AC": "Acre", "AL": "Alagoas", "AM": "Amazonas", "AP": "Amapá", "BA": "Bahia",
@@ -29,11 +30,8 @@ STATUS_ORDER = (
 )
 
 def normalize_closing_reason(value):
-    raw = str(value or "").strip()
-    normalized = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode().casefold()
-    if normalized in {"pendenciafinanceira", "pendencia financeira"}:
-        return "Pendência Financeira"
-    return raw or "Não classificado"
+    """Compatibility display helper backed by the shared canonicalizer."""
+    return ClosingReasonCanonicalizer.display(value)
 
 def _months(start, end):
     result = []
@@ -430,13 +428,13 @@ class AnalyticsQueryService:
             subtitle = "Fila atual: em atendimento, pendente ou agendada"
             period = "Atual"
         elif reason and metric == "tickets":
-            title = f"An\u00e1lise de {reason}"
+            title = f"An\u00e1lise de {ClosingReasonCanonicalizer.display(reason)}"
             subtitle = f"Tickets v\u00e1lidos criados entre {fmt(start)} e {fmt(end)} conforme os filtros ativos"
         elif reason:
             metric_word = {"closed_tickets": "encerrados", "resolved_tickets": "resolvidos",
                            "resolved_closed_tickets": "resolvidos e encerrados", "canceled_tickets": "cancelados"}.get(
                                metric, cls.METRICS[metric].lower())
-            title = f"Tickets {metric_word} por {reason}"
+            title = f"Tickets {metric_word} por {ClosingReasonCanonicalizer.display(reason)}"
             subtitle = f"{fmt(start)} a {fmt(end)}"
         else:
             metric_word = cls.METRICS[metric].lower()
@@ -561,6 +559,7 @@ class AnalyticsQueryService:
                 "terminal_at": stamp(ticket.terminal_state_at), "resolved_at": stamp(ticket.resolved_at),
                 "canceled_at": stamp(ticket.canceled_at), "status": status, "status_code": ticket.business_status,
                 "source_state": ticket.external_state_name, "reason": reason,
+                "closing_code_raw": ticket.closing_code_raw,
                 "provider": ", ".join(sorted(providers)) or "N\u00e3o identificado", "uf": ", ".join(sorted(states)),
                 "priority": ticket.priority_name, "sla": ticket.sla_name, "service": ticket.service_name,
                 "source": "OTRS + CMDB" if has_link else "OTRS", "links": relations, "evidence": evidence}
@@ -814,7 +813,7 @@ class AnalyticsQueryService:
             if canonical in {"uf", "status"}:
                 normalized = normalized.upper()
             elif canonical == "termination_reason":
-                normalized = normalize_closing_reason(normalized)
+                normalized = ClosingReasonCanonicalizer.key(normalized)
             filters[canonical] = normalized
         compare = payload.get("compare_to") or None
         if compare:
@@ -906,9 +905,7 @@ class AnalyticsQueryService:
             filtered = filtered.filter(priority_name=priority)
         reason = filters.get("termination_reason")
         if reason:
-            raw_values = [value for value in filtered.exclude(closing_code_raw="").values_list("closing_code_raw", flat=True).distinct()
-                          if normalize_closing_reason(value) == reason]
-            filtered = filtered.filter(closing_code_raw__in=raw_values)
+            filtered = filtered.filter(closing_code_raw__in=ClosingReasonCanonicalizer.raw_values(reason))
         link_filters = {cls.LINK_FILTERS[key]: filters[key] for key in cls.LINK_FILTERS if filters.get(key)}
         if link_filters:
             filtered = filtered.filter(
@@ -994,18 +991,28 @@ class AnalyticsQueryService:
                 "priority": "ticket__priority_name",
                 "termination_reason": "ticket__closing_code_raw",
             }[group]
-            by_link = relations.annotate(dimension=Coalesce(NullIf(F(field), Value("")), Value("N\u00e3o classificado"))).values(
+            if group == "termination_reason":
+                relations = ClosingReasonCanonicalizer.annotate_key(
+                    relations, field="ticket__closing_code_raw", output="dimension",
+                )
+                by_link = relations.values("dimension", "cmdb_link_id")
+            else:
+                by_link = relations.annotate(dimension=Coalesce(NullIf(F(field), Value("")), Value("N\u00e3o classificado"))).values(
                 "dimension", "cmdb_link_id",
-            ).annotate(ticket_count=Count("ticket_id", distinct=True)).filter(ticket_count__gte=2)
-            return by_link.values("dimension").annotate(value=Count("cmdb_link_id", distinct=True)).order_by("-value", "dimension")
+                )
+            by_link = by_link.annotate(ticket_count=Count("ticket_id", distinct=True)).filter(ticket_count__gte=2)
+            grouped = by_link.values("dimension").annotate(value=Count("cmdb_link_id", distinct=True)).order_by("-value", "dimension")
+            if group == "termination_reason":
+                return [{"dimension": ClosingReasonCanonicalizer.display(item["dimension"]), "value": item["value"]}
+                        for item in grouped]
+            return grouped
 
         if group == "termination_reason":
-            counts = rows.values("closing_code_raw").annotate(value=Count("pk", distinct=True))
-            merged = {}
-            for item in counts:
-                label = normalize_closing_reason(item["closing_code_raw"])
-                merged[label] = merged.get(label, 0) + item["value"]
-            return [{"dimension": label, "value": value} for label, value in sorted(merged.items(), key=lambda item: (-item[1], item[0].casefold()))]
+            counts = ClosingReasonCanonicalizer.annotate_key(rows).values(
+                "closing_reason_key",
+            ).annotate(value=Count("pk", distinct=True))
+            return [{"dimension": ClosingReasonCanonicalizer.display(item["closing_reason_key"]), "value": item["value"]}
+                    for item in counts.order_by("-value", "closing_reason_key")]
 
         amount = Count("config_items__cmdb_link_id", distinct=True) if metric == "links_affected" else Count("pk", distinct=True)
         if group == "month":
@@ -1029,7 +1036,13 @@ class AnalyticsQueryService:
             rows = rows.filter(config_items__is_present_in_source=True, config_items__cmdb_link__is_present_in_source=True, config_items__cmdb_link__in=links)
             if group == "provider":
                 rows = rows.exclude(config_items__cmdb_link__operator__isnull=True).exclude(config_items__cmdb_link__operator__name="")
-        rows = rows.annotate(dimension=Coalesce(NullIf(F(field), Value("")), Value("N\u00e3o classificado")))
+        if group == "termination_reason":
+            rows = ClosingReasonCanonicalizer.annotate_key(rows, field=field, output="dimension")
+        else:
+            rows = rows.annotate(dimension=Coalesce(NullIf(F(field), Value("")), Value("N\u00e3o classificado")))
+        if group == "termination_reason":
+            return [{"dimension": ClosingReasonCanonicalizer.display(item["dimension"]), "value": item["value"]}
+                    for item in rows.values("dimension").annotate(value=Count("pk", distinct=True)).order_by("-value", "dimension")]
         return list(rows.values("dimension").annotate(value=amount).order_by("-value", "dimension"))
 
     @classmethod
@@ -1084,8 +1097,8 @@ class AnalyticsQueryService:
         result["service"] = list(tickets.exclude(service_name="").values_list("service_name", flat=True).distinct().order_by("service_name"))
         result["priority"] = list(tickets.exclude(priority_name="").values_list("priority_name", flat=True).distinct().order_by("priority_name"))
         result["sla"] = list(tickets.exclude(sla_name="").values_list("sla_name", flat=True).distinct().order_by("sla_name"))
-        reasons = {normalize_closing_reason(value) for value in tickets.exclude(closing_code_raw="").values_list("closing_code_raw", flat=True).distinct()}
-        result["termination_reason"] = [{"value": value, "label": value} for value in sorted(reasons, key=str.casefold)]
+        raw_reasons = tickets.exclude(closing_code_raw="").order_by().values_list("closing_code_raw", flat=True).distinct()
+        result["termination_reason"] = ClosingReasonCanonicalizer.options(raw_reasons)
         relation = OTRSTicketConfigItem.objects.filter(
             ticket_id__in=tickets.values("pk"), is_present_in_source=True,
             cmdb_link__in=links,

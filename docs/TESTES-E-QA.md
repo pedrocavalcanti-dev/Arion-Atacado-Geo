@@ -1,28 +1,47 @@
-# Testes e QA
+﻿# Testes e QA
 
 ## Ambiente e comandos
 
-O projeto usa Django TestCase e cliente de testes, com testes por app em `arion_geo/aplicativos/`. Na raiz, use o interpretador da `.venv`:
+Use Python da `.venv` a partir da raiz:
 
 ```powershell
 .venv\Scripts\python.exe arion_geo\gerenciar.py check
 .venv\Scripts\python.exe arion_geo\gerenciar.py makemigrations --check
-.venv\Scripts\python.exe arion_geo\gerenciar.py test
+.venv\Scripts\python.exe arion_geo\gerenciar.py test aplicativos.configuracoes.test_documentation
 ```
 
-Para executar uma suíte específica, informe o app ou caminho de teste, por exemplo `aplicativos.ari` ou `aplicativos.configuracoes.test_errors`. Testes criam banco isolado; não exigem alterar dados do banco de desenvolvimento.
+Testes Django criam banco isolado. Se o usuário MySQL local não tiver grant para `CREATE DATABASE` do banco de teste, rode o teste focado com SQLite em memória apenas naquele processo:
 
-## Cobertura existente
+```powershell
+$env:DATABASE_URL = 'sqlite:///:memory:'
+.venv\Scripts\python.exe arion_geo\gerenciar.py test aplicativos.configuracoes.test_documentation
+Remove-Item Env:DATABASE_URL
+```
 
-- `aplicativos.autenticacao.tests`: autenticação, contas ativas/inativas e fluxo de sessão.
-- `aplicativos.configuracoes.tests` e `test_errors.py`: permissões, preferências, usuários/grupos/escopos, handlers HTTP, CSRF, JSON e proteção de respostas 500.
-- `aplicativos.auditoria.tests`: sanitização de metadata, autenticação, mudanças administrativas e exportação.
-- `aplicativos.ari.tests`: conversas, propriedade, anexos, limites/validação e artifacts.
-- `aplicativos.base_links.tests`: importação XLSX, normalização, classificação, escopo, busca, filtros e paginação.
-- `aplicativos.painel.tests`: Dashboard/Cockpit, fontes REAL/DEMO, consultas, escopo, Saved Views e exportação.
-- `aplicativos.mapa.tests`: acesso, agregações e escopo do endpoint geográfico.
-- `aplicativos.rankings.tests`: filtros, ordenação, paginação, agregação e Data Scope.
+É uma contingência daquele ambiente, não uma limitação universal do MySQL. Execute check e `makemigrations --check` com a configuração normal.
 
-## Verificações antes de entrega
+## Cobertura registrada
 
-Execute `check`, `makemigrations --check` quando aplicável e testes relevantes; tarefas de documentação ou CSS não exigem inventar testes. Mudanças em arquivos globais de template/autorização pedem smoke test autenticado das rotas afetadas. `git diff --check` verifica whitespace do diff. Testes de browser e cobertura percentual não estão configurados como pipeline neste repositório.
+- `autenticacao`: login, contas ativas/inativas e sessão.
+- `configuracoes`: permissões, preferências, usuários/grupos/escopos, erros globais e portal documental.
+- `auditoria`: sanitização, autenticação, mudanças administrativas e export.
+- `ari`: conversas, ownership, anexos, validação e artifacts.
+- `base_links`: legado XLSX, busca, classificação, escopo, filtros e paginação.
+- `painel`: Dashboard/Cockpit, analytics, scope, saved views e export.
+- `chamados`: fila e acompanhamento local, views, nota/evento e permissões.
+- `mapa`, `rankings`: agregações, APIs e Data Scope.
+- `integracoes`: clients simulados, sync/mirrors, semântica, worker, lease e migração de banco.
+
+## QA da Central de Documentação
+
+Teste home, todos os slugs permitidos, login/permissão, metadata title/category/description/search terms, busca por termos de domínio, renderização Mermaid/callouts, anchors, links internos e links inválidos. Mudanças em template global exigem smoke test autenticado de `/painel/`, `/dashboard/`, `/cockpit/`, `/mapa/`, `/rankings/`, `/base/` e `/configuracoes/`. Não é preciso rodar suíte inteira para ajuste documental.
+
+## Troubleshooting
+
+- Django ausente: confirme `.venv\Scripts\python.exe`, não use Python global.
+- Sem permissão de criação de DB de teste no MySQL local: configure grant apropriado ou use o override SQLite em memória acima.
+- Override persistiu: remova `DATABASE_URL` da sessão após o teste.
+- `makemigrations --check` divergiu: avalie model/schema em tarefa própria; documentação não exige migration.
+- Erro de rota/template global: revise reverse, URL namespace e as rotas autenticadas listadas acima.
+
+`check` valida configuração Django; `makemigrations --check` verifica estado model/migration; testes focados verificam comportamento. Um comando não substitui o outro.

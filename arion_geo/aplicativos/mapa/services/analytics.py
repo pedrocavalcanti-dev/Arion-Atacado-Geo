@@ -9,7 +9,7 @@ from aplicativos.integracoes.models import OTRSTicketConfigItem, OTRSStateMappin
 from aplicativos.integracoes.services.analytics import LinkQueryService, PeriodService, TicketQueryService
 from aplicativos.integracoes.services.ticket_business_identity import TicketBusinessIdentityService
 from aplicativos.integracoes.services.link_business_identity import BusinessIdentityRules
-from aplicativos.painel.services.analytics import normalize_closing_reason
+from aplicativos.integracoes.services.closing_reason import ClosingReasonCanonicalizer
 
 
 STATE_NAMES = {
@@ -112,7 +112,7 @@ class MapAnalyticsService:
         client = (params.get("client") or "all").strip()
         project = (params.get("project") or "").strip()
         provider = (params.get("provider") or "").strip()
-        reason_filter = (params.get("reason") or "").strip()
+        reason_filter = ClosingReasonCanonicalizer.key(params.get("reason")) if params.get("reason") else ""
         status_filter = (params.get("status") or "").strip().upper()
         priority_filter = (params.get("priority") or "").strip()
         if status_filter not in {"", *VALID_TICKET_STATES}:
@@ -185,9 +185,9 @@ class MapAnalyticsService:
             if mode == "calls" and priority_filter:
                 period_relations = period_relations.filter(ticket__priority_name=priority_filter)
             if mode == "motives" and reason_filter:
-                raw_values = [raw for raw in terminal_relations.values_list("ticket__closing_code_raw", flat=True).distinct()
-                              if normalize_closing_reason(raw) == reason_filter]
-                terminal_relations = terminal_relations.filter(ticket__closing_code_raw__in=raw_values)
+                terminal_relations = terminal_relations.filter(
+                    ticket__closing_code_raw__in=ClosingReasonCanonicalizer.raw_values(reason_filter),
+                )
             query_links = ticket_candidates.prefetch_related(
                 Prefetch("ticket_relations", queryset=period_relations, to_attr="_map_period"),
                 Prefetch("ticket_relations", queryset=current_relations, to_attr="_map_active"),
@@ -254,7 +254,7 @@ class MapAnalyticsService:
             global_tickets.update(tickets)
             global_ticket_statuses.update({ticket_id: ticket.business_status for ticket_id, ticket in tickets.items()})
             global_ticket_priorities.update({ticket_id: ticket.priority_name for ticket_id, ticket in tickets.items()})
-            global_ticket_reasons.update({ticket_id: normalize_closing_reason(ticket.closing_code_raw) for ticket_id, ticket in tickets.items()})
+            global_ticket_reasons.update({ticket_id: ClosingReasonCanonicalizer.display(ticket.closing_code_raw) for ticket_id, ticket in tickets.items()})
             active_ids.update(active)
             global_terminal.update(terminal)
             item["tickets_by_id"].update(tickets)
@@ -306,7 +306,7 @@ class MapAnalyticsService:
                 _inc(item["ticket_status_counts"], ticket.business_status)
                 if ticket.priority_name:
                     _inc(item["ticket_priority_counts"], ticket.priority_name)
-                reason = normalize_closing_reason(ticket.closing_code_raw)
+                reason = ClosingReasonCanonicalizer.display(ticket.closing_code_raw)
                 if reason:
                     _inc(item["ticket_reason_counts"], reason)
             for context in item["ticket_context_by_id"].values():
@@ -314,7 +314,7 @@ class MapAnalyticsService:
                 _inc(item["ticket_project_counts"], context["project"])
                 _inc(item["ticket_provider_counts"], context["provider"])
             for ticket in item["terminal_by_id"].values():
-                reason = normalize_closing_reason(ticket.closing_code_raw)
+                reason = ClosingReasonCanonicalizer.display(ticket.closing_code_raw)
                 if reason:
                     _inc(item["reason_counts"], reason)
             item.pop("tickets_by_id")
@@ -323,6 +323,9 @@ class MapAnalyticsService:
             item.pop("terminal_by_id")
 
         reasons = sorted({reason for row in result.values() for reason in row["reason_counts"]})
+        reason_options = set(reasons)
+        if reason_filter:
+            reason_options.add(ClosingReasonCanonicalizer.display(reason_filter))
         status_counts, priority_counts, ticket_reason_counts = {}, {}, {}
         for status in global_ticket_statuses.values():
             _inc(status_counts, status)
@@ -373,7 +376,11 @@ class MapAnalyticsService:
             "recurrence_provider_counts": recurrence_providers,
             "clients": clients, "projects": project_options,
             "providers": [{"id": row["operator_id"], "name": row["operator__name"]} for row in providers],
-            "reasons": reasons, "period": {"date_from": start.isoformat() if start else "", "date_to": end.isoformat() if end else ""},
+            "reasons": reasons, "reason_options": [
+                {**option, "raw_values": list(ClosingReasonCanonicalizer.raw_values(option["value"]))}
+                for option in ClosingReasonCanonicalizer.options(reason_options)
+            ],
+            "period": {"date_from": start.isoformat() if start else "", "date_to": end.isoformat() if end else ""},
         }
 
 

@@ -43,6 +43,8 @@ class GroupDataScope(models.Model):
             ("view_map", "Can view the operational map"),
             ("view_rankings", "Can view provider rankings"),
             ("view_base", "Can view the CMDB base"),
+              ("view_operational_tickets", "Can view operational tickets"),
+              ("manage_operational_tickets", "Can manage local ticket tracking"),
             ("import_cmdb", "Can import and update the CMDB"),
             ("export_base", "Can export CMDB data"),
             ("manage_users", "Can manage user accounts"),

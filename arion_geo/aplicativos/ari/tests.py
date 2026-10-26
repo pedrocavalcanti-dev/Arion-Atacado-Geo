@@ -1,6 +1,7 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -190,6 +191,38 @@ class AriAccessTests(TestCase):
         self.assertEqual(response.status_code, 413)
         self.assertEqual(response["Content-Type"], "application/json")
         self.assertEqual(response.json()["error"]["code"], "FILE_TOO_LARGE")
+
+    def test_upload_request_enforces_aggregate_bytes_and_attachment_count_while_streaming(self):
+        url = reverse("ari:create-message")
+        with override_settings(ARI_MAX_ATTACHMENT_BYTES=4, ARI_MAX_TOTAL_ATTACHMENT_BYTES=10):
+            with patch("aplicativos.ari.views.AriConversationService.send_message") as send_message:
+                per_file_response = self.client.post(url, {
+                    "content": "anexo", "files": [
+                        SimpleUploadedFile("large.txt", b"12345", content_type="text/plain"),
+                    ],
+                })
+        self.assertEqual(per_file_response.status_code, 413)
+        send_message.assert_not_called()
+
+        with override_settings(ARI_MAX_ATTACHMENTS=1):
+            count_response = self.client.post(url, {
+                "content": "anexos", "files": [
+                    SimpleUploadedFile("one.txt", b"um", content_type="text/plain"),
+                    SimpleUploadedFile("two.txt", b"dois", content_type="text/plain"),
+                ],
+            })
+        self.assertEqual(count_response.status_code, 413)
+        self.assertFalse(AriConversation.objects.exists())
+
+        with override_settings(ARI_MAX_ATTACHMENTS=3, ARI_MAX_TOTAL_ATTACHMENT_BYTES=4):
+            total_response = self.client.post(url, {
+                "content": "anexos", "files": [
+                    SimpleUploadedFile("one.txt", b"123", content_type="text/plain"),
+                    SimpleUploadedFile("two.txt", b"456", content_type="text/plain"),
+                ],
+            })
+        self.assertEqual(total_response.status_code, 413)
+        self.assertFalse(AriConversation.objects.exists())
 
     def test_attachment_and_artifact_are_private_and_artifact_is_controlled(self):
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):

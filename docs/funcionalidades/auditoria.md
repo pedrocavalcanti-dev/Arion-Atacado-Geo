@@ -1,4 +1,4 @@
-# Auditoria
+﻿# Auditoria
 
 ## Finalidade e modelo
 
@@ -23,7 +23,7 @@ Busca, filtros, paginação, navegação e abertura de detalhes não geram event
 | `/configuracoes/administracao/auditoria/` | GET | Lista eventos paginados e indicadores do recorte. |
 | `/configuracoes/administracao/auditoria/exportar/` | GET | Exporta CSV do recorte filtrado e registra `AUDIT_EXPORT`. |
 
-`AuditService` é o serviço central de gravação; `AuditEvent` é o model; as views administrativas em `aplicativos.configuracoes.views` consultam e exportam. As rotas exigem login e `view_audit_log`. Erros técnicos e `X-Request-ID` são tratados pela arquitetura global, não pela tabela de auditoria; veja [ARQUITETURA.md](../ARQUITETURA.md#tratamento-global-de-erros).
+`AuditService` é o serviço central de gravação; `AuditEvent` é o model; as views administrativas em `aplicativos.configuracoes.views` consultam e exportam. As rotas exigem login e `view_audit_log`. Erros técnicos e `X-Request-ID` são tratados pela arquitetura global, não pela tabela de auditoria; veja [Tratamento Global de Erros](tratamento-global-erros.md).
 
 ## Desempenho, testes e estado
 

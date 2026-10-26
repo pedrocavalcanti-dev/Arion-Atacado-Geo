@@ -1,44 +1,51 @@
-# Usuários, Grupos e Escopos de Dados
+﻿# Usuários, Grupos e Escopos de Dados
 
-## Modelo de acesso
+## RBAC e Data Scope
 
-O modelo operacional oficial associa permissões funcionais e dados disponíveis ao perfil do usuário:
+RBAC responde que ações a pessoa pode executar e usa Django Groups/Permissions. Data Scope responde quais linhas ela pode consultar e é aplicado no backend antes de filtros, agregações, paginação, detalhes, APIs e exports. Os dois controles são independentes.
 
 ```mermaid
 flowchart TD
-    U[User] --> G[Group: perfil principal]
-    G --> P[Django Permissions: ações permitidas]
-    G --> S[GroupDataScope: dados permitidos]
-    S --> A[ALL: universo funcional]
-    S --> C[CUSTOM: Operadora AND Projeto]
+U[User Django] --> G[Group]
+G --> P[Django Permissions: ações]
+G --> S[GroupDataScope: dados]
+S --> M[ALL ou CUSTOM]
+M --> Q[Query local limitada]
 ```
 
-`User` autentica a pessoa e contém campos de identidade e estado ativo. A interface do Arion trabalha com um grupo operacional principal; trocar o grupo substitui a associação anterior e troca conjuntamente permissions e Data Scope herdados. Contas inativas não podem autenticar. Criação/edição usa forms Django e senha inicial é tratada pela autenticação Django, sem armazenamento de senha em claro.
+## Grupos e permissões
 
-## Grupos e permissions
+`bootstrap_access` provisiona grupos: Administrador do Sistema, Gestor, Analista NOC e Consulta / Auditoria. Os codenames e grants vêm de `access_control.py`; não existe regra por username nem `user.role`. O formulário da Central configura o grupo principal; as views conferem permissions no backend ainda que um link esteja oculto.
 
-Django `Group` representa o perfil operacional e reúne Permissions Django. A interface permite editar permissões autorizadas e exige um grupo ao criar usuário comum. Perfis iniciais são provisionados pelo comando `bootstrap_access`; a autorização funcional continua sendo validada no backend.
+Django permite múltiplos grupos. Permissions funcionais concedidas pelos grupos seguem Django Auth. Para dados, scopes CUSTOM de cada grupo são acumulados com interseção AND. Um grupo com ALL não remove restrição CUSTOM de outro.
 
 ## `GroupDataScope`
 
-`GroupDataScope` é OneToOne com `Group` e contém `mode`, `allowed_operators` e `allowed_projects`. Não há escopo individual ativo como fonte oficial para consultas comuns.
+OneToOne com Group, modo `ALL`/`CUSTOM`, M2M `allowed_operators` e `allowed_projects`. Os catálogos de escopo são dimensões administrativas e não significam automaticamente Provider/ISP.
 
-- **ALL:** permite o universo operacional disponível pelas permissions do usuário; não transforma usuário em superuser.
-- **CUSTOM:** requer que cada registro corresponda simultaneamente a operadora permitida **e** projeto permitido.
-- **CUSTOM vazio:** sem operadoras ou sem projetos selecionados, o resultado é vazio; lista vazia nunca significa ALL.
-- **Sem grupo/configuração:** usuários comuns recebem zero registros operacionais.
-- **Superuser:** tem bypass global técnico de Data Scope.
+- ALL remove restrição adicional de linhas, mas não concede permission funcional.
+- CUSTOM exige simultaneamente Cliente/operadora permitida E Projeto permitido.
+- CUSTOM sem itens autorizados produz queryset vazio.
+- Ausência de scope em qualquer grupo torna o acesso de dados restritivo.
+- Superuser técnico é global e não precisa de scope.
 
-`DataScopeService.filter_queryset()` aplica essas regras no QuerySet do backend antes de filtros, agregações, indicadores e paginação. Ocultar opções no frontend não é controle de segurança.
+Para `CMDBLinkMirror`, filtro usa `contracting_client` ou valor raw autorizado e `business_project`. `legacy_project` só entra como fallback quando `business_project` está vazio; caso contrário poderia ampliar escopo entre projetos. As duas dimensões são AND. Para model legado `base_links.CMDBLink`, filtros usam IDs `operadora_id` e `projeto_id`.
 
-## Legado e migração
+## Fluxo e administração
 
-`LegacyUserDataScope` preserva configurações individuais anteriores à migração; não é a fonte usada pelas consultas atuais. A migração transfere para o grupo quando os escopos legados dos membros são consistentes. Grupos sem uma configuração comum recebem `CUSTOM` vazio; os dados legados permanecem preservados para referência, sem inferir permissões amplas.
+```mermaid
+flowchart LR
+R[Request autenticada] --> P[Permission Django]
+P --> D[DataScopeService]
+```
 
-## Auditoria e testes
+```mermaid
+flowchart LR
+D[Data Scope aplicado] --> F[Filtros da tela]
+F --> A[Agregação e paginação]
+A --> O[HTML API ou export]
+```
 
-Alterações relevantes podem gerar `USER_CREATED`, `USER_UPDATED`, `GROUP_CHANGED`, `USER_ACTIVATED`, `USER_DEACTIVATED`, `PERMISSIONS_CHANGED` e `DATA_SCOPE_CHANGED`. Os eventos não incluem senhas. `aplicativos.auditoria.tests` e `aplicativos.configuracoes.tests` cobrem criação, troca de perfil, permissions, modos ALL/CUSTOM, interseção, escopo vazio, ausência de grupo e bypass de superuser.
+Administração de Usuários, Grupos e Escopos fica em `/configuracoes/administracao/` e requer `manage_users`, `manage_groups` ou `manage_data_scopes`. Django `/admin/` é manutenção técnica. Data Scope controla dados operacionais; não substitui RBAC.
 
-### Estado
-
-Usuários, grupos e escopos herdados estão implementados. `LegacyUserDataScope` é legado preservado. Não há pendência de negócio adicional documentada neste módulo.
+`LegacyUserDataScope` preserva configuração individual anterior e não é fonte atual de consulta. Migração para scope por grupo manteve defaults restritivos quando escopos não eram consistentes. Auditoria registra mudanças relevantes sem senha. Testes cobrem ALL/CUSTOM, interseção, scope ausente/vazio, multi-grupo e superuser.

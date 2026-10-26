@@ -24,3 +24,10 @@ O Dashboard combina os Links atuais do mirror CMDB e os tickets presentes na fil
 - Total de Links: itens presentes no mirror CMDB.
 - Estados atendidos: UFs válidas distintas na base visível.
 - Freshness e atualização de dados continuam vinculadas aos mirrors e integrações existentes.
+## Implementação, rotas e leitura
+
+A rota `/dashboard/` é servida por views/analytics do app `painel` e template `painel/dashboard.html`; estilos ficam em `static/css/painel/` e fontes JavaScript em `frontend_src/js/painel/`. O serviço de analytics combina querysets de Links atuais e Tickets presentes, aplicando escopo no backend antes dos indicadores.
+
+O seletor de período altera somente as métricas por criação de ticket e reincidência da coorte; totais atuais de Links/UF/Providers e backlog continuam sendo fotografia do mirror. Provider é o nome resolvido em `CMDBOperatorMirror`, não uma classificação manual VIVO/CLARO/ALGAR. Ticket total é distinto no agregado geral; uma relação Ticket-CI múltipla pode associar o ticket a mais de um Link em análises por Link.
+
+A página não calcula SLA cumprido, não reconstrói backlog histórico e não acessa fonte remota em request. Freshness é mantida pela integração e monitorada pela Central. Consulte [OTRS](../OTRS.md), [CMDB](../CMDB.md) e [Data Scope](usuarios-grupos-escopos.md).

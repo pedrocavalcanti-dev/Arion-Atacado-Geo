@@ -12,6 +12,7 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
 from aplicativos.integracoes.services.analytics import LinkQueryService
+from aplicativos.integracoes.services.closing_reason import ClosingReasonCanonicalizer
 from aplicativos.configuracoes.permissions import access_required
 from config.errors import api_error, require_media_type
 from aplicativos.auditoria.services import AuditService
@@ -35,6 +36,7 @@ def index(request):
         ),
     )
     access = {
+        "can_view_chamados": request.user.has_perm("configuracoes.view_operational_tickets"),
         "can_view_base": request.user.has_perm("configuracoes.view_base"),
         "can_view_cockpit": request.user.has_perm("configuracoes.view_cockpit"),
         "can_view_map": request.user.has_perm("configuracoes.view_map"),
@@ -49,7 +51,7 @@ def index(request):
         "can_view_system": request.user.has_perm("configuracoes.view_system_info"),
     }
     access["can_view_operation"] = any(access[key] for key in (
-        "can_view_base", "can_view_cockpit", "can_view_map", "can_view_rankings", "can_view_ari",
+        "can_view_chamados", "can_view_base", "can_view_cockpit", "can_view_map", "can_view_rankings", "can_view_ari",
     ))
     access["can_view_admin_area"] = any(access[key] for key in (
         "can_view_integrations", "can_manage_users", "can_manage_groups", "can_manage_scopes",
@@ -331,10 +333,10 @@ def _pdf_report(generated, generated_by, result, filter_rows):
             story.append(chart(spec))
     story.append(PageBreak())
     story.append(para("ANEXO - TICKETS DO RESULTADO", "ArionSection"))
-    ticket_table = [[para("Ticket"), para("Data base"), para("Status"), para("Motivo"), para("Provedor"), para("UF"), para("Prioridade")]]
-    ticket_table += [[para(row["ticket"]), para(row["base_date"]), para(row["status"]), para(row["reason"]),
+    ticket_table = [[para("Ticket"), para("Data base"), para("Status"), para("Motivo"), para("Raw OTRS"), para("Provedor"), para("UF"), para("Prioridade")]]
+    ticket_table += [[para(row["ticket"]), para(row["base_date"]), para(row["status"]), para(row["reason"]), para(row.get("closing_code_raw", "")),
                       para(row["provider"]), para(row["uf"]), para(row["priority"])] for row in result.get("tickets", [])]
-    widths = [25 * mm, 24 * mm, 22 * mm, 34 * mm, content_width - 25*mm - 24*mm - 22*mm - 34*mm - 14*mm - 20*mm, 14*mm, 20*mm]
+    widths = [20 * mm, 20 * mm, 19 * mm, 28 * mm, 30 * mm, content_width - 20*mm - 20*mm - 19*mm - 28*mm - 30*mm - 12*mm - 17*mm, 12*mm, 17*mm]
     story.append(table(ticket_table, widths))
     doc.build(story, onFirstPage=page_frame, onLaterPages=page_frame, canvasmaker=NumberedCanvas)
     return buffer.getvalue()
@@ -396,14 +398,14 @@ def analytics_export(request):
         if result["metric"] != "canceled_tickets" and raw_filters.get("status") not in {"CANCELED", "UNKNOWN"}:
             filter_rows.append(("Regra operacional", "A m\u00e9trica exclui tickets cancelados e estados n\u00e3o classificados"))
         group_slug = slugify(result["group_by"]) or "resultado"
-        ticket_headers = ["ticket", "data_base", "created_at", "status", "otrs_state", "closing_reason", "provider", "uf",
+        ticket_headers = ["ticket", "data_base", "created_at", "status", "otrs_state", "closing_reason", "closing_reason_raw", "provider", "uf",
                           "priority", "sla", "source", "config_item", "number", "designation", "circuit"]
         def ticket_values(row):
             links = row.get("links", [])
             fields = ("config_item_id", "number", "designation", "circuit")
             flattened = [" | ".join(str(link.get(field) or "") for link in links) for field in fields]
             base = [row.get("ticket"), row.get("base_date"), row.get("created_at"), row.get("status"), row.get("source_state"),
-                    row.get("reason"), row.get("provider"), row.get("uf"), row.get("priority"), row.get("sla"), row.get("source")]
+                    row.get("reason"), row.get("closing_code_raw"), row.get("provider"), row.get("uf"), row.get("priority"), row.get("sla"), row.get("source")]
             return base + flattened
         if export_format == "csv":
             buffer = StringIO(newline="")
@@ -503,7 +505,22 @@ def saved_views(request):
             return api_error(request, "ACCESS_DENIED")
         if action == "list":
             rows = SavedAnalyticsView.objects.filter(user=request.user)
-            return JsonResponse({"views": [{"id": row.pk, "name": row.name, "configuration": row.configuration, "favorite": row.favorite} for row in rows]})
+            views = []
+            for row in rows:
+                configuration = dict(row.configuration or {})
+                raw_filters = configuration.get("filters")
+                if isinstance(raw_filters, dict):
+                    filters = dict(raw_filters)
+                    for legacy_key in ("closing_reason", "closing_code_raw"):
+                        if legacy_key in filters and "termination_reason" not in filters:
+                            filters["termination_reason"] = filters[legacy_key]
+                        filters.pop(legacy_key, None)
+                    reason = filters.get("termination_reason")
+                    if reason not in (None, "", "all"):
+                        filters["termination_reason"] = ClosingReasonCanonicalizer.key(reason)
+                    configuration["filters"] = filters
+                views.append({"id": row.pk, "name": row.name, "configuration": configuration, "favorite": row.favorite})
+            return JsonResponse({"views": views})
         if action == "save":
             name, config = str(payload.get("name", "")).strip(), payload.get("configuration")
             if not name or len(name) > 80 or not isinstance(config, dict):

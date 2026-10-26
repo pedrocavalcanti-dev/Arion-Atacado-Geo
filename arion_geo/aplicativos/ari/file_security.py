@@ -34,6 +34,8 @@ CANONICAL_MIME_TYPES = {
 }
 NEUTRAL_MIME_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
 DEFAULT_MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+DEFAULT_MAX_ATTACHMENTS = 5
+DEFAULT_MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024
 
 
 class UploadValidationError(ValidationError):
@@ -44,6 +46,21 @@ class UploadValidationError(ValidationError):
 
 def max_attachment_bytes():
     return int(getattr(settings, "ARI_MAX_ATTACHMENT_BYTES", DEFAULT_MAX_ATTACHMENT_BYTES))
+
+
+def validate_uploads(uploads):
+    uploads = list(uploads or ())
+    max_count = int(getattr(settings, "ARI_MAX_ATTACHMENTS", DEFAULT_MAX_ATTACHMENTS))
+    max_total = int(getattr(settings, "ARI_MAX_TOTAL_ATTACHMENT_BYTES", DEFAULT_MAX_TOTAL_ATTACHMENT_BYTES))
+    if len(uploads) > max_count:
+        raise UploadValidationError("ATTACHMENT_TOO_LARGE")
+    try:
+        total_size = sum(int(getattr(upload, "size", 0) or 0) for upload in uploads)
+    except (TypeError, ValueError):
+        raise UploadValidationError() from None
+    if total_size > max_total:
+        raise UploadValidationError("ATTACHMENT_TOO_LARGE")
+    return [validate_upload(upload) for upload in uploads]
 
 
 @dataclass(frozen=True)

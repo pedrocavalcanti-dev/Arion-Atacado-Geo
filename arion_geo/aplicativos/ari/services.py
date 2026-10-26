@@ -5,7 +5,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 
-from .file_security import UploadValidationError, validate_upload
+from .file_security import UploadValidationError, validate_uploads
 from .models import AriArtifact, AriAttachment, AriConversation, AriMessage
 
 
@@ -152,7 +152,7 @@ class AriConversationService:
     @classmethod
     def send_message(cls, *, user, content, conversation_id=None, uploads=()):
         try:
-            validated_uploads = [validate_upload(upload) for upload in uploads]
+            validated_uploads = validate_uploads(uploads)
         except UploadValidationError:
             raise
         except ValidationError as error:

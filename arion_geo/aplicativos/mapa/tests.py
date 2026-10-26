@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone as datetime_timezone
 from html.parser import HTMLParser
+import json
 from pathlib import Path
 import re
 
@@ -13,6 +14,10 @@ from aplicativos.base_links.models import Operadora, Projeto
 from aplicativos.configuracoes.models import GroupDataScope
 from aplicativos.integracoes.models import CMDBLinkMirror, CMDBOperatorMirror, OTRSTicket, OTRSTicketConfigItem
 from aplicativos.mapa.services.analytics import _bounds
+
+
+def _frontend_js(relative_path):
+    return Path(settings.BASE_DIR.parent, "frontend_src", "js", *relative_path.split("/"))
 
 
 class _MapDOMContractParser(HTMLParser):
@@ -76,7 +81,7 @@ class MapMirrorTests(TestCase):
         response = self.client.get(reverse("mapa:index"))
         self.assertEqual(response.status_code, 200)
         for content in (
-            "Visão geográfica", "data-mode=\"projects\"", "data-mode=\"calls\"",
+            "Base de links", "data-mode=\"projects\"", "data-mode=\"calls\"",
             "data-mode=\"repeat\"", "data-mode=\"motives\"", "data-client=\"Claro\"",
             "data-client=\"Vivo\"", "data-client=\"Algar\"", "data-client=\"other\"",
             "data-national-tab=\"ranking\"", "data-national-tab=\"distribution\"", "data-state-panel",
@@ -92,7 +97,7 @@ class MapMirrorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         parser = _MapDOMContractParser()
         parser.feed(response.content.decode("utf-8"))
-        script = (settings.BASE_DIR / "static" / "js" / "mapa" / "mapa-real.js").read_text(encoding="utf-8")
+        script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
         match = re.search(r"const required = \[(.*?)\];", script, re.DOTALL)
         self.assertIsNotNone(match, "mapa-real.js precisa declarar seus seletores DOM obrigatorios")
         selectors = re.findall(r'"([^"\\]+)"', match.group(1))
@@ -141,6 +146,8 @@ class MapMirrorTests(TestCase):
         all_data = self.client.get(reverse("base_links:map-aggregates"), {"mode": "base"}).json()
         self.assertEqual(all_data["states"]["SP"]["client_counts"]["Cliente não identificado"], 1)
         self.assertEqual(all_data["states"]["SP"]["client_coverage"], 66.7)
+        self.assertIn("BRADESCO", all_data["projects"])
+        self.assertNotIn("TELMEX", all_data["projects"])
 
     def test_city_variants_are_aggregated_for_display_without_mutating_mirror(self):
         self.link.city = "GOIANIA"
@@ -159,14 +166,18 @@ class MapMirrorTests(TestCase):
         self.assertEqual(_bounds({"period": "2026-10"}), (date(2026, 10, 1), date(2026, 10, 31)))
 
     def test_map_detail_accepts_shareable_motive_url(self):
-        ticket = self._ticket(88, "CLOSED", day=20, reason="FalhaMassiva")
-        self._relate(ticket)
+        for external_id, raw in ((88, "FalhaMassiva"), (89, "Defeito Massivo"), (90, "Falha Massiva")):
+            self._relate(self._ticket(external_id, "CLOSED", day=20, reason=raw))
+        aggregate = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "motives", "period": "2026-10",
+        }).json()
+        self.assertIn({"value": "falha_massiva", "label": "Falha Massiva", "raw_values": ["FalhaMassiva", "Falha Massiva", "Defeito Massivo"]}, aggregate["reason_options"])
         response = self.client.get(reverse("base_links:map-state-detail"), {
-            "mode": "motives", "uf": "SP", "reason": "FalhaMassiva", "period": "2026-10",
+            "mode": "motives", "uf": "SP", "reason": "falha_massiva", "period": "2026-10",
         })
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["ticket_total"], 1)
-        self.assertEqual(response.json()["tickets"][0]["closing_reason"], "FalhaMassiva")
+        self.assertEqual(response.json()["ticket_total"], 3)
+        self.assertEqual({item["closing_reason"] for item in response.json()["tickets"]}, {"Falha Massiva"})
 
     def test_ticket_drawer_detail_exposes_only_safe_ticket_context_and_title_identity(self):
         ticket = self._ticket(90, "CLOSED", day=20, reason="FalhaMassiva")
@@ -189,7 +200,7 @@ class MapMirrorTests(TestCase):
         self.assertNotIn("article", item)
 
     def test_map_script_restores_shareable_filters_and_keeps_selected_uf_on_mode_switch(self):
-        script = (settings.BASE_DIR / "static" / "js" / "mapa" / "mapa-real.js").read_text(encoding="utf-8")
+        script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
         for token in (
             "new URLSearchParams(location.search)", "state.selectedUF=(initialParams.get(\"uf\")||\"\").toUpperCase()",
             "[\"mode\",\"client\",\"project\",\"period\",\"uf\",\"reason\",\"provider\",\"date_from\",\"date_to\",\"status\",\"priority\"]",
@@ -203,10 +214,87 @@ class MapMirrorTests(TestCase):
 
     def test_drawer_sections_are_mode_specific_and_hidden_when_empty(self):
         template = (settings.BASE_DIR / "templates" / "mapa" / "_cmdb.html").read_text(encoding="utf-8")
-        script = (settings.BASE_DIR / "static" / "js" / "mapa" / "mapa-real.js").read_text(encoding="utf-8")
+        script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
         for section in ("clients", "coverage", "projects", "providers", "cities", "reasons", "links", "tickets"):
             self.assertIn(f'data-panel-section="{section}"', template)
         self.assertIn("section.hidden=!sectionData[section.dataset.panelSection]", script)
+
+    def test_map_visual_layers_use_local_flags_and_non_reserving_national_panel(self):
+        script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
+        style = (settings.BASE_DIR / "static" / "css" / "mapa" / "mapa.css").read_text(encoding="utf-8")
+        template = (settings.BASE_DIR / "templates" / "mapa" / "_cmdb.html").read_text(encoding="utf-8")
+        geojson = json.loads((settings.BASE_DIR / "static" / "geo" / "brasil_estados.geojson").read_text(encoding="utf-8"))
+        codes = {feature["properties"]["sigla"].lower() for feature in geojson["features"]}
+        flag_dir = settings.BASE_DIR / "static" / "imagens" / "bandeiras" / "estados"
+        self.assertEqual(len(codes), 27)
+        self.assertTrue(all((flag_dir / f"{code}.svg").is_file() for code in codes))
+        for layer in ("arion-state-fill", "arion-state-selected-halo", "arion-state-outline", "arion-state-labels"):
+            self.assertIn(f'id:"{layer}"', script)
+        self.assertIn('"feature-state"', script)
+        self.assertIn('"text-allow-overlap":false', script)
+        self.assertNotIn("fill-extrusion", script)
+        self.assertIn('role="combobox"', template)
+        self.assertIn('flags[code]', script)
+        panel_rule = re.search(r"\.national-panel\s*\{([^}]+)\}", style).group(1)
+        collapsed_rule = re.search(r"\.national-panel\.is-collapsed\s*\{([^}]+)\}", style).group(1)
+        self.assertNotIn("overflow", panel_rule)
+        self.assertNotIn("width:0", collapsed_rule)
+        self.assertIn("visibility:hidden", collapsed_rule)
+        self.assertIn("panel-scroll-content", template)
+        self.assertIn("panel-sticky-header", template)
+        self.assertIn("geo-toolbar--map", template)
+        self.assertIn("geo-context-controls", template)
+        self.assertIn("geo-analysis-controls", template)
+        self.assertIn("geo-legend--overlay", template)
+        self.assertIn("data-ranking-code", script)
+        self.assertIn('data-uf-previous', template)
+        self.assertIn('data-uf-next', template)
+        self.assertIn("function fitBrazil", script)
+        self.assertIn("function fitSelectedState", script)
+        self.assertIn('"arion-state-callouts"', script)
+        self.assertIn('const selectableLayers=["arion-state-fill","arion-state-labels","arion-state-callout-labels"]', script)
+        self.assertIn('map.on("click",layer,event=>', script)
+        self.assertIn('map.on("mousemove",layer,event=>', script)
+        for code in ("RN", "PB", "PE", "AL", "SE", "ES", "RJ", "DF"):
+            self.assertIn(f"{code}:{{anchor:", script)
+        for code in ("AM", "PA", "MT", "MS", "GO", "TO", "BA", "MG", "SP", "PR", "SC", "RS", "RO", "AC", "RR", "AP", "MA", "PI", "CE"):
+            self.assertIn(f"{code}:[", script)
+        for layer in ("arion-state-callout-lines", "arion-state-callout-labels"):
+            self.assertIn(f'id:"{layer}"', script)
+        self.assertIn("map-breadcrumb", template)
+        self.assertIn("has-selection", script)
+        label_block = re.search(r"const stateLabelCoordinates = \{(.*?)\n  \};", script, re.DOTALL)
+        callout_block = re.search(r"const smallStateCallouts = \{(.*?)\n  \};", script, re.DOTALL)
+        self.assertIsNotNone(label_block)
+        self.assertIsNotNone(callout_block)
+        coordinate_pattern = r"([A-Z]{2}):\[\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s*\]"
+        labels = {code: (float(longitude), float(latitude)) for code, longitude, latitude in re.findall(coordinate_pattern, label_block.group(1))}
+        anchors = {code: (float(longitude), float(latitude)) for code, longitude, latitude in re.findall(
+            r"([A-Z]{2}):\{anchor:\[\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s*\]", callout_block.group(1))}
+        self.assertEqual(len(labels), 19)
+        self.assertEqual(set(anchors), {"RN", "PB", "PE", "AL", "SE", "ES", "RJ", "DF"})
+        features_by_code = {feature["properties"]["sigla"]: feature["geometry"] for feature in geojson["features"]}
+        self.assertFalse(set(labels) & set(anchors))
+        self.assertEqual(set(labels) | set(anchors), set(features_by_code))
+
+        def ring_contains(point, ring):
+            longitude, latitude = point
+            inside = False
+            for first, second in zip(ring, ring[1:]):
+                lon_a, lat_a = first[:2]
+                lon_b, lat_b = second[:2]
+                crosses = (lat_a > latitude) != (lat_b > latitude)
+                if crosses and longitude < (lon_b - lon_a) * (latitude - lat_a) / (lat_b - lat_a) + lon_a:
+                    inside = not inside
+            return inside
+
+        def point_in_state(point, code):
+            geometry = features_by_code[code]
+            polygons = [geometry["coordinates"]] if geometry["type"] == "Polygon" else geometry["coordinates"]
+            return any(ring_contains(point, polygon[0]) and not any(ring_contains(point, hole) for hole in polygon[1:]) for polygon in polygons)
+
+        for code, point in {**labels, **anchors}.items():
+            self.assertTrue(point_in_state(point, code), f"Coordenada de label/callout fora de {code}: {point}")
 
     def test_calendar_month_period_filters_tickets_and_returns_month_dates(self):
         self._relate(self._ticket(89, "OPEN", day=20))
@@ -330,3 +418,41 @@ class MapMirrorTests(TestCase):
         data = self.client.get(reverse("base_links:map-aggregates"), {"mode": "base"}).json()
         self.assertEqual(data["source_total"], 2)
         self.assertEqual(data["states"]["RJ"]["total_links"], 1)
+
+    def test_project_palette_catalog_is_deterministic_and_isolated_to_project_mode(self):
+        script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
+        match = re.search(r"const projectPalettes = \{(.*?)\n  \};", script, re.DOTALL)
+        self.assertIsNotNone(match)
+        palette_keys = set(re.findall(r"^\s{4}([a-z_]+):", match.group(1), re.MULTILINE))
+        self.assertTrue({
+            "default", "diversos", "bradesco", "banco_do_brasil", "correios", "arcos_dourados",
+            "caixa_economica_federal", "fust", "escolas_conectadas", "carrefour", "petrobras",
+        }.issubset(palette_keys))
+        self.assertIn('return projectPalettes[projectPaletteAliases[key]||key]||projectPalettes.default;', script)
+        self.assertIn('state.mode==="projects"?getProjectPalette(state.project):quantitative[state.mode]||quantitative.calls', script)
+        self.assertIn('return row.total_links || 0;', script)
+        self.assertIn('default:quantitative.projects', script)
+        self.assertIn('diversos:quantitative.projects', script)
+        self.assertIn('calls:{dark:["#2c2521"', script)
+        self.assertIn('repeat:{dark:["#2d242d"', script)
+        self.assertIn('motives:{dark:["#2c281f"', script)
+
+    def test_map_hover_search_and_dark_surface_overlays_follow_the_map_contract(self):
+        script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
+        style = (settings.BASE_DIR / "static" / "css" / "mapa" / "mapa.css").read_text(encoding="utf-8")
+        self.assertIn('anchor:"auto",offset:18', script)
+        self.assertIn('if(code===state.selectedUF){closeTooltip();return;}', script)
+        self.assertIn('function closeTooltip(){popup?.remove();tooltipKey="";}', script)
+        self.assertIn('function chooseSearchResult(code){closeSearch(true);closeTooltip();selectState(code);}', script)
+        self.assertIn('page.classList.toggle("is-search-open",found.length>0)', script)
+        for variable, value in (("--map-z-stage", "0"), ("--map-z-panel", "20"), ("--map-z-legend", "30"),
+                                ("--map-z-controls", "35"), ("--map-z-tooltip", "50"), ("--map-z-search", "80"),
+                                ("--map-z-drawer", "100"), ("--map-z-modal", "200")):
+            self.assertIn(f"{variable}:{value}", style)
+        self.assertIn(".geo-page.is-search-open .geo-toolbar.geo-toolbar--map", style)
+        self.assertIn(".geo-map-stage .mapboxgl-popup.geo-popup { z-index:var(--map-z-tooltip); }", style)
+        self.assertIn(".geo-map-stage .state-panel { z-index:var(--map-z-drawer); }", style)
+        self.assertNotIn(".geo-map-canvas { position: absolute; z-index: 0;", style)
+        self.assertIn("background: #0c0d0d", style)
+        self.assertIn('"#0c0d0d"', script)
+        self.assertIn('"#363839"', script)

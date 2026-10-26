@@ -13,14 +13,15 @@ from aplicativos.auditoria.services import AuditService
 from aplicativos.configuracoes.permissions import access_required
 from aplicativos.integracoes.models import CMDBOperatorMirror
 from aplicativos.integracoes.services.analytics import LinkQueryService, PeriodService
-from .services import BEST_RANKING_MIN_LINKS, RankingService
+from .services import RankingService
 
 SORT_OPTIONS = (
     ("risk_score", "Índice ARION"),
-    ("tickets", "Mais tickets"),
-    ("affected_rate", "Maior % afetados"),
+    ("impact_noc_score", "Maior impacto no NOC"),
+    ("tickets", "Mais chamados"),
+    ("affected_rate", "Maior % da base afetada"),
     ("recurrent_links", "Mais reincidentes"),
-    ("tickets_over_24h", "Mais >24h"),
+    ("tickets_over_24h", "Mais chamados >24h"),
     ("backlog_current", "Maior backlog"),
     ("links_total", "Mais links CMDB"),
 )
@@ -67,7 +68,7 @@ def _read_filters(request):
         page_size = 25
     return {
         "month": month, "view": view,
-        "ranking_view": request.GET.get("ranking_view", "risk").strip() if request.GET.get("ranking_view", "risk").strip() in {"risk", "best"} else "risk",
+        "ranking_view": request.GET.get("ranking_view", "risk").strip() if request.GET.get("ranking_view", "risk").strip() in {"risk", "best", "stable"} else "risk",
         "date_from": start.isoformat(), "date_to": end.isoformat(),
         "operator": request.GET.get("provider", request.GET.get("operator", "")).strip(),
         "client": request.GET.get("client", "").strip(),
@@ -113,12 +114,26 @@ def _build(request, filters, *, detail_provider_id=None, detail_ticket_page=1, d
 def index(request):
     filters = _read_filters(request)
     data = _build(request, filters)
-    providers = list(data["providers"])
+    all_providers = list(data["providers"])
+    risk_providers = [row for row in all_providers if row["risk_eligible"]]
+    best_providers = [row for row in all_providers if row["tickets"] >= 1]
+    stable_providers = [row for row in all_providers if row["no_occurrence"]]
+    risk_providers.sort(key=lambda row: (
+        -row.get(filters["sort"], 0), -row["risk_score"], -row["impact_noc_score"],
+        -row["tickets"], -row["links_affected"], row["name"].casefold(),
+    ))
+    best_providers.sort(key=lambda row: (
+        row["risk_score"], -row["links_total"], -row["eligible_tickets"], row["name"].casefold(),
+    ))
+    stable_providers.sort(key=lambda row: (-row["links_total"], row["name"].casefold()))
     if filters["ranking_view"] == "best":
-        providers.sort(key=lambda row: (row["risk_score"], -row["links_total"], row["name"].casefold()))
-        top_providers = [row for row in providers if row["links_total"] >= BEST_RANKING_MIN_LINKS][:3]
+        providers = best_providers
+        top_providers = [row for row in providers if row["best_eligible"]][:3]
+    elif filters["ranking_view"] == "stable":
+        providers = stable_providers
+        top_providers = providers[:10]
     else:
-        providers.sort(key=lambda row: (-row.get(filters["sort"], 0), -row["risk_score"], row["name"].casefold()))
+        providers = risk_providers
         top_providers = providers[:3]
     for position, item in enumerate(providers, 1):
         item["ranking_position"] = position
@@ -148,11 +163,13 @@ def index(request):
         "providers": providers,
         "page_obj": page_obj,
         "top_providers": top_providers,
-        "best_eligible_count": sum(row["links_total"] >= BEST_RANKING_MIN_LINKS for row in providers),
+        "best_eligible_count": sum(row["best_eligible"] for row in best_providers),
+        "stable_total": len(stable_providers),
         "ranked_links": data["ranked_links"],
         "filters": filters,
         "sort_options": sort_options,
         "operators_filter": operators,
+        "operators": [{"name": operator.name} for operator in operators],
         "clients": clients,
         "projects": projects,
         "ufs": ufs,
@@ -165,6 +182,7 @@ def index(request):
         "export_xlsx_url": reverse("rankings:export", args=["xlsx"]) + _url(filters),
         "ranking_risk_url": _url(filters, ranking_view="risk", sort="risk_score", page=1),
         "ranking_best_url": _url(filters, ranking_view="best", sort="risk_score", page=1),
+        "ranking_stable_url": _url(filters, ranking_view="stable", sort="links_total", page=1),
         "full_links_url": _url(filters, links="all"),
         "previous_page_url": _url(filters, page=page_obj.previous_page_number()) if page_obj.has_previous() else "",
         "next_page_url": _url(filters, page=page_obj.next_page_number()) if page_obj.has_next() else "",
@@ -200,12 +218,21 @@ def export(request, file_format):
     filters = _read_filters(request)
     filters["links_all"] = True
     data = _build(request, filters)
-    providers = list(data["providers"])
+    all_providers = list(data["providers"])
     if filters["ranking_view"] == "best":
-        providers.sort(key=lambda row: (row["risk_score"], -row["links_total"], row["name"].casefold()))
-        podium = [row for row in providers if row["links_total"] >= BEST_RANKING_MIN_LINKS][:3]
+        providers = [row for row in all_providers if row["tickets"] >= 1]
+        providers.sort(key=lambda row: (row["risk_score"], -row["links_total"], -row["eligible_tickets"], row["name"].casefold()))
+        podium = [row for row in providers if row["best_eligible"]][:3]
+    elif filters["ranking_view"] == "stable":
+        providers = [row for row in all_providers if row["no_occurrence"]]
+        providers.sort(key=lambda row: (-row["links_total"], row["name"].casefold()))
+        podium = providers[:10]
     else:
-        providers.sort(key=lambda row: (-row.get(filters["sort"], 0), -row["risk_score"], row["name"].casefold()))
+        providers = [row for row in all_providers if row["risk_eligible"]]
+        providers.sort(key=lambda row: (
+            -row.get(filters["sort"], 0), -row["risk_score"], -row["impact_noc_score"],
+            -row["tickets"], -row["links_affected"], row["name"].casefold(),
+        ))
         podium = providers[:3]
     generated_at = timezone.localtime()
     generated_by = request.user.get_full_name() or request.user.get_username()

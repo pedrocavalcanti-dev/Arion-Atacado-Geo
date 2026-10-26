@@ -1,16 +1,24 @@
-# Central de Integracoes
+﻿# Central de Integrações
 
-A pagina resume espelhos locais, ultima execucao, duracao, volume, status de freshness e saude do worker. CMDB mostra Links e Operadoras presentes; OTRS mostra tickets na fila, business-open, ultimo fast e ultimo full. Snapshot stale continua sendo mostrado.
+## Papel
 
-O espelho OTRS classifica estados explicitamente: OPEN, PENDING e SCHEDULED (Agendado) compoem o backlog atual, preservando Agendado como status separado. FULL reclassifica os tickets ja espelhados; FAST mantem a atualizacao incremental.
+A Central administra configuração dos conectores CMDB/OTRS e mostra saúde/freshness dos mirrors: última execução, tipo, duração, resultado e contagens. Não é cliente de consulta remota por request; sincronização roda no worker separado.
 
-Conectores CMDB ServiceUp e OTRS MySQL continuam disponiveis para configuracao, diagnostico e sincronizacao. OTRS e somente leitura. O worker e um processo separado: `.venv\Scripts\python.exe arion_geo\gerenciar.py integration_worker`; cadencias OTRS fast 2 min/full 30 min e CMDB 10 min. FAST consulta tickets novos/alterados por `ticket.change_time` com safety window de 2 min; atualiza somente tickets afetados, inclusive saidas da fila, e suas relacoes em lote. FULL reconcilia a fila completa. CMDB atualiza snapshot completo. Lease persistente evita sobreposicao, com heartbeat de 20 s e expiracao em 180 s.
+## Conectores e estado
 
-Importacao XLSX esta desativada como operacao normal. Run e auditoria registram operacao e contagens sanitizadas, sem payload bruto ou segredo. Nao ha rota/modulo Chamados nesta fase.
+- **CMDB ServiceUp:** GenericInterface Search/Get para classes `Links de internet` e `Operadoras`, destino local `CMDBLinkMirror` e `CMDBOperatorMirror`.
+- **OTRS MySQL:** conexão read-only à fila exata `NOC - ATACADO`, estados, relações e Dynamic Fields selecionados; destino `OTRSTicket`, `OTRSTicketConfigItem` e `OTRSStateMapping`.
 
+`Integration` guarda configuração protegida/status. `IntegrationRun` guarda tentativas sanitizadas. `IntegrationSyncState` persiste cursor, sucesso/último FULL e `IntegrationLease` coordena processos. Segredo aparece mascarado, nunca em response/API.
 
-A protecao de credenciais locais usa `WindowsDPAPISecretProtector` no Windows e permanece fora de respostas HTTP.
+Cadências: OTRS FAST 2 min; OTRS FULL 30 min; CMDB FULL 10 min; retry 2 min. Ver [Worker](../WORKER-E-SINCRONIZACAO.md), [OTRS](../OTRS.md) e [CMDB](../CMDB.md).
 
-## Dynamic Fields e data terminal do OTRS
+## Diagnóstico
 
-O FULL reconcilia e o FAST atualiza em lote somente `CodigoFechamento` (`dynamic_field_value.value_text`) e `ticketResolvido` (`value_date`) para os tickets selecionados por `ticket.change_time`. `OTRSTicket` espelha esses valores em `closing_code_raw` e `resolved_at`; `terminal_state_at` e `canceled_at` derivam do último `ticket_history` de tipo `StateUpdate` que corresponde ao estado atual. Todas as consultas remotas usam SELECT, sem histórico consultado em requests. A cadência do worker permanece FAST OTRS 2 min, FULL 30 min e CMDB 10 min.
+Leia resultado e último sucesso em conjunto: attempt FAILED recente não torna mirror fresco. Confira configuração/conectividade, último FAST/FULL, cursor e lease. OTRS depende da resolução do nome exato da fila; CMDB precisa resposta completa Search/Get. FULL valida conjunto antes de marcar ausências; falha conserva o último snapshot.
+
+Segredos locais DPAPI dependem do usuário Windows de execução. Em outra conta ou máquina, cadastre de novo sem copiar credencial em ticket de suporte.
+
+## Limites
+
+Chamados não atualiza OTRS e Base não edita CMDB. Importador XLSX antigo não é uma integração oficial ativa. Runs não devem armazenar payload de ticket/credenciais. Permission de integração não substitui Data Scope dos dados operacionais.

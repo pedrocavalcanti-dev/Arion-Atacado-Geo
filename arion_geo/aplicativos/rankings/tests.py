@@ -1,6 +1,7 @@
 from io import BytesIO
 from datetime import datetime, timedelta, timezone as datetime_timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -71,6 +72,86 @@ class RankingsMirrorTests(TestCase):
         self.assertEqual(response.context["providers"][0]["tickets"], 2)
         self.assertContains(response, "Índice ARION")
 
+    def test_canceled_and_unknown_do_not_change_ranking_drawer_history_or_exports(self):
+        now = datetime(2026, 10, 25, 12, tzinfo=datetime_timezone.utc)
+        date_from = datetime(2026, 10, 1).date()
+        date_to = datetime(2026, 10, 24).date()
+        valid = self.make_ticket(status="OPEN", created_at=now - timedelta(hours=30))
+
+        def build_snapshot():
+            return RankingService.build(
+                self.user, date_from=date_from, date_to=date_to, now=now,
+                detail_provider_id=self.operator.pk,
+            )
+
+        baseline = build_snapshot()
+        canceled = self.make_ticket(
+            status="CANCELED", created_at=now - timedelta(hours=72), terminal_hours=48,
+        )
+        unknown = self.make_ticket(
+            status="UNKNOWN", created_at=now - timedelta(hours=72), terminal_hours=48,
+        )
+        snapshot = build_snapshot()
+
+        for key in ("tickets_valid", "links_affected", "links_recurrent", "tickets_over_24h", "backlog_current"):
+            self.assertEqual(snapshot[key], baseline[key], key)
+        provider = snapshot["providers"][0]
+        baseline_provider = baseline["providers"][0]
+        for key in (
+            "tickets", "links_affected", "recurrent_links", "tickets_over_24h", "backlog_current",
+            "risk_score", "impact_noc_score", "trend", "trend_delta", "history",
+        ):
+            self.assertEqual(provider[key], baseline_provider[key], key)
+        self.assertEqual(provider["tickets"], 1)
+        self.assertEqual(provider["recurrent_links"], 0)
+        self.assertEqual(provider["tickets_over_24h"], 1)
+        self.assertEqual(provider["backlog_current"], 1)
+
+        link = snapshot["ranked_links_all"][0]
+        self.assertEqual((link["tickets"], link["recurrent"], link["over_24h"]), (1, False, 1))
+        self.assertEqual([row["id"] for row in snapshot["ticket_export_rows"]], [valid.pk])
+        detail = snapshot["detail"]
+        self.assertEqual(detail["ticket_records_total"], 1)
+        self.assertEqual([row["id"] for row in detail["ticket_records"]], [valid.pk])
+        self.assertEqual([row["id"] for row in detail["over_24h_tickets"]], [valid.pk])
+        self.assertEqual([row["id"] for row in detail["backlog_tickets"]], [valid.pk])
+        self.assertEqual(detail["problematic_links"][0]["recurrent"], False)
+
+        params = {"view": "custom", "date_from": "2026-10-01", "date_to": "2026-10-24"}
+        detail_response = self.client.get(reverse("rankings:provider-detail", args=[self.operator.pk]), params)
+        self.assertEqual(detail_response.status_code, 200)
+        drawer_ids = {row["id"] for row in detail_response.json()["ticket_records"]}
+        self.assertEqual(drawer_ids, {valid.pk})
+        self.assertNotIn(canceled.pk, drawer_ids)
+        self.assertNotIn(unknown.pk, drawer_ids)
+
+        for file_format, builder in (("pdf", "build_pdf"), ("xlsx", "build_xlsx")):
+            with patch(f"aplicativos.rankings.exports.{builder}", return_value=b"export") as build_export:
+                response = self.client.get(reverse("rankings:export", args=[file_format]), params)
+            self.assertEqual(response.status_code, 200)
+            export_data = build_export.call_args.args[0]
+            export_ids = {row["id"] for row in export_data["ticket_export_rows"]}
+            self.assertEqual(export_ids, {valid.pk})
+            self.assertNotIn(canceled.pk, export_ids)
+            self.assertNotIn(unknown.pk, export_ids)
+
+    def test_reason_filter_and_top_reasons_canonicalize_confirmed_aliases(self):
+        raws = ("FalhaMassiva", "Falha Massiva", "Defeito Massivo")
+        for index, raw in enumerate(raws, 1):
+            ticket = self.make_ticket(day=10 + index, status="RESOLVED", terminal_hours=2)
+            ticket.closing_code_raw = raw
+            ticket.save(update_fields=("closing_code_raw",))
+        other = self.make_ticket(day=18, status="RESOLVED", terminal_hours=2)
+        other.closing_code_raw = "Falha Lógica na Operadora"
+        other.save(update_fields=("closing_code_raw",))
+        data = RankingService.build(
+            self.user, date_from=datetime(2026, 10, 1).date(), date_to=datetime(2026, 10, 24).date(),
+            filters={"reason": "falha_massiva"}, detail_provider_id=self.operator.pk,
+        )
+        self.assertEqual(data["tickets_valid"], 3)
+        self.assertEqual(data["detail"]["reasons_top"][0]["name"], "Falha Massiva")
+        self.assertEqual(data["detail"]["reasons_top"][0]["tickets"], 3)
+
     def test_same_provider_multiple_links_deduplicate_ticket_and_count_affected_links(self):
         other = CMDBLinkMirror.objects.create(
             source_config_item_id="ci-2", source_number="N-2", state="SP", operator=self.operator,
@@ -109,15 +190,16 @@ class RankingsMirrorTests(TestCase):
         self.assertEqual(provider["eligible_tickets"], 2)
         self.assertEqual(provider["over_24h_rate"], 1)
 
-    def test_provider_with_zero_tickets_stays_in_universe_and_sample_is_visible(self):
+    def test_provider_with_zero_tickets_has_zero_index_and_stays_in_the_service_universe(self):
         small = CMDBOperatorMirror.objects.create(source_config_item_id="op-small", name="Provider pequeno")
         CMDBLinkMirror.objects.create(source_config_item_id="ci-small", operator=small)
         data = RankingService.build(self.user, date_from=datetime(2026, 10, 1).date(), date_to=datetime(2026, 10, 24).date())
         provider = next(row for row in data["providers"] if row["name"] == "Provider pequeno")
         self.assertEqual(provider["tickets"], 0)
         self.assertTrue(provider["sample_small"])
-        self.assertGreaterEqual(provider["risk_score"], 0)
-        self.assertLessEqual(provider["risk_score"], 100)
+        self.assertEqual(provider["risk_score"], 0)
+        self.assertEqual(provider["risk_label"], "Sem ocorrências")
+        self.assertTrue(provider["no_occurrence"])
 
     def test_one_link_one_incident_remains_visible_with_high_proportional_rate(self):
         small = CMDBOperatorMirror.objects.create(source_config_item_id="op-risk", name="Provider 1 link")
@@ -147,6 +229,8 @@ class RankingsMirrorTests(TestCase):
         self.assertEqual(len(provider["history"]), 3)
         self.assertIn(provider["trend"], {"worse", "better", "stable"})
         self.assertEqual(provider["risk_score"], round(provider["risk_score"], 1))
+        self.assertEqual(provider["risk_score"], round(sum(provider["risk_components"].values()), 1))
+        self.assertNotEqual(provider["risk_score"], sum(point["score"] for point in provider["history"]))
 
     def test_monthly_trend_can_show_worsening_and_improvement(self):
         other = CMDBOperatorMirror.objects.create(source_config_item_id="op-trend", name="Provider tendência")
@@ -177,34 +261,46 @@ class RankingsMirrorTests(TestCase):
         link = response.context["ranked_links"][0]
         self.assertEqual((link["client"], link["project"], link["provider"]), ("Claro", "Bradesco", "Operadora Real"))
 
-    def test_best_view_orders_by_lowest_original_score_and_excludes_small_sample_from_podium(self):
+    def test_best_view_requires_an_event_and_podium_uses_links_or_ticket_sample(self):
         small = CMDBOperatorMirror.objects.create(source_config_item_id="op-small-best", name="Amostra pequena")
         small_link = CMDBLinkMirror.objects.create(source_config_item_id="ci-small-best", operator=small)
-        eligible = CMDBOperatorMirror.objects.create(source_config_item_id="op-eligible", name="Provider elegivel")
-        for index in range(5):
-            CMDBLinkMirror.objects.create(source_config_item_id=f"ci-eligible-{index}", operator=eligible)
-        larger = CMDBOperatorMirror.objects.create(source_config_item_id="op-larger", name="Provider maior")
-        for index in range(10):
-            CMDBLinkMirror.objects.create(source_config_item_id=f"ci-larger-{index}", operator=larger)
+        eligible_by_links = CMDBOperatorMirror.objects.create(source_config_item_id="op-eligible", name="Provider elegivel por links")
+        eligible_links = [CMDBLinkMirror.objects.create(source_config_item_id=f"ci-eligible-{index}", operator=eligible_by_links) for index in range(5)]
+        eligible_by_tickets = CMDBOperatorMirror.objects.create(source_config_item_id="op-eligible-tickets", name="Provider elegivel por chamados")
+        eligible_ticket_link = CMDBLinkMirror.objects.create(source_config_item_id="ci-eligible-ticket", operator=eligible_by_tickets)
+        stable = CMDBOperatorMirror.objects.create(source_config_item_id="op-stable", name="Provider estavel")
+        stable_links = [CMDBLinkMirror.objects.create(source_config_item_id=f"ci-stable-{index}", operator=stable) for index in range(8)]
         self.make_ticket(links=[small_link])
+        self.make_ticket(links=[eligible_links[0]])
+        for day in (6, 7, 8):
+            self.make_ticket(day=day, links=[eligible_ticket_link])
 
         response = self.client.get(reverse("rankings:index"), {
             "view": "custom", "date_from": "2026-10-01", "date_to": "2026-10-24", "ranking_view": "best",
         })
         self.assertEqual(response.status_code, 200)
         rows = response.context["providers"]
-        self.assertEqual(rows, sorted(rows, key=lambda row: (row["risk_score"], -row["links_total"], row["name"].casefold())))
+        self.assertTrue(all(row["tickets"] >= 1 for row in rows))
+        self.assertEqual(rows, sorted(rows, key=lambda row: (row["risk_score"], -row["links_total"], -row["eligible_tickets"], row["name"].casefold())))
         self.assertEqual(response.context["best_eligible_count"], 2)
-        self.assertTrue(all(row["links_total"] >= 5 for row in response.context["top_providers"]))
+        self.assertTrue(all(row["best_eligible"] for row in response.context["top_providers"]))
         self.assertNotIn(small.pk, [row["id"] for row in response.context["top_providers"]])
-        self.assertContains(response, "ranking_view=best")
+        self.assertNotIn(stable.pk, [row["id"] for row in rows])
 
         risk_response = self.client.get(reverse("rankings:index"), {
             "view": "custom", "date_from": "2026-10-01", "date_to": "2026-10-24", "ranking_view": "risk",
         })
         risk_rows = risk_response.context["providers"]
-        self.assertEqual(risk_rows, sorted(risk_rows, key=lambda row: (-row["risk_score"], -row["risk_score"], row["name"].casefold())))
+        self.assertEqual(risk_rows, sorted(risk_rows, key=lambda row: (-row["risk_score"], -row["risk_score"], -row["impact_noc_score"], -row["tickets"], -row["links_affected"], row["name"].casefold())))
         self.assertIn(small.pk, [row["id"] for row in risk_response.context["top_providers"]])
+
+        stable_response = self.client.get(reverse("rankings:index"), {
+            "view": "custom", "date_from": "2026-10-01", "date_to": "2026-10-24", "ranking_view": "stable",
+        })
+        self.assertEqual(stable_response.status_code, 200)
+        self.assertEqual(stable_response.context["providers"][0]["id"], stable.pk)
+        self.assertEqual(stable_response.context["providers"][0]["links_total"], len(stable_links))
+        self.assertContains(stable_response, "Sem ocorr&ecirc;ncias no per&iacute;odo")
 
     def test_detail_responsibility_and_ticket_rows_deduplicate_same_provider_and_sanitize_title(self):
         second_link = CMDBLinkMirror.objects.create(
@@ -250,7 +346,7 @@ class RankingsMirrorTests(TestCase):
         self.assertNotIn("pessoa@example.com", record["title"])
         self.assertNotIn("99999-1234", record["title"])
 
-    def test_responsibility_classification_does_not_change_arion_v1_score(self):
+    def test_responsibility_classification_does_not_change_arion_v2_score(self):
         ticket = self.make_ticket()
         before = RankingService.build(
             self.user, date_from=datetime(2026, 10, 1).date(), date_to=datetime(2026, 10, 24).date(),
@@ -301,6 +397,11 @@ class RankingsMirrorTests(TestCase):
         self.assertEqual(workbook.sheetnames, ["Resumo", "Ranking", "Providers", "Links", "Tickets"])
         self.assertEqual(workbook["Links"].max_row, 2)
         self.assertEqual(workbook["Tickets"].max_row, 2)
+        ranking_headers = next(workbook["Ranking"].iter_rows(values_only=True))
+        self.assertIn("Índice ARION V2", ranking_headers)
+        self.assertIn("Impacto no NOC /30", ranking_headers)
+        self.assertIn("Chamados / link", ranking_headers)
+        self.assertNotIn("Tickets / 100 links", ranking_headers)
         values = [cell for row in workbook["Links"].iter_rows(values_only=True) for cell in row]
         self.assertNotIn("ci-export-out", values)
         self.assertNotIn("ci-export-project-out", values)
@@ -319,24 +420,70 @@ class RankingsMirrorTests(TestCase):
 
 class RankingScoreTests(SimpleTestCase):
     def test_weight_sets_are_complete_and_scores_are_bounded(self):
-        self.assertEqual(sum(RANKING_WEIGHTS["proportional"].values()), 1)
-        self.assertEqual(sum(RANKING_WEIGHTS["impact"].values()), 1)
-        self.assertEqual(sum(RANKING_WEIGHTS["score"].values()), 1)
-        rows = [{"affected_rate": 0, "tickets_per_100_links": 0, "recurrent_rate": 0,
-                 "over_24h_rate": 0, "backlog_per_100_links": 0, "criticality_rate": 0,
-                 "tickets": 0, "affected_links": 0, "tickets_over_24h": 0, "backlog_current": 0},
-                {"affected_rate": 1, "tickets_per_100_links": 100, "recurrent_rate": 1,
-                 "over_24h_rate": 1, "backlog_per_100_links": 100, "criticality_rate": 1,
-                 "tickets": 100, "affected_links": 100, "tickets_over_24h": 100, "backlog_current": 100}]
+        self.assertEqual(sum(RANKING_WEIGHTS.values()), 1)
+        rows = [
+            {"links_total": 50, "tickets": 0, "links_affected": 0, "recurrent_links": 0,
+             "eligible_tickets": 0, "tickets_over_24h": 0, "backlog_current": 0},
+            {"links_total": 1, "tickets": 4, "links_affected": 1, "recurrent_links": 1,
+             "eligible_tickets": 4, "tickets_over_24h": 3, "backlog_current": 1},
+            {"links_total": 267, "tickets": 28, "links_affected": 24, "recurrent_links": 4,
+             "eligible_tickets": 28, "tickets_over_24h": 6, "backlog_current": 1},
+            {"links_total": 267, "tickets": 2, "links_affected": 2, "recurrent_links": 0,
+             "eligible_tickets": 2, "tickets_over_24h": 0, "backlog_current": 0},
+        ]
         _apply_scores(rows)
         self.assertEqual(rows[0]["risk_score"], 0)
-        self.assertEqual(rows[1]["risk_score"], 100)
+        self.assertEqual(rows[0]["risk_label"], "Sem ocorrências")
+        self.assertGreaterEqual(rows[1]["risk_score"], 60)
+        self.assertGreater(rows[2]["impact_noc_score"], rows[3]["impact_noc_score"])
+        self.assertLess(rows[3]["risk_score"], 20)
+        self.assertEqual(rows[2]["risk_components"]["impact_noc"], rows[2]["impact_noc_score"])
+
+    def test_recurrence_aging_and_backlog_each_increase_their_component(self):
+        recurrent = {"links_total": 1, "tickets": 5, "links_affected": 1, "recurrent_links": 1,
+                     "eligible_tickets": 5, "tickets_over_24h": 4, "backlog_current": 1}
+        _apply_scores([recurrent])
+        self.assertEqual(recurrent["recurrent_score"], 20)
+        self.assertEqual(recurrent["over_24h_score"], 16)
+
+        without_backlog = {"links_total": 10, "tickets": 2, "links_affected": 1, "recurrent_links": 0,
+                           "eligible_tickets": 2, "tickets_over_24h": 0, "backlog_current": 0}
+        with_backlog = {**without_backlog, "backlog_current": 1}
+        _apply_scores([without_backlog, with_backlog])
+        self.assertGreater(with_backlog["backlog_score"], without_backlog["backlog_score"])
+        self.assertGreater(with_backlog["risk_score"], without_backlog["risk_score"])
+
+    def test_zero_ticket_provider_is_excluded_from_best_but_available_in_stable_view(self):
+        rows = [
+            {"links_total": 50, "tickets": 0, "links_affected": 0, "recurrent_links": 0,
+             "eligible_tickets": 0, "tickets_over_24h": 0, "backlog_current": 0},
+            {"links_total": 2, "tickets": 1, "links_affected": 1, "recurrent_links": 0,
+             "eligible_tickets": 1, "tickets_over_24h": 0, "backlog_current": 0},
+        ]
+        _apply_scores(rows)
+        self.assertFalse(rows[0]["risk_eligible"])
+        self.assertFalse(rows[0]["best_eligible"])
+        self.assertTrue(rows[0]["no_occurrence"])
+        self.assertTrue(rows[1]["risk_eligible"])
+        self.assertFalse(rows[1]["best_eligible"])
+
+    def test_drawer_and_table_use_v2_portuguese_labels_without_percentile_rows(self):
+        root = Path(__file__).resolve().parents[2]
+        script = (root.parent / "frontend_src/js/rankings/rankings.js").read_text(encoding="utf-8")
+        template = (root / "templates/rankings/index.html").read_text(encoding="utf-8")
+        for label in ("Impacto no NOC", "Base afetada", "Reincid", "Backlog atual", "Chamados por link"):
+            self.assertIn(label, script + template)
+        self.assertNotIn("percentil'", script)
+        self.assertNotIn("Tickets / 100", template)
+        self.assertNotIn("Tickets ARION", script)
+        for legacy in ("Affected Rate", "Recurrent Rate", "Over 24h Rate", "Criticality Rate"):
+            self.assertNotIn(legacy, script + template)
 
 
 class CockpitRankingPresentationTests(SimpleTestCase):
     def test_collapse_toggles_invert_state_and_uf_flags_are_local_assets(self):
         root = Path(__file__).resolve().parents[2]
-        script = (root / "static/js/painel/cockpit.js").read_text(encoding="utf-8")
+        script = (root.parent / "frontend_src/js/painel/cockpit.js").read_text(encoding="utf-8")
         self.assertIn("setDetailCollapsed(key, !detailCollapseState[key])", script)
         self.assertIn("data-details-global", script)
         self.assertIn("aria-expanded", script)

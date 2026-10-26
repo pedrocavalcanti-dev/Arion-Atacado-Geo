@@ -29,3 +29,12 @@ class TicketBusinessIdentityTests(SimpleTestCase):
         unknown = TicketBusinessIdentityService.parse("BRADESCO - BD1000001")
         self.assertEqual((claro.client, claro.project), ("Claro", "Bradesco"))
         self.assertEqual((unknown.client, unknown.project), ("", "Bradesco"))
+
+    def test_telmex_context_and_region_prefix_do_not_become_projects(self):
+        claro_telmex = TicketBusinessIdentityService.parse("CLARO - TELMEX - BRADESCO - BD000123")
+        telmex = TicketBusinessIdentityService.parse("TELMEX - CLARO.BA.BLIVR000123")
+        self.assertEqual((claro_telmex.client_raw, claro_telmex.client, claro_telmex.project),
+                         ("CLARO / TELMEX", "Claro", "Bradesco"))
+        self.assertEqual((telmex.client, telmex.project), ("Claro", ""))
+        vivo = TicketBusinessIdentityService.parse("TELEFONICA - BRADESCO - BD000124")
+        self.assertEqual((vivo.client, vivo.project), ("Vivo", "Bradesco"))

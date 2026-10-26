@@ -2,7 +2,7 @@
 {% load static %}
 {% block body_class %}integration-portal-body{% endblock %}
 {% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/integracoes/integracoes.css' %}">{% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'js/integracoes/confirmacoes.js' %}" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% arion_js 'js/integracoes/confirmacoes.js' %}" defer></script>{% endblock %}
 {% block content %}
 <div class="integration-portal">
   <span class="integration-sr-only">ADMINISTRAÇÃO</span>

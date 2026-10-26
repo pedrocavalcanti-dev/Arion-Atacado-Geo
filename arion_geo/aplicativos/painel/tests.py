@@ -70,7 +70,9 @@ class MirrorAnalyticsTests(TestCase):
         response = self.client.get(reverse("painel:index"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "ACESSO OPERACIONAL")
+        self.assertContains(response, 'class="overview-module-card" href="/chamados/"')
         self.assertContains(response, 'class="overview-module-card" href="/ari/"')
+        self.assertContains(response, 'class="overview-module-card"', count=6)
         self.assertContains(response, "Conta")
         self.assertNotContains(response, "ACESSO RESTRITO")
         self.assertNotContains(response, "Documenta&ccedil;&atilde;o")
@@ -85,7 +87,7 @@ class MirrorAnalyticsTests(TestCase):
         response = self.client.get(reverse("painel:index"))
         self.assertEqual(response.status_code, 200)
         for label in (
-            "Base de Links", "Cockpit", "Mapa", "Rankings", "ARI I.A", "Conta",
+            "Chamados", "Base de Links", "Cockpit", "Mapa", "Rankings", "ARI I.A", "Conta",
             "Administra&ccedil;&atilde;o", "Integra&ccedil;&otilde;es", "Usu&aacute;rios", "Grupos",
             "Escopos", "Auditoria", "Documenta&ccedil;&atilde;o", "Sistema", "Minha conta",
         ):
@@ -101,6 +103,7 @@ class MirrorAnalyticsTests(TestCase):
         self.client.force_login(limited)
         response = self.client.get(reverse("painel:index"))
         self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'href="/chamados/"')
         self.assertNotContains(response, 'href="/ari/"')
         self.assertNotContains(response, reverse("configuracoes:documentation"))
         self.assertNotContains(response, "ACESSO RESTRITO")
@@ -124,7 +127,17 @@ class MirrorAnalyticsTests(TestCase):
         self.assertContains(response, "Situação atual dos chamados")
         self.assertContains(response, "Em atendimento")
         self.assertContains(response, "Agendados")
-        self.assertNotContains(response, "OPEN")
+        queue_url = reverse("chamados:index")
+        for status in ("OPEN", "PENDING", "SCHEDULED"):
+            self.assertContains(response, f'href="{queue_url}?tab={status}"')
+        self.assertNotContains(response, "otrs_status=")
+        self.assertEqual(response.context["open_count"], 1)
+        self.assertEqual(response.context["pending_count"], 0)
+        self.assertEqual(response.context["scheduled_count"], 0)
+        self.assertEqual(response.context["resolved_count"], 0)
+        self.assertEqual(response.context["closed_count"], 0)
+        self.assertEqual(response.context["canceled_count"], 0)
+        self.assertNotContains(response, ">OPEN<")
         self.assertEqual(response.context["top_providers"], [{"name": "Operadora Analytics", "value": 2}])
         self.assertNotContains(response, "CLASSIFICAÇÃO LEGADA")
         self.assertNotContains(response, "VIVO")
@@ -341,7 +354,7 @@ class MirrorAnalyticsTests(TestCase):
         self.assertContains(response, 'data-more-filters')
         self.assertNotContains(response, 'data-snapshot-kpis')
         self.assertContains(response, 'Visualizar por')
-        self.assertContains(response, 'data-chart-grid')
+        self.assertContains(response, 'data-dimension-grid')
         self.assertContains(response, 'data-ticket-drawer')
         self.assertContains(response, 'data-ticket-search')
         self.assertContains(response, 'data-initial-loading="true"')
@@ -440,6 +453,115 @@ class MirrorAnalyticsTests(TestCase):
         self.assertEqual(success["period_date_label"], "data de encerramento")
         self.assertEqual(closed_result["tickets"][0]["base_date"], "03/10/2026 00:00")
         self.assertTrue(any(value.startswith("Data de encerramento entre 01/10/2026 e 31/10/2026") for value in closed_result["tickets"][0]["evidence"]))
+
+    def test_massive_failure_reason_filter_and_monthly_series_use_all_raw_aliases(self):
+        raws = ("FalhaMassiva", "Defeito Massivo", "Falha Massiva")
+        for index, (month, raw) in enumerate(zip((7, 8, 9), raws), 1):
+            ticket = self._ticket(2600 + index, "CLOSED", False, 5)
+            ticket.source_created_at = datetime(2026, month, 5, tzinfo=datetime_timezone.utc)
+            ticket.terminal_state_at = datetime(2026, month, 6, tzinfo=datetime_timezone.utc)
+            ticket.closing_code_raw = raw
+            ticket.save()
+
+        service = AnalyticsQueryService()
+        grouped = service.query({
+            "metric": "closed_tickets", "group_by": "termination_reason",
+            "start": "2026-07-01", "end": "2026-09-30", "filters": {},
+        }, user=self.user)
+        filtered = service.query({
+            "metric": "tickets", "group_by": "month",
+            "start": "2026-07-01", "end": "2026-09-30",
+            "filters": {"termination_reason": "falha_massiva"},
+        }, user=self.user, include_all_rows=True)
+        self.assertEqual([(row["dimension"], row["value"]) for row in grouped["detail"]], [("Falha Massiva", 3)])
+        self.assertIn({"value": "falha_massiva", "label": "Falha Massiva"}, grouped["options"]["termination_reason"])
+        self.assertEqual(filtered["value"], 3)
+        self.assertEqual([row["value"] for row in filtered["series"]], [1, 1, 1])
+        self.assertEqual({row["reason"] for row in filtered["tickets"]}, {"Falha Massiva"})
+        self.assertEqual({row["closing_code_raw"] for row in filtered["tickets"]}, set(raws))
+
+    def test_transition_reason_filters_group_options_and_saved_views_are_canonical(self):
+        raws = {
+            "equipamento_travado": (
+                "Equipamento travado/reinicilizado", "EquipamentoTravado",
+            ),
+            "rompimento_fibra": ("Rompimento/manut Fibra", "RompimentoFibra"),
+            "chamado_cancelado": ("Cancelado", "ChamadoCancelado"),
+            "conexao_incorreta_cabo_interface": (
+                "Conexão Incorreta - Cabeamento/porta", "ConexaoIncorreta",
+            ),
+        }
+        ext = 1800
+        for aliases in raws.values():
+            for month, raw in zip((7, 9), aliases):
+                ticket = self._ticket(ext, "CLOSED", False, 5)
+                ticket.source_created_at = datetime(2026, month, 5, tzinfo=datetime_timezone.utc)
+                ticket.terminal_state_at = ticket.source_created_at
+                ticket.closing_code_raw = raw
+                ticket.save(update_fields=("closing_code_raw", "source_created_at", "terminal_state_at"))
+                ext += 1
+
+        payload = {
+            "metric": "closed_tickets", "start": "2026-07-01", "end": "2026-09-30",
+            "group_by": "termination_reason", "filters": {},
+        }
+        result = AnalyticsQueryService().query(payload, user=self.user)
+        reason_options = result["options"]["termination_reason"]
+        self.assertEqual(len(reason_options), len({item["value"] for item in reason_options}))
+        self.assertEqual(len(reason_options), len({item["label"].casefold() for item in reason_options}))
+        for key, label in (
+            ("equipamento_travado", "Equipamento Travado"),
+            ("rompimento_fibra", "Rompimento de Fibra"),
+            ("chamado_cancelado", "Chamado Cancelado"),
+            ("conexao_incorreta_cabo_interface", "Conexão Incorreta - Cabo/Interface"),
+        ):
+            self.assertEqual(sum(item["value"] == key and item["label"] == label for item in reason_options), 1)
+
+        service = AnalyticsQueryService()
+        for key, aliases in raws.items():
+            with self.subTest(key=key):
+                filtered = service.query(
+                    {**payload, "filters": {"termination_reason": aliases[0]}},
+                    user=self.user, include_all_rows=True,
+                )
+                self.assertEqual(filtered["value"], 2)
+                self.assertEqual(filtered["normalized_query"]["filters"]["termination_reason"], key)
+                self.assertEqual({row["closing_code_raw"] for row in filtered["tickets"]}, set(aliases))
+
+        monthly = service.query(
+            {**payload, "metric": "closed_tickets", "group_by": "month",
+             "filters": {"termination_reason": "Equipamento travado/reinicilizado"}},
+            user=self.user,
+        )
+        self.assertEqual([row["value"] for row in monthly["series"]], [1, 0, 1])
+
+        from .models import SavedAnalyticsView
+        saved = SavedAnalyticsView.objects.create(
+            user=self.user, name="Legado", configuration={"filters": {"termination_reason": "EquipamentoTravado"}},
+        )
+        listed = self.client.post(
+            reverse("analytics-saved-views"), data=json.dumps({"action": "list"}),
+            content_type="application/json",
+        )
+        self.assertEqual(listed.status_code, 200)
+        saved_view = next(item for item in listed.json()["views"] if item["id"] == saved.pk)
+        self.assertEqual(saved_view["configuration"]["filters"]["termination_reason"], "equipamento_travado")
+
+        legacy_url = self.client.post(
+            reverse("analytics-query"), data=json.dumps({**payload, "filters": {"termination_reason": "EquipamentoTravado"}}),
+            content_type="application/json",
+        )
+        self.assertEqual(legacy_url.status_code, 200)
+        legacy_payload = legacy_url.json()
+        self.assertEqual(legacy_payload["normalized_query"]["filters"]["termination_reason"], "equipamento_travado")
+        self.assertEqual(legacy_payload["value"], 2)
+        self.assertEqual(
+            [item for item in legacy_payload["options"]["termination_reason"] if item["value"] == "equipamento_travado"],
+            [{"value": "equipamento_travado", "label": "Equipamento Travado"}],
+        )
+        self.assertEqual(len(legacy_payload["detail"]), 1)
+        self.assertEqual(legacy_payload["detail"][0]["dimension"], "Equipamento Travado")
+        self.assertEqual(legacy_payload["detail"][0]["value"], 2)
 
     def test_kpis_are_scoped_to_the_selected_query_without_dashboard_snapshot_cards(self):
         self._ticket(816, "OPEN", True, 3)
@@ -910,7 +1032,7 @@ class MirrorAnalyticsTests(TestCase):
         self.assertIn('data-current-period', body)
 
         static_root = Path(settings.BASE_DIR) / "static"
-        script = (static_root / "js" / "painel" / "cockpit.js").read_text(encoding="utf-8")
+        script = (Path(settings.BASE_DIR.parent) / "frontend_src" / "js" / "painel" / "cockpit.js").read_text(encoding="utf-8")
         styles = (static_root / "css" / "painel" / "cockpit.css").read_text(encoding="utf-8")
         self.assertIn('DETAIL_COLLAPSE_DEFAULTS = { dimensions: false, distribution: true, tickets: false }', script)
         self.assertIn("sessionStorage", script)
@@ -929,7 +1051,7 @@ class MirrorAnalyticsTests(TestCase):
             body = response.content.decode("utf-8")
             for token in damaged:
                 self.assertNotIn(token, body, f"{route}: {token}")
-        cockpit_script = (Path(settings.BASE_DIR) / "static" / "js" / "painel" / "cockpit.js").read_text(encoding="utf-8")
+        cockpit_script = (Path(settings.BASE_DIR.parent) / "frontend_src" / "js" / "painel" / "cockpit.js").read_text(encoding="utf-8")
         for token in ("servi?o", "per?odo", "Reincid?ncia", "\ufffd", "Ãƒ"):
             self.assertNotIn(token, cockpit_script)
 
@@ -1072,12 +1194,17 @@ class MirrorAnalyticsTests(TestCase):
             if export_format == "csv":
                 self.assertTrue(response.content.startswith(b"\xef\xbb\xbf"))
                 self.assertIn("Pendência Financeira".encode(), response.content)
+                self.assertIn(b"closing_reason_raw", response.content)
+                self.assertIn(b"PendenciaFinanceira", response.content)
             elif export_format == "xlsx":
                 from openpyxl import load_workbook
                 workbook = load_workbook(BytesIO(response.content), read_only=True)
                 self.assertEqual(workbook.sheetnames, ["Resumo", "Distribuição", "Tickets"])
                 self.assertEqual(workbook["Distribuição"].max_row, 2)
                 self.assertEqual(workbook["Tickets"].max_row, 2)
+                headers = [cell.value for cell in workbook["Tickets"][1]]
+                raw_column = headers.index("closing_reason_raw") + 1
+                self.assertEqual(workbook["Tickets"].cell(row=2, column=raw_column).value, "PendenciaFinanceira")
 
     def test_cockpit_export_denies_users_without_cockpit_permission(self):
         user = get_user_model().objects.create_user(username="no-cockpit-export", password="safe-password-4")
@@ -1087,7 +1214,7 @@ class MirrorAnalyticsTests(TestCase):
 
     def test_cockpit_chart_keeps_months_in_one_scrollable_row(self):
         template = Path("arion_geo/static/css/painel/cockpit.css").read_text(encoding="utf-8")
-        script = Path("arion_geo/static/js/painel/cockpit.js").read_text(encoding="utf-8")
+        script = (Path(settings.BASE_DIR.parent) / "frontend_src" / "js" / "painel" / "cockpit.js").read_text(encoding="utf-8")
         self.assertIn("grid-template-columns: repeat(var(--series-count, 12)", template)
         self.assertIn("data-chart-key=", script)
         self.assertIn(".cockpit-chart { overflow-x: auto; }", template)

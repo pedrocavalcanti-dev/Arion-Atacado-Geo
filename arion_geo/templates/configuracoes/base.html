@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/configuracoes/settings.css' %}">{% endblock %}
-{% block extra_js %}<script src="{% static 'js/configuracoes/settings.js' %}" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% arion_js 'js/configuracoes/settings.js' %}" defer></script>{% endblock %}
 {% block content %}
 <section class="settings-page{% if active_section == 'integrations' %} settings-page--integrations{% endif %}" aria-labelledby="settings-title">
   <aside class="settings-sidebar" aria-label="Navegação das configurações">

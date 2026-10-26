@@ -47,6 +47,9 @@ class TicketBusinessIdentityService:
                 occurrence = cls.OCCURRENCES[key]
             if key in cls.SERVICES:
                 service = cls.SERVICES[key]
+        client_tokens = {comparison_key(part) for part in parts}
+        if client == "Claro" and {"CLARO", "TELMEX"}.issubset(client_tokens):
+            raw_client = "CLARO / TELMEX"
         source = "OTRS_EXPLICIT_CLIENT" if raw_client else "UNKNOWN"
         if not raw_client and project:
             client = BusinessIdentityRules.project_rule_client(project_raw)

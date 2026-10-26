@@ -1,0 +1,20 @@
+{
+  "name": "arion-atacado-geo-frontend-build",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "npm run build:production",
+    "build:production": "node frontend_src/build.mjs --production",
+    "clean": "node frontend_src/build.mjs --clean"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "javascript-obfuscator": "4.1.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

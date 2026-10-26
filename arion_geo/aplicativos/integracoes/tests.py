@@ -1,5 +1,4 @@
 from unittest.mock import Mock, patch
-import json
 import tempfile
 from pathlib import Path
 
@@ -61,32 +60,29 @@ class IntegrationConfigurationTests(TestCase):
         self.protector = TestSecretProtector()
 
     @patch("aplicativos.integracoes.services.arion_database.config_path")
-    def test_arion_configuration_page_offers_only_sqlite_and_mysql(self, database_config_path):
+    def test_arion_configuration_page_offers_the_mysql_candidate_flow(self, database_config_path):
         with tempfile.TemporaryDirectory() as temp_dir:
             database_config_path.return_value = Path(temp_dir) / "var" / "database-config.json"
             response = self.client.get(reverse("configuracoes:integracoes:arion"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Banco atualmente ativo")
-        self.assertContains(response, "Testar conexão")
-        self.assertContains(response, "Salvar configuração")
-        self.assertContains(response, 'value="sqlite"')
-        self.assertContains(response, 'value="mysql"')
-        self.assertNotContains(response, 'value="mariadb"')
+        self.assertContains(response, "Salvar candidato")
+        self.assertContains(response, 'name="database"')
+        self.assertContains(response, 'name="host"')
+        self.assertContains(response, 'name="user"')
         self.assertNotContains(response, "MariaDB Workbench")
 
     @patch("aplicativos.integracoes.services.arion_database.config_path")
-    def test_arion_sqlite_config_is_saved_outside_main_database_and_restart_is_required(self, database_config_path):
+    def test_arion_candidate_requires_mysql_host_database_and_user(self, database_config_path):
         with tempfile.TemporaryDirectory() as temp_dir:
             config_file = Path(temp_dir) / "var" / "database-config.json"
             database_config_path.return_value = config_file
             response = self.client.post(reverse("configuracoes:integracoes:arion-save"), {
-                "engine": "sqlite", "database": "portable.sqlite3",
-            }, follow=True)
+                "database": "", "host": "", "user": "", "port": "3306", "timeout": "10",
+            })
             self.assertEqual(response.status_code, 200)
-            self.assertContains(response, "após reiniciar a aplicação e o worker")
-            self.assertTrue(config_file.exists())
-            stored = json.loads(config_file.read_text(encoding="utf-8"))
-            self.assertEqual(stored, {"engine": "sqlite", "database": "portable.sqlite3"})
+            self.assertContains(response, "Este campo")
+            self.assertFalse(config_file.exists())
 
     @patch("aplicativos.integracoes.services.arion_database.get_secret_protector")
     @patch("aplicativos.integracoes.services.arion_database.config_path")
@@ -96,7 +92,7 @@ class IntegrationConfigurationTests(TestCase):
             database_config_path.return_value = config_file
             get_protector.return_value = self.protector
             saved = self.client.post(reverse("configuracoes:integracoes:arion-save"), {
-                "engine": "mysql", "host": "127.0.0.1", "port": "3306", "mysql_database": "arion_geo",
+                "host": "127.0.0.1", "port": "3306", "database": "arion_geo",
                 "user": "arion", "password": "private-db-password", "timeout": "10",
             })
             self.assertEqual(saved.status_code, 302)
@@ -107,11 +103,11 @@ class IntegrationConfigurationTests(TestCase):
             with patch("aplicativos.integracoes.views.password_for_connection_test", return_value="private-db-password") as password, \
                  patch("aplicativos.integracoes.views.test_mysql_connection", return_value={"database": "arion_geo", "version": "8.4.2"}) as test_connection:
                 response = self.client.post(reverse("configuracoes:integracoes:arion-test"), {
-                    "engine": "mysql", "host": "127.0.0.1", "port": "3306", "mysql_database": "arion_geo",
+                    "host": "127.0.0.1", "port": "3306", "database": "arion_geo",
                     "user": "arion", "password": "", "timeout": "10",
                 })
             self.assertEqual(response.status_code, 200)
-            self.assertContains(response, "Conexão OK")
+            self.assertContains(response, "Conexao do candidato OK")
             self.assertContains(response, "MySQL 8.x")
             self.assertNotContains(response, "private-db-password")
             password.assert_called_once()
@@ -249,7 +245,7 @@ class IntegrationConfigurationTests(TestCase):
         self.assertNotContains(home, "Desktop\\ARION-ATACADO-GEO")
         arion = self.client.get(reverse("configuracoes:integracoes:arion"))
         self.assertEqual(arion.status_code, 200)
-        self.assertContains(arion, "Estado da conexão")
+        self.assertContains(arion, "Conex&atilde;o")
         for name in ("configuracoes:integracoes:cmdb", "configuracoes:integracoes:otrs"):
             with self.subTest(route=name):
                 response = self.client.get(reverse(name))
@@ -282,8 +278,8 @@ class IntegrationConfigurationTests(TestCase):
 
         record = DocumentationService.get("integracoes")
         self.assertIsNotNone(record)
-        self.assertEqual(record["title"], "Central de Integracoes")
-        self.assertIn("WindowsDPAPISecretProtector", record["body"])
+        self.assertEqual(record["title"], "Central de Integra\u00e7\u00f5es")
+        self.assertIn("DPAPI", record["body"])
         self.assertIn("integracoes", {item["slug"] for category in DocumentationService.categories() for item in category["documents"]})
 
     @patch("aplicativos.integracoes.views._cmdb_client")

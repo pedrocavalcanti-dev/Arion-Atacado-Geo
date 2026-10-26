@@ -1,7 +1,7 @@
 {% extends "integracoes/base_integracoes.html" %}
 {% load static %}
 {% block title %}Central de Integrações · NOC Atacado{% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'js/integracoes/busca.js' %}" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% arion_js 'js/integracoes/busca.js' %}" defer></script>{% endblock %}
 {% block integration_content %}
 <section class="integration-home-heading">
   <div><p class="integration-eyebrow">FONTES DE DADOS E INFRAESTRUTURA</p><h1>Central de Integrações</h1><p>Gerencie, teste e acompanhe as fontes de dados conectadas ao NOC Atacado.</p></div>

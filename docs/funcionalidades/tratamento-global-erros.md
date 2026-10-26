@@ -40,6 +40,6 @@ O middleware e handlers não registram corpo, cookies, tokens ou credenciais da 
 
 ## Assets e testes
 
-Templates independentes carregam CSS/JS local (`static/css/errors.css`, `static/js/errors.js`) e `theme.js` local. O tema é obtido no navegador; a interface responde a claro/escuro e telas pequenas.
+Templates independentes carregam CSS local (`static/css/errors.css`) e JavaScript de `frontend_src/js/errors.js` e `frontend_src/js/theme.js`, resolvidos pelo template tag `{% arion_js %}`. O tema é obtido no navegador; a interface responde a claro/escuro e telas pequenas.
 
 Testes em `aplicativos.configuracoes.test_errors` cobrem 400, 401 API, 403, 404, 405, 500, CSRF, formato JSON, preservação de detalhes em DEBUG para HTML e ausência de segredos nas respostas de produção. Não há rate limiting, modo de manutenção, health check ou configuração de páginas de proxy implementados.

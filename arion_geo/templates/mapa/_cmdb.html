@@ -1,46 +1,45 @@
 {% load static %}
-<div class="geo-toolbar">
-  <div class="geo-heading">
+<header class="geo-toolbar geo-toolbar--map">
+  <div class="geo-heading geo-heading--map">
     <span class="section-kicker">NOC ATACADO <span>/</span> GEOGRAFIA</span>
-    <h1 id="geo-title">Visão geográfica</h1>
-    <span class="source-badge" data-source-badge><i></i>CMDB real · base atual</span>
-    <nav class="geo-breadcrumb" data-breadcrumb aria-label="Localização atual" hidden><button type="button" data-brazil-link>Brasil</button><span aria-hidden="true">/</span><span data-selected-name></span></nav>
+    <div class="geo-heading-line"><h1 id="geo-title">Base de links</h1><span class="source-badge" data-source-badge><i></i>CMDB real · base atual</span></div>
   </div>
-  <div class="geo-control-area">
-    <div class="geo-control-row geo-control-row--primary">
-      <div class="mode-control"><span class="control-caption">O QUE ESTOU ANALISANDO</span><div class="mode-filters" role="group" aria-label="Modo geográfico">
+  <div class="geo-context-controls" aria-label="Contexto da análise">
+    <div class="operator-control"><span class="control-caption">CLIENTE</span><div class="geo-filters" role="group" aria-label="Filtrar cliente contratante">
+      <button class="filter-chip is-selected" type="button" data-client="all" aria-pressed="true">Todas</button><button class="filter-chip" type="button" data-client="Claro" aria-pressed="false">Claro</button><button class="filter-chip" type="button" data-client="Vivo" aria-pressed="false">Vivo</button><button class="filter-chip" type="button" data-client="Algar" aria-pressed="false">Algar</button><button class="filter-chip" type="button" data-client="other" aria-pressed="false">Outras</button>
+    </div></div>
+    <div class="future-filters"><label><span>Projeto</span><select data-project-filter aria-label="Filtrar projeto"><option value="">Todos os projetos</option></select></label><label data-period-control hidden><span>Período</span><select data-period-filter aria-label="Selecionar período"><option value="this_month">Este mês</option><option value="last_month">Mês anterior</option><option value="last_30">Últimos 30 dias</option><option value="last_90">Últimos 90 dias</option><option value="custom">Personalizado</option></select></label>
+      <details class="map-more-filters"><summary>Mais filtros</summary><div class="map-more-filters-content"><label><span>Provedor / ISP</span><select data-provider-filter><option value="">Todos</option></select></label><div data-ticket-filters hidden><label><span>Status</span><select data-status-filter><option value="">Todos</option><option value="OPEN">Aberto</option><option value="PENDING">Pendente</option><option value="SCHEDULED">Agendado</option><option value="RESOLVED">Resolvido</option><option value="CLOSED">Fechado</option></select></label><label><span>Prioridade</span><select data-priority-filter><option value="">Todas</option></select></label></div></div></details>
+    </div>
+    <div class="geo-custom-period" data-custom-period hidden><label>De <input type="date" data-date-from></label><label>Até <input type="date" data-date-to></label><button type="button" data-apply-period>Aplicar</button></div>
+  </div>
+  <div class="geo-analysis-controls">
+    <div class="mode-control"><span class="control-caption">MODO DA ANÁLISE</span><div class="mode-filters" role="group" aria-label="Modo geográfico">
         <button class="mode-chip is-selected" type="button" data-mode="base" aria-pressed="true">Base</button>
         <button class="mode-chip" type="button" data-mode="projects" aria-pressed="false">Projetos</button>
         <button class="mode-chip" type="button" data-mode="calls" aria-pressed="false">Chamados</button>
         <button class="mode-chip" type="button" data-mode="repeat" aria-pressed="false">Reincidência</button>
         <button class="mode-chip" type="button" data-mode="motives" aria-pressed="false">Motivos</button>
       </div></div>
-      <div class="geo-search-wrap"><label class="map-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg><input type="search" data-state-search placeholder="Buscar estado..." autocomplete="off" aria-label="Buscar estado por nome ou sigla"><kbd>UF</kbd></label><div class="state-search-results" data-state-search-results role="listbox" hidden></div></div>
-      <label class="motives-select" data-motives-select hidden><span>Motivo</span><select data-motive-filter aria-label="Filtrar motivo"><option value="">Todos os motivos</option></select></label>
-    </div>
-    <div class="geo-control-row geo-control-row--secondary">
-      <div class="operator-control"><span class="control-caption">DE QUEM ESTOU ANALISANDO</span><div class="geo-filters" role="group" aria-label="Filtrar cliente contratante">
-        <button class="filter-chip is-selected" type="button" data-client="all" aria-pressed="true">Todas</button><button class="filter-chip" type="button" data-client="Claro" aria-pressed="false">Claro</button><button class="filter-chip" type="button" data-client="Vivo" aria-pressed="false">Vivo</button><button class="filter-chip" type="button" data-client="Algar" aria-pressed="false">Algar</button><button class="filter-chip" type="button" data-client="other" aria-pressed="false">Outras</button>
-      </div></div>
-      <div class="future-filters"><label><span>Projeto</span><select data-project-filter aria-label="Filtrar projeto"><option value="">Todos</option></select></label><label data-period-control hidden><span>Período</span><select data-period-filter aria-label="Selecionar período"><option value="this_month">Este mês</option><option value="last_month">Mês anterior</option><option value="last_30">Últimos 30 dias</option><option value="last_90">Últimos 90 dias</option><option value="custom">Personalizado</option></select></label>
-        <details class="map-more-filters"><summary>Mais filtros</summary><label><span>Provedor / ISP</span><select data-provider-filter><option value="">Todos</option></select></label><div data-ticket-filters hidden><label><span>Status</span><select data-status-filter><option value="">Todos</option><option value="OPEN">Aberto</option><option value="PENDING">Pendente</option><option value="SCHEDULED">Agendado</option><option value="RESOLVED">Resolvido</option><option value="CLOSED">Fechado</option></select></label><label><span>Prioridade</span><select data-priority-filter><option value="">Todas</option></select></label></div></details>
-      </div>
-      <div class="geo-custom-period" data-custom-period hidden><label>De <input type="date" data-date-from></label><label>Até <input type="date" data-date-to></label><button type="button" data-apply-period>Aplicar</button></div>
-      <div class="geo-legend" data-legend aria-live="polite"></div>
-    </div>
+    <div class="geo-search-wrap"><label class="map-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg><input type="search" data-state-search placeholder="Buscar UF..." autocomplete="off" aria-label="Buscar estado por nome ou sigla" role="combobox" aria-expanded="false" aria-controls="state-search-results" aria-autocomplete="list"><kbd>UF</kbd></label><div id="state-search-results" class="state-search-results" data-state-search-results role="listbox" aria-label="Estados correspondentes" hidden></div></div>
+    <label class="motives-select" data-motives-select hidden><span>Motivo</span><select data-motive-filter aria-label="Filtrar motivo"><option value="">Todos os motivos</option></select></label>
   </div>
-</div>
+</header>
 
 <main class="geo-map-stage" data-map-config data-token="{{ mapbox_token }}" data-geojson-url="{% static 'geo/brasil_estados.geojson' %}" data-api-url="{% url 'base_links:map-aggregates' %}" data-detail-url="{% url 'base_links:map-state-detail' %}" data-base-url="{% url 'base_links:index' %}" data-cockpit-url="{% url 'cockpit' %}">
   <div id="brazil-map" class="geo-map-canvas" role="application" aria-label="Mapa interativo do Brasil por estado"></div>
+  <nav class="map-breadcrumb" data-breadcrumb aria-label="Localização atual" hidden><button type="button" data-brazil-link>Brasil</button><span aria-hidden="true">/</span><span data-selected-name></span></nav>
+  <div class="geo-legend geo-legend--overlay" data-legend aria-live="polite"></div>
   <div class="map-message" data-map-message role="status" aria-live="polite"><span class="map-message-spinner" data-map-spinner aria-hidden="true"></span><div><strong data-message-title>Preparando mapa</strong><span data-message-description>Carregando dados locais do CMDB e OTRS.</span></div></div>
   <aside class="national-panel" data-national-panel aria-label="Resumo nacional do Brasil"><header class="national-header"><div><span class="section-kicker">BRASIL</span><span class="national-subtitle">Visão nacional</span></div><button class="national-collapse" type="button" data-national-collapse aria-label="Recolher resumo nacional" aria-expanded="true">&#8249;</button></header><div class="national-content" data-national-content><div class="national-tabs" role="tablist" aria-label="Resumo nacional"><button type="button" role="tab" data-national-tab="summary" aria-selected="true">Resumo</button><button type="button" role="tab" data-national-tab="ranking" aria-selected="false">Ranking</button><button type="button" role="tab" data-national-tab="distribution" aria-selected="false">Distribuição</button></div><div class="national-view" data-national-view role="tabpanel"></div></div></aside>
-  <button class="national-expand" type="button" data-national-expand hidden>› <span>Resumo</span></button>
+  <button class="national-expand" type="button" data-national-expand aria-label="Expandir resumo nacional" hidden><span aria-hidden="true">&#8250;</span><span>Resumo</span></button>
   <button class="map-backdrop" type="button" data-panel-backdrop aria-label="Fechar detalhes do estado" tabindex="-1"></button>
   <aside class="state-panel thin-scroll" data-state-panel aria-label="Detalhes da unidade federativa" aria-hidden="true" inert hidden>
-    <div class="panel-topline"><span class="section-kicker">DETALHES DA UNIDADE</span><button class="panel-close" type="button" data-panel-close aria-label="Fechar painel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="panel-sticky-header">
+    <div class="panel-topline"><span class="section-kicker">DETALHES DA UNIDADE</span><div class="panel-header-actions"><div class="panel-uf-navigation" aria-label="Navegar entre unidades federativas"><button type="button" data-uf-previous aria-label="Unidade anterior">&#8249;</button><button type="button" data-uf-next aria-label="Próxima unidade">&#8250;</button></div><button class="panel-close" type="button" data-panel-close aria-label="Fechar painel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
     <div class="panel-title"><div class="panel-identity"><img class="state-flag panel-flag" data-panel-flag alt="" width="30" height="20" decoding="async"><span class="state-code" data-panel-code></span></div><div><h2 data-panel-name></h2><span>Brasil</span></div></div>
     <div class="panel-total"><strong data-panel-total>0</strong><span data-panel-scope>links CMDB · Atual</span></div><p class="panel-context" data-panel-context></p>
+    </div><div class="panel-scroll-content">
     <section class="panel-section" data-panel-section="clients"><h3 data-panel-client-heading>Clientes</h3><div data-panel-clients></div></section><section class="panel-section" data-panel-section="coverage"><h3>Cobertura de Cliente</h3><div data-panel-coverage></div></section>
     <section class="panel-section" data-panel-section="status"><h3>Status dos chamados</h3><div data-panel-status></div></section>
     <section class="panel-section" data-panel-section="reasons"><h3>Motivos de encerramento</h3><div data-panel-reasons></div></section>
@@ -49,8 +48,10 @@
     <section class="panel-section" data-panel-section="cities"><h3>Principais cidades</h3><div data-panel-cities></div></section>
     <section class="panel-section panel-links-section" data-panel-section="links"><h3>Links da unidade</h3><div data-panel-links></div></section>
     <section class="panel-section panel-tickets-section" data-panel-section="tickets"><h3>Chamados do recorte</h3><div data-panel-tickets></div></section>
-    <div class="panel-actions"><a data-open-base href="#">Ver links na Base</a><a data-open-cockpit href="#">Analisar no Cockpit</a></div>
-    <p class="panel-note" data-panel-note>Dimensões comerciais derivadas do Nome original CMDB; o Provedor vem da relação ISP do ConfigItem.</p>
+    </div><footer class="panel-footer">
+      <div class="panel-actions"><a data-open-base href="#">Ver links na Base</a><a data-open-cockpit href="#">Analisar no Cockpit</a></div>
+      <p class="panel-note" data-panel-note>Dimens&otilde;es comerciais derivadas do Nome original CMDB; o Provedor vem da rela&ccedil;&atilde;o ISP do ConfigItem.</p>
+    </footer>
   </aside>
   <div class="ticket-detail-backdrop" data-ticket-modal hidden>
     <section class="ticket-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="ticket-dialog-title" tabindex="-1">

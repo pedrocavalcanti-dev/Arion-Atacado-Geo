@@ -4,7 +4,9 @@ O Cockpit consulta somente o espelho local dos Tickets atuais da fila exata `NOC
 
 ## Fechamento e motivo
 
-`CodigoFechamento` é sincronizado para `OTRSTicket.closing_code_raw`. A interface e os agrupamentos usam normalização explícita: `PendenciaFinanceira` e `Pendência Financeira` são apresentados como `Pendência Financeira`. Outros valores permanecem distintos; `Cancelado`, `ChamadoCancelado` e `CancelamentoServico` não são mesclados. Detalhe de fechamento em texto livre não é importado.
+`CodigoFechamento` (Dynamic Field Ticket ID 101) e sincronizado para `OTRSTicket.closing_code_raw`, sem sobrescrever o raw. `ClosingReasonCanonicalizer` centraliza a regra `raw -> canonical key -> display label`, usada em filtro, agrupamentos, KPIs, calendario, evidencias e exportacoes. `FalhaMassiva`, `Falha Massiva` e `Defeito Massivo` usam a chave `falha_massiva` e uma unica serie. O dropdown usa chaves estaveis, por exemplo `termination_reason=falha_massiva`; URLs antigas com raw conhecido tambem sao resolvidas.
+
+O dropdown exibe uma opcao por categoria canonica, ordenada pelo label humano e com a chave canonica como valor. Alem dos aliases anteriores, `Equipamento travado/reinicilizado` + `EquipamentoTravado`, `Rompimento/manut Fibra` + `RompimentoFibra`, `Cancelado` + `ChamadoCancelado`, e `Conexao Incorreta - Cabeamento/porta` + `ConexaoIncorreta` sao consolidados. `CancelamentoServico` permanece separado. URLs e consultas salvas com raws antigos sao resolvidas para a chave canonica ao carregar. O detalhe do ticket e a exportacao incluem o label canonico; CSV/XLSX/PDF tambem preservam o valor raw em coluna propria. Detalhe de fechamento em texto livre nao e importado. Inventario historico de aliases: `docs/estudos/OTRS-MOTIVOS-FECHAMENTO.md`; regra normativa atual: [OTRS](../OTRS.md).
 
 `ticketResolvido` é sincronizado para `resolved_at`, mas não é a data analítica universal de fechamento. A validação agregada contra `ticket_history` / `StateUpdate` encontrou correspondência de até um minuto em 18/18 tickets `resolvido`; entre tickets `closed successful` com ambos os valores, 10.727/10.944 ficaram até um dia e 217 divergiram mais de um dia. Para evitar atribuir datas divergentes, `terminal_state_at` usa o último `StateUpdate` correspondente ao estado terminal atual. `canceled_at` guarda separadamente o evento para tickets atualmente cancelados. Não há leitura de histórico durante as requisições.
 
@@ -29,3 +31,12 @@ A lista de tickets mostra 25 por página, com opções 50 e 100. A busca conside
 PDF, CSV e XLSX chamam o mesmo `AnalyticsQueryService` e exportam todos os tickets do resultado, respeitando Data Scope. O PDF inclui título dinâmico, usuário e horário de geração, resumo executivo, visão geral, calendário do mês selecionado, ranking em tabela, gráficos complementares e anexo de tickets. Não repete a distribuição completa do ranking no corpo. Usa fonte Unicode Vera. CSV é UTF-8 com BOM e contém os tickets; XLSX tem abas `Resumo`, `Distribuição` e `Tickets`. Nenhum formato inclui campos pessoais do cliente ou conteúdo de artigos.
 
 Na primeira abertura, a tela mostra placeholders de filtros, KPIs, gráficos e tabelas. Atualizações posteriores preservam os filtros e mostram um estado discreto de carregamento dos resultados. O Cockpit não inicializa consultas ou sincronizações durante carregamento de página; apenas lê o espelho local.
+
+
+## Implementação e operação
+
+Views e serviço do app `painel` alimentam `/cockpit/`; a API compartilhada de consulta fica em `/api/analytics/query/`, exportação em `/api/analytics/export/` e views salvas em `/api/analytics/saved-views/`. A série temporal respeita a timezone do projeto (`America/Sao_Paulo`). O intervalo é `[start, end_exclusive)`; a granularidade muda conforme a duração selecionada.
+
+A mesma query normalizada e limitada por Data Scope alimenta KPIs, séries, calendário, evidências e exportação. Status atual e volume por data de criação são conceitos distintos. Gráficos de tendências não equivalem a histórico reconstruído de backlog. Saved Views pertencem ao usuário atual e não ampliam scope nem permissions.
+
+Código principal: `aplicativos/painel/services/analytics.py`, views do app `painel`, templates `templates/painel/` e fonte JS `frontend_src/js/painel/cockpit.js`. CSV/XLSX/PDF passam pela validação e queryset já autorizado.

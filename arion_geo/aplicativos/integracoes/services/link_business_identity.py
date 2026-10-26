@@ -136,9 +136,13 @@ class LinkBusinessIdentityService:
         }
         if raw_client and comparison_key(raw_client) in aliases_by_key:
             client = aliases_by_key[comparison_key(raw_client)]
+        client_tokens = {comparison_key(part) for part in parts}
+        if client == "Claro" and {"CLARO", "TELMEX"}.issubset(client_tokens):
+            raw_client = "CLARO / TELMEX"
 
         project_index = -1
         project_raw = ""
+        project = ""
         for index, part in enumerate(parts):
             if BusinessIdentityRules.project_key(part):
                 project_index, project_raw = index, part
@@ -146,10 +150,15 @@ class LinkBusinessIdentityService:
         if project_index >= 0:
             project = BusinessIdentityRules.canonical_project(project_raw)
         elif raw_client:
-            # Preserve the previous structured rule: immediately following segment is project.
-            project_index = client_index + 1
-            project_raw = parts[project_index] if project_index < len(parts) else ""
-            project = BusinessIdentityRules.canonical_project(project_raw) if project_raw else ""
+            # Only use the legacy adjacent-token fallback for a real commercial
+            # segment. Regional Claro circuit prefixes are technical context.
+            candidate_index = client_index + 1
+            candidate = parts[candidate_index] if candidate_index < len(parts) else ""
+            is_regional_claro = bool(re.match(r"^CLARO\.(?:AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)(?:\.|$)", comparison_key(candidate)))
+            if candidate and not is_regional_claro and comparison_key(candidate) != "TELMEX":
+                project_index = candidate_index
+                project_raw = candidate
+                project = BusinessIdentityRules.canonical_project(project_raw)
         else:
             project = ""
 
@@ -161,7 +170,12 @@ class LinkBusinessIdentityService:
                 source = "CMDB_PROJECT_RULE"
         account = ""
         if raw_client and project_index >= 0:
-            remaining = [part for index, part in enumerate(parts) if index not in {client_index, project_index}]
+            context_indices = {
+                index for index, part in enumerate(parts)
+                if client == "Claro" and comparison_key(part) == "TELMEX"
+            }
+            remaining = [part for index, part in enumerate(parts)
+                         if index not in ({client_index, project_index} | context_indices)]
             if len(remaining) == 1:
                 account = remaining[0]
         confidence = "HIGH" if client and project and business_id else "MEDIUM" if client or project or business_id else "LOW"

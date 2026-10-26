@@ -18,4 +18,4 @@
   <div class="settings-form-actions"><a class="settings-button settings-button--secondary" href="{% url 'configuracoes:scopes' %}">Cancelar</a><button class="settings-button" type="submit">Salvar escopo do grupo</button></div>
 </form></section>
 {% endblock %}
-{% block extra_js %}{{ block.super }}<script src="{% static 'js/configuracoes/user-form.js' %}" defer></script>{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% arion_js 'js/configuracoes/user-form.js' %}" defer></script>{% endblock %}

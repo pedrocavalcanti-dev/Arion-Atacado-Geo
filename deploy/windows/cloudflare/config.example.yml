@@ -1,0 +1,12 @@
+# Locally managed named tunnel. Replace placeholders only on the deployment host.
+# Keep the generated credentials JSON outside the project/repository.
+tunnel: <TUNNEL_UUID>
+credentials-file: 'C:\Windows\System32\config\systemprofile\.cloudflared\<TUNNEL_UUID>.json'
+no-autoupdate: true
+loglevel: info
+logfile: 'C:\ProgramData\ARION\logs\cloudflared.log'
+
+ingress:
+  - hostname: arion.example.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404

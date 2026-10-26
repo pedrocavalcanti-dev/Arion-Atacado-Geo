@@ -18,11 +18,30 @@
     <article class="kpi-card dash-card" data-tone="green"><header><span class="kpi-label">Estados atendidos</span></header><strong class="kpi-value" data-count="{{ state_count }}">{{ state_count }}</strong><small class="kpi-note">CMDB real</small><div class="kpi-visual kpi-dots" data-dots="{{ state_count }}" aria-hidden="true"></div></article>
     <article class="kpi-card dash-card" data-tone="orange"><header><span class="kpi-label">Tickets no período</span></header><strong class="kpi-value" data-count="{{ calls }}">{{ calls|intcomma }}</strong><small class="kpi-note">Criados entre {{ date_from }} e {{ date_to }} · NOC</small><svg class="kpi-visual kpi-sparkline" data-sparkline="calls" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"></svg></article>
     <article class="kpi-card dash-card" data-tone="rose"><header><span class="kpi-label">Links reincidentes</span></header><strong class="kpi-value" data-count="{{ repeat }}">{{ repeat|intcomma }}</strong><small class="kpi-note">2+ tickets distintos no período</small><svg class="kpi-visual kpi-sparkline" data-sparkline="repeat" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"></svg></article>
-    <article class="kpi-card dash-card" data-tone="violet"><header><span class="kpi-label">Chamados abertos agora</span></header><strong class="kpi-value" data-count="{{ business_open }}">{{ business_open|intcomma }}</strong><small class="kpi-note">Em atendimento + pendentes + agendados</small></article>
+    <article class="kpi-card dash-card" data-tone="violet"><header><span class="kpi-label">Chamados abertos agora</span></header><strong class="kpi-value" data-count="{{ business_open }}">{{ business_open|intcomma }}</strong><small class="kpi-note">Em atendimento + pendentes + agendados</small>{% if perms.configuracoes.view_operational_tickets %}<a class="dashboard-queue-link" href="{% url 'chamados:index' %}">Abrir fila operacional <span aria-hidden="true">&rarr;</span></a>{% endif %}</article>
   </div>
-  <section class="dashboard-status-summary" aria-label="Situação atual dos chamados">
-    <h2>Situação atual dos chamados</h2>
-    <div><span>Em atendimento <strong>{{ open_count|intcomma }}</strong></span><span>Pendentes <strong>{{ pending_count|intcomma }}</strong></span><span>Agendados <strong>{{ scheduled_count|intcomma }}</strong></span><span>Resolvidos <strong>{{ resolved_count|intcomma }}</strong></span><span>Encerrados <strong>{{ closed_count|intcomma }}</strong></span><span>Cancelados <strong>{{ canceled_count|intcomma }}</strong></span>{% if unknown_count %}<span>Não classificados <strong>{{ unknown_count|intcomma }}</strong></span>{% endif %}<span>Links afetados <strong>{{ links_affected|intcomma }}</strong></span></div>
+  <section class="dashboard-status-summary" aria-labelledby="dashboard-status-title">
+    <h2 id="dashboard-status-title">Situação atual dos chamados</h2>
+    <div class="dashboard-status-main">
+      <div class="dashboard-status-active" role="group" aria-label="Fila ativa">
+        {% if perms.configuracoes.view_operational_tickets %}
+        <a class="dashboard-status-item" data-tone="blue" href="{% url 'chamados:index' %}?tab=OPEN"><span class="dashboard-status-label"><i aria-hidden="true"></i>Em atendimento</span><strong>{{ open_count|intcomma }}</strong></a>
+        <a class="dashboard-status-item" data-tone="orange" href="{% url 'chamados:index' %}?tab=PENDING"><span class="dashboard-status-label"><i aria-hidden="true"></i>Pendentes</span><strong>{{ pending_count|intcomma }}</strong></a>
+        <a class="dashboard-status-item" data-tone="violet" href="{% url 'chamados:index' %}?tab=SCHEDULED"><span class="dashboard-status-label"><i aria-hidden="true"></i>Agendados</span><strong>{{ scheduled_count|intcomma }}</strong></a>
+        {% else %}
+        <span class="dashboard-status-item" data-tone="blue"><span class="dashboard-status-label"><i aria-hidden="true"></i>Em atendimento</span><strong>{{ open_count|intcomma }}</strong></span>
+        <span class="dashboard-status-item" data-tone="orange"><span class="dashboard-status-label"><i aria-hidden="true"></i>Pendentes</span><strong>{{ pending_count|intcomma }}</strong></span>
+        <span class="dashboard-status-item" data-tone="violet"><span class="dashboard-status-label"><i aria-hidden="true"></i>Agendados</span><strong>{{ scheduled_count|intcomma }}</strong></span>
+        {% endif %}
+      </div>
+      <div class="dashboard-status-affected" data-tone="teal"><span class="dashboard-status-label"><i aria-hidden="true"></i>Links afetados</span><strong>{{ links_affected|intcomma }}</strong></div>
+    </div>
+    <div class="dashboard-status-history" role="group" aria-label="Estados históricos do mirror">
+      <span class="dashboard-status-history-item" data-tone="green">Resolvidos <strong>{{ resolved_count|intcomma }}</strong></span>
+      <span class="dashboard-status-history-item" data-tone="neutral">Encerrados <strong>{{ closed_count|intcomma }}</strong></span>
+      <span class="dashboard-status-history-item" data-tone="rose">Cancelados <strong>{{ canceled_count|intcomma }}</strong></span>
+      {% if unknown_count %}<span class="dashboard-status-history-item" data-tone="neutral">Não classificados <strong>{{ unknown_count|intcomma }}</strong></span>{% endif %}
+    </div>
   </section>
   <div class="dashboard-grid">
     <article class="dash-panel dash-card trend-panel"><header><div><span class="panel-kicker">EVOLUÇÃO MENSAL · NOC - ATACADO</span><h2>Chamados no período</h2></div></header><div class="chart-legend" aria-label="Legenda do gráfico"><span class="legend-calls"><i></i>Tickets criados</span><span class="legend-repeat"><i></i>Links com 2+ tickets no mês</span></div><div class="trend-chart" data-monthly-chart role="img" aria-label="Tickets criados por mês e quantidade de Links com dois ou mais tickets distintos no mês"></div>{{ monthly|json_script:"monthly-chart-data" }}</article>
@@ -32,4 +51,4 @@
   <div class="chart-tooltip" data-chart-tooltip role="tooltip" hidden></div>
 </section>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/painel/dashboard.js' %}" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% arion_js 'js/painel/dashboard.js' %}" defer></script>{% endblock %}

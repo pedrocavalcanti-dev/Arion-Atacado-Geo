@@ -2,6 +2,9 @@
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from django.core.exceptions import ImproperlyConfigured
 
 try:
     from dotenv import load_dotenv
@@ -10,18 +13,74 @@ except ImportError:
     pass
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = BASE_DIR.parent
+
+ARION_ENV = os.getenv("ARION_ENV", "development").strip().casefold()
+if ARION_ENV not in {"development", "production"}:
+    raise ImproperlyConfigured("ARION_ENV deve ser development ou production.")
+ARION_PRODUCTION = ARION_ENV == "production"
 
 
 def env_bool(name, default=False):
     return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
 
 
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-local-development-key-change-before-deployment",
-)
-DEBUG = env_bool("DJANGO_DEBUG", True)
-ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if host.strip()]
+_development_secret = "django-insecure-local-development-key-change-before-deployment"
+if ARION_PRODUCTION:
+    SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
+    secret_classes = sum((any(char.islower() for char in SECRET_KEY),
+                         any(char.isupper() for char in SECRET_KEY),
+                         any(char.isdigit() for char in SECRET_KEY),
+                         any(not char.isalnum() for char in SECRET_KEY)))
+    secret_markers = ("replace_with", "change_me", "changeme", "example_secret")
+    if (len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 20 or secret_classes < 3
+            or SECRET_KEY == _development_secret
+            or any(marker in SECRET_KEY.casefold() for marker in secret_markers)):
+        raise ImproperlyConfigured(
+            "Produção exige DJANGO_SECRET_KEY forte (mínimo de 50 caracteres) configurada fora do código."
+        )
+else:
+    SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", _development_secret)
+
+DEBUG = env_bool("DJANGO_DEBUG", not ARION_PRODUCTION)
+if ARION_PRODUCTION and DEBUG:
+    raise ImproperlyConfigured("DJANGO_DEBUG deve ser false em ARION_ENV=production.")
+try:
+    ARION_WEB_PORT = int(os.getenv("ARION_WEB_PORT", "8000"))
+except ValueError:
+    raise ImproperlyConfigured("ARION_WEB_PORT deve ser uma porta TCP entre 1 e 65535.") from None
+if not 1 <= ARION_WEB_PORT <= 65535:
+    raise ImproperlyConfigured("ARION_WEB_PORT deve ser uma porta TCP entre 1 e 65535.")
+ARION_WEB_BIND = "127.0.0.1"
+
+_default_hosts = "" if ARION_PRODUCTION else "127.0.0.1,localhost"
+ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", _default_hosts).split(",") if host.strip()]
+if ARION_PRODUCTION and (not ALLOWED_HOSTS or any("*" in host or "/" in host or "@" in host for host in ALLOWED_HOSTS)):
+    raise ImproperlyConfigured("Produção exige DJANGO_ALLOWED_HOSTS explícito e sem wildcard.")
+
+if ARION_PRODUCTION:
+    _csrf_origins = [origin.strip() for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
+    if not _csrf_origins:
+        raise ImproperlyConfigured("Produção exige DJANGO_CSRF_TRUSTED_ORIGINS com origens HTTPS explícitas.")
+    for _origin in _csrf_origins:
+        _parsed_origin = urlsplit(_origin)
+        if (_parsed_origin.scheme != "https" or not _parsed_origin.hostname or "*" in _parsed_origin.netloc
+                or _parsed_origin.username or _parsed_origin.password
+                or _parsed_origin.path not in ("", "/") or _parsed_origin.query or _parsed_origin.fragment):
+            raise ImproperlyConfigured("DJANGO_CSRF_TRUSTED_ORIGINS aceita somente origens HTTPS exatas.")
+        if _parsed_origin.hostname.casefold() not in {host.casefold() for host in ALLOWED_HOSTS}:
+            raise ImproperlyConfigured("Cada origem CSRF de produção também deve constar em DJANGO_ALLOWED_HOSTS.")
+    CSRF_TRUSTED_ORIGINS = _csrf_origins
+else:
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
+
+OTRS_WEB_BASE_URL = os.getenv(
+    "OTRS_WEB_BASE_URL", "https://suporte.grupoarion.com.br/otrs/index.pl",
+).strip().rstrip("?")
+OTRS_NOC_ATACADO_QUEUE_URL = os.getenv(
+    "OTRS_NOC_ATACADO_QUEUE_URL",
+    "https://suporte.grupoarion.com.br/otrs/index.pl?Action=AgentKPISearch;Subaction=Search;TakeLastSearch=1;Profile=251_2",
+).strip()
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -40,13 +99,16 @@ INSTALLED_APPS = [
     "aplicativos.mapa.apps.MapaConfig",
     "aplicativos.rankings.apps.RankingsConfig",
     "aplicativos.base_links.apps.BaseLinksConfig",
+    "aplicativos.chamados.apps.ChamadosConfig",
 ]
 
 MIDDLEWARE = [
-    "config.middleware.RequestErrorMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    *(["whitenoise.middleware.WhiteNoiseMiddleware"] if ARION_PRODUCTION else []),
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "config.middleware.ProductionSecurityHeadersMiddleware",
+    "config.middleware.RequestErrorMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -58,7 +120,7 @@ TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
     "DIRS": [BASE_DIR / "templates"],
     "APP_DIRS": True,
-    "OPTIONS": {"context_processors": [
+    "OPTIONS": {"builtins": ["config.templatetags.arion_assets"], "context_processors": [
         "django.template.context_processors.request",
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
@@ -70,6 +132,14 @@ WSGI_APPLICATION = "config.wsgi.application"
 from aplicativos.integracoes.services.arion_database import django_database_settings
 
 DATABASES = {"default": django_database_settings(base_dir=BASE_DIR)}
+if ARION_PRODUCTION and DATABASES["default"]["ENGINE"] != "django.db.backends.mysql":
+    raise ImproperlyConfigured("Produção exige o MySQL local configurado para o ARION.")
+if ARION_PRODUCTION:
+    _production_db = DATABASES["default"]
+    if (_production_db.get("HOST", "").strip().casefold() not in {"127.0.0.1", "localhost", "::1"}
+            or not _production_db.get("USER", "").strip()
+            or _production_db["USER"].strip().casefold() == "root"):
+        raise ImproperlyConfigured("ProduÃ§Ã£o exige usuÃ¡rio MySQL prÃ³prio do ARION e conexÃ£o local por loopback.")
 if DATABASES["default"]["ENGINE"] == "django.db.backends.mysql":
     import pymysql
     pymysql.install_as_MySQLdb()
@@ -85,9 +155,29 @@ TIME_ZONE = "America/Sao_Paulo"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_URL = "/static/"
+STATIC_ROOT = Path(os.getenv("DJANGO_STATIC_ROOT", str(PROJECT_ROOT / "var" / "staticfiles"))).expanduser()
+ARION_FRONTEND_MANIFEST_PATH = Path(os.getenv(
+    "DJANGO_FRONTEND_MANIFEST", str(PROJECT_ROOT / "var" / "arion-frontend-manifest.json"),
+)).expanduser()
+if ARION_PRODUCTION:
+    STATICFILES_DIRS = [BASE_DIR / "static"]
+    if not ARION_FRONTEND_MANIFEST_PATH.is_file():
+        raise ImproperlyConfigured("Build frontend de produção ausente; execute npm run build:production.")
+else:
+    STATICFILES_DIRS = [BASE_DIR / "static", PROJECT_ROOT / "frontend_src"]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+if ARION_PRODUCTION:
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    }
+else:
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
 
 LOGIN_URL = "autenticacao:login"
 LOGIN_REDIRECT_URL = "painel:index"
@@ -134,6 +224,64 @@ LOGGING = {
 MAPBOX_PUBLIC_TOKEN = os.getenv("MAPBOX_PUBLIC_TOKEN", "").strip()
 
 # ARI uploads are private and are only served through owner-checked views.
-MEDIA_ROOT = BASE_DIR / "private_media"
+MEDIA_ROOT = Path(os.getenv(
+    "DJANGO_MEDIA_ROOT",
+    str(PROJECT_ROOT / "var" / "private_media" if ARION_PRODUCTION else BASE_DIR / "private_media"),
+)).expanduser()
 ARI_MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+ARI_MAX_ATTACHMENTS = 5
+ARI_MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024
+FILE_UPLOAD_HANDLERS = [
+    "config.upload_limits.AriAttachmentQuotaHandler",
+    "django.core.files.uploadhandler.MemoryFileUploadHandler",
+    "django.core.files.uploadhandler.TemporaryFileUploadHandler",
+]
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+X_FRAME_OPTIONS = "DENY"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+CONTENT_SECURITY_POLICY_REPORT_ONLY = (
+    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; "
+    "script-src 'self' https://api.mapbox.com; "
+    "style-src 'self' 'unsafe-inline' https://api.mapbox.com https://fonts.googleapis.com; "
+    "img-src 'self' data: blob: https://api.mapbox.com https://*.mapbox.com https://*.tiles.mapbox.com; "
+    "font-src 'self' data: https://fonts.gstatic.com https://fonts.mapbox.com; "
+    "connect-src 'self' https://api.mapbox.com https://events.mapbox.com https://*.mapbox.com https://*.tiles.mapbox.com; "
+    "worker-src 'self' blob:"
+)
+
+if ARION_PRODUCTION:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = False
+    CSRF_COOKIE_SAMESITE = "Lax"
+    try:
+        SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "3600"))
+    except ValueError:
+        raise ImproperlyConfigured("DJANGO_SECURE_HSTS_SECONDS deve ser um inteiro não negativo.") from None
+    if SECURE_HSTS_SECONDS < 0:
+        raise ImproperlyConfigured("DJANGO_SECURE_HSTS_SECONDS deve ser um inteiro não negativo.")
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
+    ARION_CSP_REPORT_ONLY = True
+else:
+    SECURE_SSL_REDIRECT = False
+    SECURE_PROXY_SSL_HEADER = None
+    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SECURE = False
+    CSRF_COOKIE_HTTPONLY = False
+    CSRF_COOKIE_SAMESITE = "Lax"
+    SECURE_HSTS_SECONDS = 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
+    ARION_CSP_REPORT_ONLY = False
 

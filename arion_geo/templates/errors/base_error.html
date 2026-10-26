@@ -7,8 +7,8 @@
   <title>{% block title %}Arion Atacado Geo{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'favicon/arion.svg' %}">
   <link rel="stylesheet" href="{% static 'css/errors.css' %}">
-  <script src="{% static 'js/theme.js' %}"></script>
-  <script src="{% static 'js/errors.js' %}" defer></script>
+  <script src="{% arion_js 'js/theme.js' %}"></script>
+  <script src="{% arion_js 'js/errors.js' %}" defer></script>
 </head>
 <body>
   <header class="error-brand-header">

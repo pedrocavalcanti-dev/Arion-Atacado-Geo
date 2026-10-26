@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% load static humanize %}
+{% block title %}Chamados · ARION ATACADO GEO{% endblock %}
+{% block body_class %}tickets-layout{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/chamados/chamados.css' %}">{% endblock %}
+{% block content %}
+<section class="tickets-page" aria-labelledby="tickets-title" data-detail-template="{% url 'chamados:detail' 0 %}" data-tracking-template="{% url 'chamados:tracking_update' 0 %}" data-base-template="{% url 'base_links:index' %}" data-views-action="{{ queue_views_action_url }}" data-active-saved-view="{{ active_saved_view_id }}" data-manage="{% if perms.configuracoes.manage_operational_tickets %}1{% else %}0{% endif %}" data-current-user="{{ request.user.pk }}">
+  <header class="tickets-heading">
+    <div><p class="section-kicker">NOC ATACADO <span>/</span> CHAMADOS</p><h1 id="tickets-title">Fila operacional</h1><p>Acompanhe e organize os chamados ativos · OTRS e CMDB em espelhos locais</p></div>
+    <div class="ticket-header-actions">
+      <div class="tickets-sync" role="status">
+        {% if sync_error %}<span class="sync-dot sync-dot--warn"></span><span>Última leitura {{ last_sync|date:'d/m/Y H:i'|default:'indisponível' }} · espelho pode estar desatualizado</span>
+        {% elif last_sync %}<span class="sync-dot"></span><span>Mirror atualizado em {{ last_sync|date:'d/m/Y H:i' }}</span>
+        {% else %}<span class="sync-dot sync-dot--muted"></span><span>Horário da última sincronização indisponível</span>{% endif %}
+      </div>
+      {% if otrs_queue_url %}<a class="ticket-external-link" href="{{ otrs_queue_url }}" target="_blank" rel="noopener noreferrer">Abrir fila no OTRS <span aria-hidden="true">↗</span></a>{% endif %}
+      <details class="saved-queue-menu"><summary>Minhas filas <span aria-hidden="true">⌄</span></summary><div class="saved-queue-popover">
+        <strong>Visualizações pessoais</strong>
+        {% for saved in saved_views %}<div class="saved-queue-row"><a class="{% if saved.pk == active_saved_view_id %}is-active{% endif %}" href="?saved_view={{ saved.pk }}">{{ saved.name }}{% if saved.is_default %}<small>Fila padrão</small>{% endif %}</a>
+          {% if perms.configuracoes.manage_operational_tickets %}<div><button type="button" data-rename-view="{{ saved.pk }}" data-name="{{ saved.name }}" aria-label="Renomear {{ saved.name }}">Renomear</button><button type="button" data-default-view="{{ saved.pk }}">{% if saved.is_default %}Remover padrão{% else %}Definir padrão{% endif %}</button><button type="button" data-delete-view="{{ saved.pk }}" data-name="{{ saved.name }}" aria-label="Excluir {{ saved.name }}">Excluir</button></div>{% endif %}
+        </div>{% empty %}<p>Nenhuma fila salva ainda.</p>{% endfor %}
+        {% if perms.configuracoes.manage_operational_tickets %}<button class="save-queue-button" type="button" data-save-queue>Salvar esta fila</button>{% endif %}
+      </div></details>
+    </div>
+  </header>
+  {% if sync_error %}<p class="tickets-sync-error">Falha registrada em {{ sync_error_at|date:'d/m/Y H:i' }}. Os dados exibidos continuam sendo os últimos disponíveis no mirror local.</p>{% endif %}
+
+  <div class="tickets-kpis" aria-label="Resumo da fila">
+    <article><span>Chamados ativos</span><strong>{{ active_count|intcomma }}</strong></article>
+    <article><span>Em atendimento</span><strong>{{ status_counts.OPEN|intcomma }}</strong></article>
+    <article><span>Pendentes</span><strong>{{ status_counts.PENDING|intcomma }}</strong></article>
+    <article><span>Agendados</span><strong>{{ status_counts.SCHEDULED|intcomma }}</strong></article>
+    <article><span>Links afetados</span><strong>{{ affected_count|intcomma }}</strong></article>
+    <article><span>Acima de 24h</span><strong>{{ aged_count|intcomma }}</strong></article>
+  </div>
+
+  <nav class="ticket-tabs" aria-label="Recortes da fila">
+    <a class="{% if filters.tab == 'all' %}is-active{% endif %}" href="{{ tab_urls.all }}">Todos <b>{{ tab_counts.all|intcomma }}</b></a>
+    <a class="{% if filters.tab == 'OPEN' %}is-active{% endif %}" href="{{ tab_urls.OPEN }}">Em atendimento <b>{{ tab_counts.OPEN|intcomma }}</b></a>
+    <a class="{% if filters.tab == 'PENDING' %}is-active{% endif %}" href="{{ tab_urls.PENDING }}">Pendentes <b>{{ tab_counts.PENDING|intcomma }}</b></a>
+    <a class="{% if filters.tab == 'SCHEDULED' %}is-active{% endif %}" href="{{ tab_urls.SCHEDULED }}">Agendados <b>{{ tab_counts.SCHEDULED|intcomma }}</b></a>
+    <a class="{% if filters.tab == 'mine' %}is-active{% endif %}" href="{{ tab_urls.mine }}">Meus <b data-tab-count="mine" data-count="{{ mine_count }}">{{ mine_count|intcomma }}</b></a>
+    <a class="{% if filters.tab == 'unassigned' %}is-active{% endif %}" href="{{ tab_urls.unassigned }}">Sem responsável <b data-tab-count="unassigned" data-count="{{ unassigned_count }}">{{ unassigned_count|intcomma }}</b></a>
+  </nav>
+
+  <form class="ticket-filters" method="get" action="{% url 'chamados:index' %}">
+    <input type="hidden" name="tab" value="{{ filters.tab }}">
+    <input type="hidden" name="page_size" value="{{ page_size }}">
+    <div class="ticket-filter-primary">
+      <label class="ticket-search"><span>Buscar</span><input type="search" name="q" value="{{ filters.q }}" placeholder="Número, título, link, CI, projeto, provedor…"></label>
+      <label><span>Status ARION</span><select name="arion_status"><option value="">Todos</option>{% for code,label in internal_statuses %}<option value="{{ code }}"{% if filters.arion_status == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label><span>Cliente</span><select name="client"><option value="">Todos</option>{% for option in filter_options.clients %}<option{% if filters.client == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
+      <label><span>Projeto</span><select name="project"><option value="">Todos</option>{% for option in filter_options.projects %}<option{% if filters.project == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
+      <label><span>Provider / ISP</span><select name="provider"><option value="">Todos</option>{% for option in filter_options.providers %}<option value="{{ option.value }}"{% if filters.provider == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
+      <label><span>UF</span><select name="uf"><option value="">Todas</option>{% for option in filter_options.ufs %}<option{% if filters.uf == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
+      <label><span>Responsável</span><select name="assignee"><option value="">Todos</option><option value="unassigned"{% if filters.assignee == 'unassigned' %} selected{% endif %}>Sem responsável</option>{% for option in filter_options.assignees %}<option value="{{ option.value }}"{% if filters.assignee == option.value|stringformat:'s' %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
+    </div>
+    <details class="ticket-more-filters"{% if filters.otrs_status or filters.priority or filters.reason or filters.over_24h or filters.recurrent or filters.sort != 'aging' %} open{% endif %}>
+      <summary>Mais filtros</summary>
+      <div class="ticket-filter-secondary">
+        <label><span>Status OTRS</span><select name="otrs_status"><option value="">Todos ativos</option>{% for code,label in status_choices %}<option value="{{ code }}"{% if filters.otrs_status == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label><span>Prioridade OTRS</span><select name="priority"><option value="">Todas</option>{% for option in filter_options.priorities %}<option{% if filters.priority == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
+        <label><span>Motivo de fechamento</span><select name="reason"><option value="">Todos</option>{% for option in filter_options.reasons %}<option value="{{ option.value }}"{% if filters.reason == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
+        <label><span>Ordenar</span><select name="sort">{% for code,label in available_sort %}<option value="{{ code }}"{% if filters.sort == code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="ticket-check"><input type="checkbox" name="over_24h" value="1"{% if filters.over_24h %} checked{% endif %}> Mais de 24h</label>
+        <label class="ticket-check"><input type="checkbox" name="recurrent" value="1"{% if filters.recurrent %} checked{% endif %}> Link reincidente</label>
+      </div>
+    </details>
+    <div class="ticket-filter-actions"><button type="submit" class="button-primary">Aplicar filtros</button><a class="button-secondary" href="{{ clear_url }}">Limpar</a></div>
+  </form>
+
+  <div class="ticket-list-header"><div><h2>Fila ativa</h2><span>{{ page.paginator.count|intcomma }} chamados no recorte</span></div><label>Por página <select data-page-size><option value="25"{% if page_size == 25 %} selected{% endif %}>25</option><option value="50"{% if page_size == 50 %} selected{% endif %}>50</option><option value="100"{% if page_size == 100 %} selected{% endif %}>100</option></select></label></div>
+  <div class="ticket-table-wrap">
+    <table class="ticket-table"><thead><tr><th>Chamado</th><th>Cliente / projeto</th><th>Link / local</th><th>Provider / ISP</th><th>Acompanhamento ARION</th><th title="Aging operacional ARION; não representa necessariamente SLA contratual">Aging ⓘ</th><th>Ação</th></tr></thead>
+      <tbody>{% for row in rows %}<tr class="ticket-row" data-ticket-id="{{ row.external_id }}" tabindex="0" role="button" aria-label="Abrir detalhes ARION do chamado {{ row.ticket_number }}">
+        <td>{% if row.otrs_url %}<a class="ticket-number-link" href="{{ row.otrs_url }}" target="_blank" rel="noopener noreferrer" data-external-ticket>{{ row.ticket_number }} <span aria-hidden="true">↗</span></a>{% else %}<strong>{{ row.ticket_number }}</strong>{% endif %}<small>{{ row.source_created_at|date:'d/m/Y H:i'|default:'Sem data' }}</small></td>
+        <td><strong><span class="ticket-client ticket-client--{{ row.client|slugify }}">{{ row.client }}</span></strong><small>{{ row.project }}</small></td>
+        <td><strong class="ticket-link-title" title="{{ row.title }}">{{ row.designation }}</strong><small title="{{ row.title }}">{{ row.city }}{% if row.city and row.state %} · {% endif %}{{ row.state }}{% if row.links_count > 1 %} · +{{ row.links_count|add:'-1' }} links{% endif %}</small></td>
+        <td><strong>{{ row.provider }}{% if row.provider_more %} <small>+{{ row.provider_more }} ISP</small>{% endif %}</strong></td>
+        <td><div class="ticket-follow-up">{% if perms.configuracoes.manage_operational_tickets %}<form class="ticket-inline-form" data-inline-status-form data-ticket-id="{{ row.external_id }}">{% csrf_token %}<input type="hidden" name="action" value="inline_status"><input type="hidden" name="revision" value="{{ row.tracking.revision }}"><select id="ticket-status-{{ row.external_id }}" name="internal_status" class="ticket-inline-status ticket-internal--{{ row.tracking_class }}" data-saved-value="{{ row.tracking.internal_status }}" aria-label="Status ARION do chamado {{ row.ticket_number }}">{% for status_code,status_label in internal_statuses %}<option value="{{ status_code }}"{% if row.tracking.internal_status == status_code %} selected{% endif %}>{{ status_label }}</option>{% endfor %}</select><small class="ticket-row-feedback" data-row-feedback aria-live="polite"></small></form>{% else %}<span class="ticket-internal-status ticket-internal--{{ row.tracking_class }}">{{ row.tracking.internal_status_label }}</span>{% endif %}
+          <div class="ticket-row-owner" data-row-owner data-assigned-user="{{ row.tracking.assigned_to_id|default:'' }}"><small data-row-assignee>{% if row.tracking.assigned_to %}{{ row.tracking.assigned_to.get_full_name|default:row.tracking.assigned_to.username }}{% else %}Sem responsável{% endif %}</small>{% if perms.configuracoes.manage_operational_tickets %}{% if row.tracking.assigned_to_self %}<button class="ticket-assume" type="button" data-unassign-ticket="{{ row.external_id }}" data-revision="{{ row.tracking.revision }}">Desassumir</button>{% elif not row.tracking.assigned_to %}<button class="ticket-assume" type="button" data-assume-ticket="{{ row.external_id }}" data-revision="{{ row.tracking.revision }}">Assumir</button>{% endif %}{% endif %}</div></div></td>
+        <td><span class="ticket-age{% if row.over_24h %} is-old{% endif %}">{{ row.age_label }}</span><small>{% if row.over_24h %}<span class="ticket-aged-label">ARION &gt;24h</span>{% endif %}{% if row.recurrent %}<span class="ticket-recurrence">Reincidente</span>{% endif %}</small></td>
+        <td><span class="ticket-open-action">Abrir <span aria-hidden="true">→</span></span></td>
+      </tr>{% empty %}<tr><td class="ticket-empty" colspan="7"><strong>Nenhum chamado ativo encontrado.</strong><span>A fila operacional está sem chamados dentro dos filtros selecionados.</span><a href="{{ clear_url }}">Limpar filtros</a></td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  <footer class="ticket-pagination"><span>Página {{ page.number }} de {{ page.paginator.num_pages|default:1 }}</span><div>{% if page.has_previous %}<a href="{{ pagination_urls.previous }}">Anterior</a>{% endif %}{% if page.has_next %}<a href="{{ pagination_urls.next }}">Próxima</a>{% endif %}</div></footer>
+</section>
+{{ saved_filter_values|json_script:"ticket-queue-filters" }}
+<dialog class="ticket-queue-dialog" data-queue-dialog aria-labelledby="queue-dialog-title" aria-describedby="queue-dialog-message">
+  <form data-queue-dialog-form>
+    <h2 id="queue-dialog-title" data-queue-dialog-title>Salvar fila pessoal</h2>
+    <label data-queue-name-label>Nome da fila<input name="name" maxlength="80" required autocomplete="off"></label>
+    <p id="queue-dialog-message" data-queue-dialog-message role="status"></p>
+    <div><button type="button" data-queue-dialog-cancel>Cancelar</button><button type="submit" class="button-primary" data-queue-dialog-submit>Salvar fila</button></div>
+  </form>
+</dialog>
+<div class="ticket-drawer-backdrop" data-drawer-backdrop hidden></div>
+<aside class="ticket-drawer" data-ticket-drawer aria-labelledby="ticket-drawer-title" aria-hidden="true" hidden>
+  <header><div><p class="section-kicker">DETALHE DO CHAMADO</p><h2 id="ticket-drawer-title"><a data-drawer-ticket-link target="_blank" rel="noopener noreferrer" hidden></a><span data-drawer-ticket-number></span></h2></div><button type="button" class="drawer-close" data-drawer-close aria-label="Fechar">&times;</button></header>
+  <div class="drawer-loading" data-drawer-loading>Carregando detalhes…</div>
+  <div class="drawer-content" data-drawer-content hidden>
+    <div data-ticket-summary></div>
+    <section><h3>Identidade operacional: links relacionados</h3><div data-ticket-links></div></section>
+    <section class="drawer-tracking"><h3>Acompanhamento ARION</h3><div class="drawer-meta" data-tracking-summary></div><div class="drawer-assignee" data-drawer-assignee-panel><div><span>Responsável</span><strong data-drawer-assignee>Sem responsável</strong></div><div><button class="ticket-assume" type="button" data-drawer-assume hidden>Assumir chamado</button><button class="ticket-assume" type="button" data-drawer-unassign hidden>Desassumir</button></div></div><form class="drawer-manage" data-tracking-form data-manage-section hidden>{% csrf_token %}<label>Status ARION<select name="internal_status" required></select></label><label>Responsável ARION<select name="assigned_to"><option value="">Sem responsável</option></select></label><label>Prioridade ARION<select name="internal_priority"><option value="">Sem prioridade</option></select></label><label>Próxima ação ARION<input type="datetime-local" name="next_action_at"></label><input type="hidden" name="revision"><button class="button-primary" type="submit">Salvar acompanhamento</button></form></section>
+    <section class="drawer-notes"><h3>Notas ARION</h3><form data-note-form{% if not perms.configuracoes.manage_operational_tickets %} hidden{% endif %}>{% csrf_token %}<label for="ticket-note-body">Adicionar nota</label><textarea id="ticket-note-body" name="body" rows="3" maxlength="2000" required></textarea><input type="hidden" name="revision"><button class="button-primary" type="submit">Adicionar nota</button></form><div data-ticket-notes></div></section>
+    <section><h3>Histórico ARION</h3><div data-ticket-events></div></section>
+    <footer class="drawer-links"><a data-base-link hidden>Ver na Base</a><a data-cockpit-link target="_blank" rel="noopener">Abrir no Cockpit</a></footer>
+  </div>
+  <p class="drawer-feedback" data-drawer-feedback role="status"></p>
+</aside>
+<script type="application/json" id="ticket-permissions">{"canManage":{% if perms.configuracoes.manage_operational_tickets %}true{% else %}false{% endif %}}</script>
+{% endblock %}
+{% block extra_js %}<script src="{% arion_js 'js/chamados/chamados.js' %}" defer></script>{% endblock %}

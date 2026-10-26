@@ -1,86 +1,96 @@
 # Rankings operacionais · NOC Atacado
 
-O módulo **Rankings** compara o risco operacional de Providers/ISPs do CMDB e tickets espelhados do OTRS. A identidade do produto continua **ARION ATACADO GEO**; NOC Atacado identifica a operação atendida. Todas as consultas usam mirrors locais em modo somente leitura.
+O módulo **Rankings** compara a pressão operacional dos provedores/ISPs do CMDB com chamados espelhados do OTRS. A identidade do produto permanece **ARION ATACADO GEO**; NOC Atacado identifica a operação atendida. As consultas usam somente os mirrors locais e não escrevem na origem.
 
 ## Universo, escopo e filtros
 
-- Links são registros atuais `CMDBLinkMirror.is_present_in_source=True`. Provider é a operadora/ISP vinculada ao link no CMDB; Cliente e Projeto vêm de `contracting_client` e `business_project` canônicos.
-- O Data Scope de Operadora/Projeto é aplicado por `LinkQueryService.base(user)` antes dos filtros, tickets relacionados, dimensões e scores. O drawer refaz a consulta sob o mesmo usuário e escopo.
-- Tickets pertencem à fila `NOC - ATACADO`, estão presentes na fila e têm um estado operacional válido: `OPEN`, `PENDING`, `SCHEDULED`, `RESOLVED` ou `CLOSED`. `CANCELED` e `UNKNOWN` não entram nas métricas operacionais.
-- Tickets válidos no período usam `source_created_at`, no fuso `America/Sao_Paulo`, com início inclusivo e limite superior exclusivo no início do dia seguinte. O KPI nacional distinto sem filtros segue o mesmo universo semântico do Cockpit.
-- Filtros disponíveis: mês, janela mensal/móvel de três meses, período personalizado, Cliente, Projeto, Provider, UF, prioridade OTRS, motivo normalizado, estado operacional, apenas Aging >24h e apenas reincidentes.
+- Links são registros atuais `CMDBLinkMirror.is_present_in_source=True`. Provedor é a operadora/ISP vinculada ao link no CMDB; Cliente e Projeto usam `contracting_client` e `business_project` canônicos.
+- O Data Scope de Operadora/Projeto é aplicado por `LinkQueryService.base(user)` antes de filtros, relações, dimensões e cálculos. O drawer refaz a consulta sob o mesmo usuário e escopo.
+- Chamados pertencem à fila `NOC - ATACADO`, estão presentes na fila e têm status operacional válido: `OPEN`, `PENDING`, `SCHEDULED`, `RESOLVED` ou `CLOSED`. `CANCELED` e `UNKNOWN` não entram nas métricas.
+- Chamados do período usam `source_created_at`, no fuso `America/Sao_Paulo`, com início inclusivo e limite superior exclusivo no início do dia seguinte. O KPI nacional distinto segue o mesmo universo semântico do Cockpit.
+- Filtros: mês, visão mensal ou consolidado de três meses, período personalizado, Cliente, Projeto, Provedor, UF, prioridade OTRS, motivo normalizado, status, apenas Aging >24h e apenas reincidentes.
+- Filtro e Top Motivos usam `ClosingReasonCanonicalizer`, compartilhado com Cockpit e Mapa. Valores raw sem equivalência confirmada permanecem separados.
 
-Um ticket relacionado a vários ConfigItems do mesmo Provider conta uma vez para esse Provider, enquanto cada link distinto afetado conta uma vez. Se os links do ticket pertencem a Providers diferentes, o ticket conta uma vez em cada Provider; portanto, a soma dos tickets por Provider pode superar o KPI nacional de tickets distintos. Essa diferença decorre do agrupamento e é intencional.
+Um chamado relacionado a vários ConfigItems do mesmo provedor conta uma vez para esse provedor; cada link distinto afetado conta uma vez. Se os links pertencem a provedores diferentes, o chamado conta uma vez em cada provedor. Por isso, a soma dos chamados por provedor pode superar o KPI nacional distinto.
 
-## Métricas
+## Métricas operacionais
 
-- **Links CMDB:** links atuais no Provider dentro do Data Scope e dos filtros comerciais/geográficos.
-- **Tickets:** tickets válidos distintos criados no intervalo selecionado e associados aos links do Provider.
-- **Links afetados:** links distintos com pelo menos um ticket válido no intervalo; não depende de o ticket continuar aberto.
-- **Reincidência:** um link tem reincidência quando possui pelo menos dois tickets válidos distintos criados no mesmo intervalo. `recurrent_rate = recurrent_links / links_affected`; sem links afetados, a taxa é zero.
-- **Backlog atual:** tickets distintos hoje em `OPEN`, `PENDING` ou `SCHEDULED`.
-- **ARION >24h:** soma de tickets atualmente abertos há mais de 24 horas desde `source_created_at` e tickets `RESOLVED`/`CLOSED` do período cuja duração `terminal_state_at - source_created_at` excede 24 horas. `resolved_at` não é usado como substituto universal do timestamp terminal.
-- **Taxa >24h:** tickets ARION >24h divididos pelos tickets que possuem timestamps suficientes para avaliação. Tickets sem os timestamps necessários ficam fora do denominador; ausência de dado não é tratada como sucesso.
-- **Criticidade:** participação de tickets com prioridade alta/crítica, baseada em mapeamento explícito dos nomes reais: `Alto`/`High` e `Crítico`/`Critico`/`Critical`, com normalização de acento e caixa. Não há detecção por substring.
+- **Links CMDB:** links atuais do provedor dentro do Data Scope e dos filtros comerciais/geográficos.
+- **Chamados:** chamados distintos válidos criados no período e relacionados aos links do provedor.
+- **Chamados por link:** chamados válidos divididos pelos links CMDB atuais. A tela não usa a antiga taxa por 100 links.
+- **Links afetados:** links distintos com pelo menos um chamado válido no período.
+- **Reincidência:** um link reincide quando possui pelo menos dois chamados válidos distintos no período. A taxa é `links reincidentes / links afetados`; sem links afetados, é zero.
+- **Backlog atual:** chamados distintos em `OPEN`, `PENDING` ou `SCHEDULED`.
+- **ARION >24h:** chamados abertos há mais de 24 horas desde `source_created_at` e chamados `RESOLVED`/`CLOSED` do período cuja duração `terminal_state_at - source_created_at` supera 24 horas. `resolved_at` não substitui o timestamp terminal.
+- **Taxa de aging:** chamados acima de 24h divididos pelos chamados avaliáveis com timestamps suficientes. Registros sem timestamps necessários ficam fora do denominador.
 
-O indicador de 24 horas é o **limite operacional provisório do ARION**. Não representa necessariamente o SLA contratual de cada Projeto/Cliente. Não há disponibilidade percentual, penalidade ou dado contratual estimado.
+O limite de 24 horas é operacional do ARION e não representa necessariamente o SLA contratual. O módulo não estima disponibilidade, causa técnica, penalidade nem responsabilidade do provedor.
 
-## Índice de Risco ARION V1
+## Índice ARION V2 · atual
 
-O índice fica entre 0 e 100; valores maiores indicam maior atenção operacional. Cada componente é convertido para percentil ordinal dentro do conjunto filtrado de Providers: ordenação por valor, percentil médio para empates e escala de 0 a 100 entre as posições mínima e máxima. Assim, um outlier não comprime os demais como ocorreria em min-max. Se todos os Providers empatam ou há somente um, o componente recebe zero.
+O índice varia de **0 a 100**. Zero representa ausência de pressão observada no período. Os cinco componentes arredondados a uma casa decimal somam o total:
 
-O **Risco proporcional** pesa 70% do índice e combina:
+| Componente | Peso | Cálculo |
+|---|---:|---|
+| Impacto no NOC | 30 pontos | 60% volume de chamados e 40% links afetados; cada volume é dividido pelo P95 do conjunto filtrado e limitado a 100% antes da ponderação. |
+| Base afetada | 20 pontos | `links afetados / links CMDB`, limitado a 100%. |
+| Reincidência | 20 pontos | `links reincidentes / links afetados`, limitado a 100%. |
+| Aging ARION >24h | 20 pontos | `chamados >24h / chamados avaliáveis`. |
+| Backlog atual | 10 pontos | `backlog / max(chamados válidos, 1)`, limitado a 100%. |
 
-| Componente proporcional | Peso |
-|---|---:|
-| Taxa de links afetados | 25% |
-| Tickets por 100 links | 20% |
-| Taxa de reincidência | 20% |
-| Taxa ARION >24h | 20% |
-| Backlog por 100 links | 10% |
-| Criticidade Alto/Crítico | 5% |
+O P95 usa a regra de posto mais próximo sobre os provedores do recorte já filtrado; distribuição vazia ou P95 zero rende zero pontos naquele subcomponente. O score não tem piso estatístico. O P95 é metodologia interna e não aparece por linha na interface. Responsabilidade do fechamento é apenas informativa e não altera o V2.
 
-O **Impacto absoluto** pesa 30% e combina tickets do período (40%), links afetados (30%), tickets ARION >24h (20%) e backlog atual (10%).
+Faixas: `0` Sem ocorrências; `0,1–19,9` Muito baixo; `20–39,9` Baixo; `40–59,9` Moderado; `60–79,9` Alto; `80–100` Crítico. Provedores sem chamados e sem backlog têm score zero e ficam fora das visões de risco e melhor desempenho.
 
-Os pesos e a exposição mínima são centralizados em `RANKING_WEIGHTS` e `SMALL_SAMPLE_LINK_THRESHOLD` no service de Rankings. Provider com menos de cinco links permanece no ranking e recebe a marca **Amostra pequena**, sem redução artificial de taxa ou score. Quando os scores proporcionais e de impacto divergem, ambos ficam disponíveis no detalhe.
+Provedores com menos de cinco links continuam visíveis e recebem **Amostra pequena**. Eles permanecem elegíveis ao ranking de risco. Para o pódio de melhor desempenho exige-se chamado válido e pelo menos cinco links **ou** três chamados; provedores menores com eventos continuam na tabela.
 
-Faixas de apresentação: 0–19,9 Muito bom; 20–39,9 Atenção baixa; 40–59,9 Atenção; 60–79,9 Alto risco; 80–100 Crítico. São categorias internas de priorização, não metas contratuais.
+## Visões e desempates
 
-## Período móvel e tendência
+- **Maior risco:** inclui `chamados >= 1 OU backlog > 0`. A ordenação padrão é Índice ARION decrescente; empates usam Impacto no NOC, chamados e links afetados em ordem decrescente, depois nome.
+- **Melhor desempenho:** inclui somente provedores com ao menos um chamado válido. Ordena o índice crescente; empates priorizam maior exposição, primeiro links CMDB e depois chamados avaliados. Zero eventos não são tratados como desempenho de atendimento.
+- **Sem ocorrências:** inclui `chamados = 0 E backlog = 0`; exibe até 10 provedores por maior exposição de links e apresenta links, clientes, projetos e UFs.
 
-O padrão é o mês selecionado até hoje quando for o mês corrente; meses anteriores usam o mês calendário completo. **3 meses** soma os dados brutos desde o primeiro dia de dois meses antes até o fim do mês selecionado (ou hoje, se corrente) e recalcula os componentes e o score sobre esse agregado. Scores mensais não são somados.
+Os atalhos de ordenação incluem Índice ARION, impacto no NOC, chamados, percentual da base afetada, reincidentes, chamados acima de 24h, backlog e links CMDB. A tendência conserva a diferença contra o mês anterior: `↓ Melhorou` em verde, `↑ Piorou` em coral e `→ Estável` em neutro; a faixa estável é de ±2 pontos.
 
-A tendência exibida em cada Provider compara o score recalculado do mês selecionado com o mês calendário anterior: diferença acima de 2 pontos indica piora, abaixo de -2 indica melhora; entre esses limites é estável. O drawer também mostra os scores dos três meses calendário mais recentes disponíveis no recorte.
+## Período, consolidação e tendência
 
-## Ranking de links e detalhe
+A visão mensal usa o mês selecionado (até hoje quando for o mês corrente). **Consolidado 3 meses** agrega os dados brutos desde o primeiro dia de dois meses antes até o fim do mês selecionado, ou hoje se for o mês corrente, e então recalcula o V2 uma vez. Não soma scores mensais. O gráfico histórico recalcula o V2 separadamente para cada mês.
 
-O ranking por circuito apresenta 20 links por padrão e permite abrir a lista completa. Projeto e Cliente usam as dimensões canônicas do CMDB. O detalhe do Provider reúne evolução do índice, principais Projetos, Clientes, UFs com bandeiras locais, motivos normalizados, links mais problemáticos, tickets ARION >24h e backlog atual. As ações abrem Base e Cockpit com os filtros de Provider/período correspondentes. Não são enviados dados fora do escopo autorizado.
+A tendência compara o score recalculado do mês selecionado com o mês calendário anterior: diferença acima de 2 pontos indica piora, abaixo de -2 indica melhora; entre esses limites é estável. A análise não altera a fonte nem simula meta ou SLA.
 
-## Consistência e limites
+## Consistência de cobertura
 
-O KPI **Tickets válidos** nacional, sem filtros adicionais, corresponde ao Cockpit para a mesma janela de criação e estados operacionais; ele inclui tickets da fila que ainda não têm vínculo com um link atual. A soma por Provider pode ser maior por causa de tickets associados a mais de um ISP, ou menor quando tickets não têm Provider identificável. O Mapa agrega tickets por UF e não inclui tickets relacionados somente a links sem UF normalizável em seu total estadual; essa diferença de cobertura geográfica não altera as regras do Mapa.
+O KPI **Chamados válidos** nacional, sem filtros adicionais, corresponde ao Cockpit para a mesma janela de criação e estados operacionais; ele inclui chamados da fila sem vínculo com um link atual. A soma por provedor pode ser maior por causa de chamados associados a mais de um ISP, ou menor quando não há provedor identificável. O Mapa agrega por UF e não inclui chamados relacionados somente a links sem UF normalizável no total estadual; a diferença de cobertura geográfica não muda as regras do Mapa.
 
-Os rankings são derivados dos campos disponíveis nos mirrors. O módulo não infere contrato, disponibilidade, causa técnica ou responsabilidade do Provider. Pesos, faixas e limiar de amostra são uma primeira versão operacional e podem ser ajustados quando a governança de SLA por Projeto/Cliente for definida.
+## Detalhe e links
 
+O ranking de circuitos apresenta 20 links por padrão e permite abrir a lista completa. O drawer mostra a soma dos cinco componentes, a evolução mensal, principais projetos/clientes/UFs/motivos, links problemáticos e chamados paginados. Clientes, Projetos e Motivos têm contagens e atributos complementares separados visualmente. As ações abrem Base e Cockpit preservando os filtros apropriados e o Data Scope.
 
-## Maior risco e melhor desempenho
+Procedentes, Improcedentes e Indeterminados vêm do campo de validação do OTRS. O estudo da origem localizou `RvalidacaoProcedenteImprocedente` (`Validação`, tipo `Dropdown`) em `dynamic_field`; os valores ficam em `dynamic_field_value`. No snapshot consultado em 24/10/2026, 1.848 de 11.973 chamados tinham valor: 1.505 `Procedente` e 343 `Improcedente` (15,43% preenchido). O cruzamento com `CodigoFechamento` encontrou motivos iguais sob as duas classificações; a categoria não prova culpa do provedor, cliente ou área técnica.
 
-A URL mantém `ranking_view=risk` (padrão) ou `ranking_view=best`. Maior risco usa a ordenação descendente da visão ativa; Melhor desempenho ordena o mesmo Índice ARION V1 em ordem crescente, sem inverter a escala. Empates de melhor desempenho priorizam maior exposição de links e depois o nome do Provedor / ISP. `BEST_RANKING_MIN_LINKS = 5` centraliza a elegibilidade do pódio de melhores. Providers com menos links continuam na tabela e podem aparecer no pódio de risco, com a marca Amostra pequena; não entram no pódio positivo. O total de links permanece exposto para contextualizar resultados sem tickets.
+O mirror guarda `responsibility_raw` e `responsibility_normalized`: valores reconhecidos, sem distinção de caixa/acentos, tornam-se `PROCEDENTE` ou `IMPROCEDENTE`; vazio ou valor não reconhecido vira `INDETERMINADO`. A taxa de procedência usa somente `PROCEDENTE + IMPROCEDENTE` como denominador. A marca informativa **Revisar responsabilidade** requer pelo menos seis classificações conhecidas e taxa de Improcedentes de 60% ou mais; não afirma falso positivo e não altera o Índice ARION V2.
 
-## Procedência observada no OTRS
-
-Estudo read-only do OTRS localizou em `dynamic_field` o campo de Ticket `RvalidacaoProcedenteImprocedente`, label `Validação`, tipo `Dropdown`; os valores ficam em `dynamic_field_value`. No snapshot consultado em 24/10/2026, 1.848 de 11.973 tickets da fila tinham valor: 1.505 `Procedente` e 343 `Improcedente` (15,43% preenchido). O cruzamento com `CodigoFechamento` mostrou motivos iguais sob as duas classificações, portanto a categoria não prova culpa ou responsabilidade do Provider, Cliente ou área técnica.
-
-O mirror guarda `responsibility_raw` e `responsibility_normalized`: valores reconhecidos, sem distinção de caixa/acentos, tornam-se `PROCEDENTE` ou `IMPROCEDENTE`; campo vazio ou outro valor vira `INDETERMINADO`. O resumo do Provider conta tickets distintos do período, e a taxa de procedência usa somente `PROCEDENTE + IMPROCEDENTE` como denominador. A marca informativa **Revisar responsabilidade** requer ao menos seis tickets conhecidos e 60% ou mais classificados como improcedentes; não afirma falso positivo. Esses dados não alteram o Índice ARION V1.
-
-O detalhe inclui resumo, barra proporcional, motivos com contagens de procedentes/improcedentes, dimensões de Projeto/Cliente/UF, links com as duas classificações e tickets paginados em lotes de 10 ou 50. O modal mostra campos operacionais do mirror, sem artigos, notas internas, anexos, e-mail ou telefone; contatos reconhecíveis no título são removidos na resposta.
+O drawer inclui resumo, barra proporcional, motivos com contagens de procedentes/improcedentes, dimensões de Projeto/Cliente/UF, links com as duas classificações e chamados paginados em lotes de 10 ou 50. O modal mostra somente campos operacionais do mirror; não inclui artigos, notas internas ou anexos, e contatos reconhecíveis no título são removidos na resposta. Um futuro V3 poderá avaliar ajuste por responsabilidade depois de validação semântica.
 
 ## Exportação e navegação para a Base
 
-PDF e XLSX são gerados pela consulta atual, com filtros de período, visão e dimensões preservados. PDF contém metadados de geração, KPIs, pódio, até 20 Providers e totais de responsabilidade observados; XLSX contém as abas Resumo, Ranking, Providers, Links e Tickets, sem a paginação da tela. O serviço aplica `LinkQueryService.base(user)` antes dos dados, de modo que detalhe e exportação respeitam o Data Scope.
+PDF e XLSX usam a análise e os filtros atuais. Ambos apresentam o Índice ARION V2 e seus cinco pontos componentes. O XLSX mantém as abas **Resumo**, **Ranking**, **Providers**, **Links** e **Tickets** (o cabeçalho em português é “Chamados”). Exportação, detalhe e navegação individual para Base respeitam `LinkQueryService.base(user)`; não há acesso fora do escopo autorizado.
 
-O link individual do Ranking abre a Base por `config_item_id` exato e não transmite Cliente/Projeto/UF/Provider herdados. Na Base, a chave técnica é resolvida dentro do queryset já limitado por Data Scope; dimensões antigas ou contraditórias são ignoradas para esse destino, mas um CI fora do escopo continua sem resultado. O botão de lista do Provider mantém o filtro de Provider para mostrar vários links acessíveis.
+O link individual abre a Base por `config_item_id` exato, resolvido dentro do queryset já limitado por Data Scope. Dimensões herdadas/contraditórias não ampliam o acesso; um ConfigItem fora do escopo não retorna resultado. A ação de lista mantém o filtro do provedor para mostrar os links acessíveis.
 
-## Governança futura
+## Índice ARION V1 · histórico
 
-A próxima versão pode avaliar um score ajustado por responsabilidade após aprovação semântica, além de SLA por Projeto, disponibilidade observada, janela operacional e penalização contratual. Esses conceitos não são calculados nesta versão e não alteram a V1.
+A V1 combinava risco proporcional (70%) e impacto absoluto (30%), convertendo os componentes em percentis ordinais do conjunto comparado. Risco proporcional: taxa de links afetados (25%), chamados por 100 links (20%), taxa de reincidência (20%), taxa >24h (20%), backlog por 100 links (10%) e criticidade alta/crítica (5%). Impacto absoluto: chamados (40%), links afetados (30%), chamados >24h (20%) e backlog (10%).
+
+Esse modelo podia atribuir 43,3 a provedores sem ocorrência por causa dos percentis dos empates. Está preservado apenas como metodologia histórica e para o estudo de comparação; não alimenta mais tela, drawer, histórico atual nem exportação.
+
+## Estudo real da mudança
+
+O estudo read-only sobre o snapshot de outubro/2026 registra posições V1/V2, Top 10 das três visões e casos relevantes em `docs/estudos/ARION-RANKINGS-V1-V2-OUTUBRO-2026.md`. O relatório descreve escopo, normalização P95 e limites de interpretação.
+## Implementação e interpretação
+
+Campos brutos e classificação de fechamento estão em [OTRS](../OTRS.md); a canonicalização compartilhada e a interpretação de acompanhamento ficam em [Chamados](chamados.md).
+
+A rota `/rankings/` e seus detalhes/exports são implementados no app `rankings`; regra de negócio em `services.py`/`performance.py`, export em `exports.py`, interface em `templates/rankings/` e JavaScript fonte em `frontend_src/js/rankings/`. Visões usam o universo de ticket válido, Data Scope e associação Provider/ISP documentados; filtros mudam recorte, não fórmula.
+
+Índice ARION V2 é indicador operacional comparativo: não é SLA contratual, prova de responsabilidade causal de Provider nem avaliação de qualidade de atendimento externa. Períodos por criação e snapshot de backlog são conceitos distintos. Versão anterior e comparações numéricas em `docs/estudos/` são históricas e não definem o contrato ativo.

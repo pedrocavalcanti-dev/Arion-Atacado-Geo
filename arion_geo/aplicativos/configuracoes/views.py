@@ -357,7 +357,8 @@ def documentation_home(request):
     category_map = {category["name"]: category["documents"] for category in categories}
     card_definitions = (
         ("inicio", "Começar", "Visão geral, arquitetura e fontes de dados.", ("Começar",)),
-        ("modulos", "Funcionalidades", "Base, Dashboard, Cockpit, Mapa, Rankings e ARI.", ("Funcionalidades",)),
+        ("modulos", "Funcionalidades", "Chamados, Base, Dashboard, Cockpit, Mapa, Rankings e ARI.", ("Funcionalidades",)),
+        ("dados", "Dados e Integrações", "Banco de dados, OTRS, CMDB, worker e dicionário.", ("Dados e Integrações",)),
         ("administracao", "Administração", "Usuários, grupos, escopos, configurações e auditoria.", ("Administração",)),
         ("operacao", "Segurança e operação", "Segurança, testes, erros, implantação e padrões.", ("Segurança e operação", "Padrões")),
     )
@@ -367,12 +368,13 @@ def documentation_home(request):
         documents = [item for name in names for item in category_map.get(name, [])]
         home_cards.append({"anchor": anchor, "title": title, "description": description, "groups": groups, "documents": documents})
     navigation = DocumentationService.navigation()
-    popular_slugs = ("arquitetura", "base", "usuarios-grupos-escopos", "seguranca", "implantacao-e-producao")
+    popular_slugs = ("arquitetura", "banco-de-dados", "otrs", "cmdb", "worker", "chamados")
     return render(request, "documentacao/inicio.html", {
         "home_cards": home_cards,
         "popular_documents": [item for slug in popular_slugs for item in navigation if item["slug"] == slug],
         "categories": categories,
         "navigation": navigation,
+        "active_category": "Começar",
     })
 
 
@@ -393,6 +395,7 @@ def documentation_page(request, slug):
         "document": document,
         "categories": DocumentationService.categories(),
         "navigation": navigation,
+        "active_category": document["category"],
         "previous_document": navigation[current_index - 1] if current_index > 0 else None,
         "next_document": navigation[current_index + 1] if current_index + 1 < len(navigation) else None,
     })
@@ -413,6 +416,7 @@ def documentation_search(request):
         "results": results,
         "categories": DocumentationService.categories(),
         "navigation": DocumentationService.navigation(),
+        "active_category": "Funcionalidades",
     })
 
 
