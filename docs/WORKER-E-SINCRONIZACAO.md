@@ -49,7 +49,7 @@ OTRS usa MySQL read-only com SQL restrito. CMDB usa `ConfigItemSearch` e `Config
 
 ### OTRS FAST
 
-FAST inicia pelo cursor salvo, aplica safety window, seleciona tickets alterados e carrega Dynamic Fields/relações que os suportam. O cursor só avança depois que o apply local termina com sucesso.
+FAST inicia pelo cursor salvo, subtrai a safety window e seleciona tickets alterados antes de carregar Dynamic Fields/relações. Como `ticket.change_time` no OTRS é um `DATETIME` sem fuso, o limite da consulta é convertido para a hora local definida por `TIME_ZONE` e enviado sem `tzinfo`; o cursor interno continua timezone-aware. Após um apply bem-sucedido, o cursor avança para o início da leitura ou para o `change_time` observado mais recente, se posterior, mesmo quando o delta está vazio. A janela de segurança reaplica as alterações próximas ao limite na execução seguinte.
 
 ```mermaid
 flowchart TD

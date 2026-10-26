@@ -51,6 +51,15 @@ def _number(value):
         return None
 
 
+def _otrs_naive_local_datetime(value):
+    """Convert an internal Django timestamp to OTRS's timezone-naive DATETIME."""
+    if value is None:
+        return None
+    if timezone.is_aware(value):
+        value = timezone.localtime(value, timezone.get_default_timezone())
+    return value.replace(tzinfo=None)
+
+
 class OTRSSyncService:
     TICKET_TABLE = "ticket"
     QUEUE_TABLE = "queue"
@@ -501,11 +510,19 @@ class OTRSSyncService:
         type_rows = self._dimension("ticket_state_type")
         state_type_map = self._dimension_map(type_rows)
         now = timezone.now()
-        known_ids = tuple(OTRSTicket.objects.values_list("external_id", flat=True)) if changed_since is not None else ()
-        if changed_since is not None:
+        is_incremental = changed_since is not None
+        known_ids = tuple(OTRSTicket.objects.values_list("external_id", flat=True)) if is_incremental else ()
+        query_changed_since = changed_since
+        if is_incremental:
             from datetime import timedelta
-            changed_since -= timedelta(seconds=safety_window)
-        ticket_source_rows = self._tickets(queue_id, changed_since=changed_since, known_ids=known_ids)
+            safety_cursor = changed_since - timedelta(seconds=safety_window)
+            query_changed_since = _otrs_naive_local_datetime(safety_cursor)
+            logger.info(
+                "OTRS FAST cursor_internal=%s changed_since_otrs=%s safety_window=%ss timezone=%s",
+                changed_since.isoformat(), query_changed_since.isoformat(),
+                safety_window, timezone.get_default_timezone_name(),
+            )
+        ticket_source_rows = self._tickets(queue_id, changed_since=query_changed_since, known_ids=known_ids)
         self.progress(f"[OTRS] Tickets atuais encontrados: {len(ticket_source_rows)}.")
         tickets, state_mappings, status_counts, warnings = self._normalize_tickets(ticket_source_rows, queue_id, resolved_queue, dimensions, state_type_map, now)
         ticket_terminal_fields, terminal_field_counts = self._ticket_terminal_fields(ticket_source_rows, dimensions)
@@ -540,7 +557,7 @@ class OTRSSyncService:
             raise ValueError("TN já pertence a outro ID externo local; reconciliação cancelada.")
         with transaction.atomic() if apply else _NullContext():
             mapping_counts = self._upsert_dimension(OTRSStateMapping, state_mappings, apply=apply)
-            ticket_counts_summary = self._upsert_tickets(tickets, now=now, apply=apply, reconcile=changed_since is None)
+            ticket_counts_summary = self._upsert_tickets(tickets, now=now, apply=apply, reconcile=not is_incremental)
             if apply:
                 ticket_map = {row.external_id: row for row in OTRSTicket.objects.filter(external_id__in=[row["external_id"] for row in tickets])}
             else:
@@ -551,7 +568,7 @@ class OTRSSyncService:
                 }
             relation_counts_summary = self._upsert_relations(
                 relation_rows, ticket_map=ticket_map, now=now, apply=apply,
-                affected_ticket_ids=[item["external_id"] for item in tickets] if changed_since is not None else None,
+                affected_ticket_ids=[item["external_id"] for item in tickets] if is_incremental else None,
             )
 
         status_counts = {key: status_counts.get(key, 0) for key in OTRSStateMapping.BusinessStatus.values}

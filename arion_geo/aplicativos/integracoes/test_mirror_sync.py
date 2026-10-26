@@ -1,10 +1,10 @@
 from datetime import datetime, timezone as datetime_timezone
 from unittest.mock import patch
-from django.test import TestCase as DjangoTestCase
+from django.test import TestCase as DjangoTestCase, override_settings
 
 from .models import CMDBLinkMirror, CMDBOperatorMirror, OTRSStateMapping, OTRSTicket, OTRSTicketConfigItem
 from .services.cmdb_sync import CMDBSyncService
-from .services.otrs_sync import OTRSSyncService
+from .services.otrs_sync import OTRSSyncService, _otrs_naive_local_datetime
 
 
 class FakeCMDBClient:
@@ -114,7 +114,10 @@ class FakeOTRSReadOnlyClient:
             {"source_object_id": 4, "source_key": "ci-bad-state", "target_object_id": 1, "target_key": "100", "type_id": 3, "state_id": 2, "create_time": None},
             {"source_object_id": 4, "source_key": "ci-bad-type", "target_object_id": 1, "target_key": "100", "type_id": 4, "state_id": 1, "create_time": None},
         ]
-        self.ticket = {"id": 100, "tn": "2026000000000100", "title": "Link service", "queue_id": queue_id, "state_id": self.states[0]["id"], "priority_id": 2, "type_id": 3, "service_id": 4, "sla_id": 5, "responsible_user_id": 13, "customer_id": "ACME", "timeout": 12, "until_time": 20, "escalation_time": -2, "escalation_update_time": 3, "escalation_response_time": 4, "escalation_solution_time": 5, "create_time": datetime(2025, 1, 1, tzinfo=datetime_timezone.utc), "change_time": datetime(2025, 1, 2, tzinfo=datetime_timezone.utc)}
+        self.ticket = {"id": 100, "tn": "2026000000000100", "title": "Link service", "queue_id": queue_id, "state_id": self.states[0]["id"], "priority_id": 2, "type_id": 3, "service_id": 4, "sla_id": 5, "responsible_user_id": 13, "customer_id": "ACME", "timeout": 12, "until_time": 20, "escalation_time": -2, "escalation_update_time": 3, "escalation_response_time": 4, "escalation_solution_time": 5, "create_time": datetime(2025, 1, 1, tzinfo=datetime_timezone.utc), "change_time": datetime(2025, 1, 2)}
+        self.ticket_rows = [self.ticket]
+        self.last_changed_since = None
+        self.last_changed_since_parameter = None
         self.dynamic_values = []
         self.history_rows = []
 
@@ -160,9 +163,22 @@ class FakeOTRSReadOnlyClient:
         if "from `sla`" in normalized:
             return [{"id": 5, "name": "Padrão"}]
         if "from `ticket`" in normalized:
-            row = dict(self.ticket)
-            row["state_id"] = self.ticket["state_id"]
-            return [row]
+            if " >= %s" in normalized:
+                queue_id = params[0]
+                self.last_changed_since_parameter = params[-1]
+                cutoff = params[-1]
+                # PyMySQL serializes aware datetime fields as wall time, dropping tzinfo.
+                if cutoff.tzinfo is not None:
+                    cutoff = cutoff.replace(tzinfo=None)
+                self.last_changed_since = cutoff
+                known_ids = set(params[1:-1])
+                rows = [row for row in self.ticket_rows
+                        if (row["queue_id"] == queue_id or row["id"] in known_ids)
+                        and row["change_time"] >= cutoff]
+            else:
+                queue_id = params[0]
+                rows = [row for row in self.ticket_rows if row["queue_id"] == queue_id]
+            return [dict(row) for row in rows]
         if "from `link_object`" in normalized:
             return [{"id": 1, "name": "Ticket"}, {"id": 4, "name": "ITSMConfigItem"}]
         if "from `link_type`" in normalized:
@@ -262,6 +278,49 @@ class OTRSMirrorSyncTests(DjangoTestCase):
         self.assertEqual(result["tickets"]["created"], 1)
         self.assertEqual(ticket.config_items.filter(is_present_in_source=True).count(), 2)
         self.assertEqual(result["relation_stats"]["tickets_multiple_ci"], 1)
+
+    @override_settings(TIME_ZONE="America/Sao_Paulo", USE_TZ=True)
+    def test_fast_converts_utc_cursor_to_naive_otrs_local_datetime(self):
+        cursor = datetime(2026, 10, 26, 13, 0, tzinfo=datetime_timezone.utc)
+        self.assertEqual(_otrs_naive_local_datetime(cursor), datetime(2026, 10, 26, 10, 0))
+
+    @override_settings(TIME_ZONE="America/Sao_Paulo", USE_TZ=True)
+    def test_fast_finds_new_ticket_after_cursor_without_config_item(self):
+        client = FakeOTRSReadOnlyClient(relations=[])
+        client.ticket["change_time"] = datetime(2026, 10, 26, 10, 5)
+        cursor = datetime(2026, 10, 26, 13, 2, tzinfo=datetime_timezone.utc)
+
+        result = OTRSSyncService(client).run(apply=True, changed_since=cursor)
+
+        self.assertEqual(client.last_changed_since_parameter, datetime(2026, 10, 26, 10, 0))
+        self.assertEqual(result["tickets"]["found"], 1)
+        self.assertEqual(result["tickets"]["created"], 1)
+        self.assertTrue(OTRSTicket.objects.get(external_id=100).is_present_in_queue)
+        self.assertEqual(result["relations"]["found"], 0)
+
+    @override_settings(TIME_ZONE="America/Sao_Paulo", USE_TZ=True)
+    def test_fast_safety_window_recovers_ticket_changed_before_cursor(self):
+        client = FakeOTRSReadOnlyClient(relations=[])
+        client.ticket["change_time"] = datetime(2026, 10, 26, 10, 4)
+        cursor = datetime(2026, 10, 26, 13, 5, tzinfo=datetime_timezone.utc)
+
+        result = OTRSSyncService(client).run(apply=True, changed_since=cursor, safety_window=120)
+
+        self.assertEqual(client.last_changed_since_parameter, datetime(2026, 10, 26, 10, 3))
+        self.assertEqual(result["tickets"]["found"], 1)
+        self.assertEqual(result["tickets"]["created"], 1)
+
+    def test_fast_repeated_delta_is_idempotent(self):
+        client = FakeOTRSReadOnlyClient(relations=[])
+        cursor = datetime(2025, 1, 2, tzinfo=datetime_timezone.utc)
+
+        first = OTRSSyncService(client).run(apply=True, changed_since=cursor)
+        second = OTRSSyncService(client).run(apply=True, changed_since=cursor)
+
+        self.assertEqual(first["tickets"]["created"], 1)
+        self.assertEqual(second["tickets"]["created"], 0)
+        self.assertEqual(second["tickets"]["unchanged"], 1)
+        self.assertEqual(OTRSTicket.objects.filter(external_id=100).count(), 1)
 
     def test_fast_sync_reconciles_ticket_leaving_queue_without_deleting_it(self):
         client = FakeOTRSReadOnlyClient()
