@@ -219,9 +219,6 @@ class OTRSSyncService:
                     continue
                 if ticket_id is not None and ci_id:
                     result.append({"ticket_id": ticket_id, "config_item_id": ci_id, "relation_type": "DependsOn", "relation_state": "Valid", "source_created_at": source_datetime(_val(row, "create_time"))})
-        keys = [(row["ticket_id"], row["config_item_id"], row["relation_type"]) for row in result]
-        if len(keys) != len(set(keys)):
-            raise ValueError("Relações OTRS duplicadas no snapshot; reconciliação cancelada.")
         return result
 
     @staticmethod
@@ -444,16 +441,45 @@ class OTRSSyncService:
         return {"found": len(rows), "processed": len(rows), "created": created, "updated": updated, "unchanged": unchanged, "stale": len(stale_ids), "failed": 0}
 
     @staticmethod
-    def _upsert_relations(relations, *, ticket_map, now, apply, affected_ticket_ids=None):
+    def _canonical_relation_key(ticket_id, config_item_id, relation_type):
+        external_ticket_id = _number(ticket_id)
+        canonical_ci_id = normalized_name(config_item_id)
+        canonical_relation_type = normalized_name(relation_type)
+        if external_ticket_id is None or not canonical_ci_id or not canonical_relation_type:
+            raise ValueError("Relação OTRS sem ticket, ConfigItem ou tipo válido.")
+        return external_ticket_id, canonical_ci_id, canonical_relation_type
+
+    @classmethod
+    def _deduplicate_relation_rows(cls, relations):
+        unique = {}
+        for relation in relations:
+            key = cls._canonical_relation_key(
+                relation.get("ticket_id"), relation.get("config_item_id"), relation.get("relation_type"),
+            )
+            # Keep the first source row deterministically; later copies of the
+            # same logical relation must not affect the mirror or its metrics.
+            unique.setdefault(key, relation)
+        return list(unique.values())
+
+    @classmethod
+    def _upsert_relations(cls, relations, *, ticket_map, now, apply, affected_ticket_ids=None):
+        found_count = len(relations)
+        relations = cls._deduplicate_relation_rows(relations)
         tickets_by_external = {ticket.external_id: ticket for ticket in ticket_map.values()}
         config_item_ids = {relation["config_item_id"] for relation in relations}
-        links_by_ci = CMDBLinkMirror.objects.filter(source_config_item_id__in=config_item_ids).in_bulk(field_name="source_config_item_id")
-        existing = {
-            (row.ticket_id, row.config_item_id, row.relation_type): row
-            for row in OTRSTicketConfigItem.objects.filter(is_present_in_source=True).filter(
-                **({} if affected_ticket_ids is None else {"ticket__external_id__in": affected_ticket_ids})
-            )
+        links_by_ci = {
+            normalized_name(link.source_config_item_id): link
+            for link in CMDBLinkMirror.objects.filter(source_config_item_id__in=config_item_ids)
         }
+        existing = {}
+        existing_rows = OTRSTicketConfigItem.objects.select_related("ticket").filter(
+            **({} if affected_ticket_ids is None else {"ticket__external_id__in": affected_ticket_ids})
+        )
+        for row in existing_rows:
+            key = cls._canonical_relation_key(
+                row.ticket.external_id, row.config_item_id, row.relation_type,
+            )
+            existing.setdefault(key, row)
         create, update, created, updated, unchanged = [], [], 0, 0, 0
         seen = set()
         fields = ("ticket_id", "config_item_id", "cmdb_link_id", "relation_type", "relation_state", "source_created_at", "source_last_seen_at", "source_synced_at", "is_present_in_source")
@@ -461,14 +487,16 @@ class OTRSSyncService:
             ticket = tickets_by_external.get(relation["ticket_id"])
             if not ticket:
                 raise ValueError("Relação recebida para ticket fora da fila; reconciliação cancelada.")
-            link = links_by_ci.get(relation["config_item_id"])
+            key = cls._canonical_relation_key(
+                ticket.external_id, relation["config_item_id"], relation["relation_type"],
+            )
+            link = links_by_ci.get(normalized_name(relation["config_item_id"]))
             values = {
                 "ticket_id": ticket.pk, "config_item_id": relation["config_item_id"],
                 "cmdb_link_id": link.pk if link else None, "relation_type": relation["relation_type"],
                 "relation_state": relation["relation_state"], "source_created_at": relation["source_created_at"],
                 "source_last_seen_at": now, "source_synced_at": now, "is_present_in_source": True,
             }
-            key = (ticket.pk, relation["config_item_id"], relation["relation_type"])
             seen.add(key)
             current = existing.get(key)
             if current is None:
@@ -489,7 +517,7 @@ class OTRSSyncService:
             OTRSTicketConfigItem.objects.bulk_update(update, fields=fields, batch_size=500)
             if stale_ids:
                 OTRSTicketConfigItem.objects.filter(pk__in=stale_ids).update(is_present_in_source=False)
-        return {"found": len(relations), "processed": len(relations), "created": created, "updated": updated, "unchanged": unchanged, "stale": len(stale_ids), "failed": 0, "unresolved_link": sum(1 for row in relations if row["config_item_id"] not in links_by_ci)}
+        return {"found": found_count, "processed": len(relations), "created": created, "updated": updated, "unchanged": unchanged, "stale": len(stale_ids), "failed": 0, "unresolved_link": sum(1 for row in relations if normalized_name(row["config_item_id"]) not in links_by_ci)}
 
     def run(self, queue_name="NOC - ATACADO", *, apply=False, changed_since=None, safety_window=120):
         started = time.perf_counter()
@@ -532,11 +560,13 @@ class OTRSSyncService:
         relation_type_id = self._relation_ids("link_type", {"DependsOn"})
         relation_state_id = self._relation_ids("link_state", {"Valid"})
         relation_rows = self._relations(ticket_source_rows, objects, relation_type_id, relation_state_id)
-        self.progress(f"[OTRS] Relações válidas ticket–ConfigItem: {len(relation_rows)}.")
-        ticket_ci_counts = Counter(row["ticket_id"] for row in relation_rows)
-        ci_ticket_counts = Counter(row["config_item_id"] for row in relation_rows)
-        relation_ci_ids = {row["config_item_id"] for row in relation_rows}
+        unique_relation_rows = self._deduplicate_relation_rows(relation_rows)
+        self.progress(f"[OTRS] Relações válidas ticket–ConfigItem: {len(unique_relation_rows)} únicas em {len(relation_rows)} linhas de origem.")
+        ticket_ci_counts = Counter(row["ticket_id"] for row in unique_relation_rows)
+        ci_ticket_counts = Counter(normalized_name(row["config_item_id"]) for row in unique_relation_rows)
+        relation_ci_ids = {row["config_item_id"] for row in unique_relation_rows}
         local_ci_ids = set(CMDBLinkMirror.objects.filter(source_config_item_id__in=relation_ci_ids).values_list("source_config_item_id", flat=True))
+        canonical_local_ci_ids = {normalized_name(config_item_id) for config_item_id in local_ci_ids}
         relation_stats = {
             "tickets_with_ci": len(ticket_ci_counts),
             "tickets_without_ci": max(0, len(tickets) - len(ticket_ci_counts)),
@@ -544,8 +574,8 @@ class OTRSSyncService:
             "tickets_multiple_ci": sum(1 for count in ticket_ci_counts.values() if count > 1),
             "unique_config_items": len(ci_ticket_counts),
             "configitems_multiple_tickets": sum(1 for count in ci_ticket_counts.values() if count > 1),
-            "resolved_local_links": sum(1 for row in relation_rows if row["config_item_id"] in local_ci_ids),
-            "unresolved_local_links": sum(1 for row in relation_rows if row["config_item_id"] not in local_ci_ids),
+            "resolved_local_links": sum(1 for row in unique_relation_rows if normalized_name(row["config_item_id"]) in canonical_local_ci_ids),
+            "unresolved_local_links": sum(1 for row in unique_relation_rows if normalized_name(row["config_item_id"]) not in canonical_local_ci_ids),
         }
 
         # Validate exact TN uniqueness before any local reconciliation.

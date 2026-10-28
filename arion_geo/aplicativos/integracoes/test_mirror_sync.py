@@ -228,6 +228,42 @@ class OTRSMirrorSyncTests(DjangoTestCase):
         self.assertEqual(result["business_open"], 1)
         self.assertEqual(result["business_status"]["UNKNOWN"], 0)
 
+    def test_duplicate_source_relations_are_counted_but_reconciled_once(self):
+        relation = {"source_object_id": 4, "source_key": "ci-1", "target_object_id": 1, "target_key": "100", "type_id": 3, "state_id": 1, "create_time": None}
+        client = FakeOTRSReadOnlyClient(relations=[dict(relation), dict(relation)])
+
+        result = OTRSSyncService(client).run(apply=True)
+
+        self.assertEqual(result["relations"]["found"], 2)
+        self.assertEqual(result["relations"]["processed"], 1)
+        self.assertEqual(result["relations"]["created"], 1)
+        self.assertEqual(result["relations"]["updated"], 0)
+        self.assertEqual(result["relations"]["unchanged"], 0)
+        self.assertEqual(result["relation_stats"]["tickets_one_ci"], 1)
+        self.assertEqual(OTRSTicketConfigItem.objects.count(), 1)
+
+    def test_stale_existing_relation_is_reactivated_by_canonical_key(self):
+        OTRSSyncService(FakeOTRSReadOnlyClient(relations=[])).run(apply=True)
+        ticket = OTRSTicket.objects.get(external_id=100)
+        relation = OTRSTicketConfigItem.objects.create(
+            ticket=ticket, config_item_id="CI-1", relation_type="dependson",
+            relation_state="Invalid", is_present_in_source=False,
+        )
+
+        result = OTRSSyncService(FakeOTRSReadOnlyClient()).run(apply=True)
+
+        relation.refresh_from_db()
+        self.assertEqual(result["relations"]["found"], 1)
+        self.assertEqual(result["relations"]["processed"], 1)
+        self.assertEqual(result["relations"]["created"], 0)
+        self.assertEqual(result["relations"]["updated"], 1)
+        self.assertTrue(relation.is_present_in_source)
+        self.assertEqual(relation.config_item_id, "ci-1")
+        self.assertEqual(relation.relation_type, "DependsOn")
+        self.assertEqual(relation.relation_state, "Valid")
+        self.assertEqual(relation.cmdb_link_id, CMDBLinkMirror.objects.get(source_config_item_id="ci-1").pk)
+        self.assertEqual(OTRSTicketConfigItem.objects.count(), 1)
+
     def test_resolved_state_is_never_business_open_and_queue_departure_is_stale_not_closed(self):
         resolved_client = FakeOTRSReadOnlyClient(states=[{"id": 20, "name": "resolvido", "type_id": 2}])
         resolved_client.ticket["state_id"] = 20
