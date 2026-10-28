@@ -1,0 +1,41 @@
+{% extends "relatorios/base.html" %}
+{% load static %}
+{% block reports_title %}Nova competência · Claro Multas{% endblock %}
+{% block reports_content %}
+<header class="reports-heading reports-heading--compact">
+  <div><a class="reports-back-link" href="{% url 'relatorios:claro-penalidades' %}">← Claro Multas</a><p class="reports-eyebrow">CLARO MULTAS</p><h1>Nova competência</h1><p>Selecione o período e, se já estiver disponível, envie a planilha original.</p></div>
+</header>
+<form class="competence-wizard" method="post" enctype="multipart/form-data" action="{% url 'relatorios:competence-create' %}" data-competence-wizard data-progress-upload data-period-check-url="{% url 'relatorios:competence-period-exists' %}" data-period-existing="{% if duplicate_competence %}true{% else %}false{% endif %}" data-existing-period="{{ duplicate_competence.period_label|default:'' }}" data-existing-url="{{ duplicate_competence_url }}" data-existing-archived="{% if duplicate_competence.deleted_at %}true{% else %}false{% endif %}">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="reports-form-errors" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+  {% if duplicate_competence %}<div class="wizard-period-conflict" role="status" data-period-conflict-server><strong>Já existe uma competência Claro Multas para {{ duplicate_competence.period_label }}.</strong>{% if duplicate_competence_url %}<a href="{{ duplicate_competence_url }}">Abrir competência existente <span aria-hidden="true">→</span></a>{% elif duplicate_competence.deleted_at %}<span>A competência está arquivada; solicite acesso a um Administrador do Sistema.</span>{% endif %}</div>{% endif %}
+  <ol class="wizard-steps" aria-label="Etapas da criação">
+    <li class="is-current" data-step-indicator="1"><span>1</span><strong>Competência e arquivo</strong></li>
+    <li data-step-indicator="2"><span>2</span><strong>Conferência</strong></li>
+  </ol>
+  <section class="wizard-panel" data-step-panel="1" aria-labelledby="wizard-step-one">
+    <div class="wizard-panel__heading"><span>ETAPA 01</span><h2 id="wizard-step-one" tabindex="-1">Informe o período</h2><p>Uma competência identifica o tipo de relatório e seu mês de referência.</p></div>
+    <div class="wizard-fields">
+      <div class="wizard-field"><label for="{{ form.competence_month.id_for_label }}">{{ form.competence_month.label }}</label>{{ form.competence_month }}{% if not duplicate_competence %}{{ form.competence_month.errors }}{% endif %}</div>
+      <div class="wizard-field"><label for="{{ form.competence_year.id_for_label }}">{{ form.competence_year.label }}</label>{{ form.competence_year }}{{ form.competence_year.errors }}</div>
+    </div>
+    <div class="wizard-period-availability" data-period-availability role="status" aria-live="polite" hidden><span data-period-message></span><a data-period-link hidden>Abrir competência existente <span aria-hidden="true">→</span></a></div>
+    <div class="wizard-field wizard-file-field"><span class="wizard-field__label">{{ form.original_file.label }} <small>opcional</small></span>
+      <label class="wizard-dropzone" data-file-dropzone for="{{ form.original_file.id_for_label }}">{{ form.original_file }}<span class="wizard-dropzone__icon" aria-hidden="true">↑</span><strong data-file-name>Escolha ou arraste uma planilha</strong><small data-file-meta>Excel .xls ou .xlsx · até {{ max_file_size_mb }} MB</small></label>
+      <p id="report-file-help" class="wizard-file-note">O arquivo será validado e armazenado em área privada do sistema. O Original não poderá ser substituído.</p>
+      {{ form.original_file.errors }}<p class="wizard-file-error" data-file-error role="alert" hidden></p>
+    </div>
+    <div class="wizard-notice"><span aria-hidden="true">i</span><p>Ao enviar uma planilha, o ARION identifica as abas e os cabeçalhos e abre a etapa de mapeamento e prévia real antes de gravar as linhas.</p></div>
+    <div class="wizard-actions"><a class="reports-button" href="{% url 'relatorios:claro-penalidades' %}">Cancelar</a><button class="reports-button reports-button--primary" type="button" data-step-next="2">Conferir <span aria-hidden="true">→</span></button></div>
+  </section>
+  <section class="wizard-panel" data-step-panel="2" aria-labelledby="wizard-step-two" hidden>
+    <div class="wizard-panel__heading"><span>ETAPA 02</span><h2 id="wizard-step-two" tabindex="-1">Revise os dados da competência</h2><p>O arquivo será validado no servidor antes de qualquer linha ser importada.</p></div>
+    <dl class="wizard-review"><div><dt>Relatório</dt><dd>Claro Multas</dd></div><div><dt>Competência</dt><dd data-review-period>Selecione mês e ano</dd></div><div><dt>Arquivo selecionado</dt><dd data-review-file>Nenhum arquivo</dd></div><div><dt>Estado inicial</dt><dd><span class="report-status report-status--draft">Rascunho</span></dd></div></dl>
+    <div class="wizard-submit-status wizard-submit-status--progress" data-submit-status role="status" aria-live="polite" hidden>
+      <span class="loading-spinner" aria-hidden="true"></span><div class="wizard-progress-copy"><strong data-progress-title>Validando planilha…</strong><span data-progress-stage>Preparando envio</span><div class="wizard-progress-track" role="progressbar" aria-label="Etapas estimadas do processamento; não indica percentual exato de leitura" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span data-progress-bar></span></div><small>As etapas indicam o andamento geral; não representam percentual exato de leitura da planilha.</small><span class="wizard-progress-filename" data-progress-filename></span><span class="wizard-progress-error" data-progress-error role="alert" hidden></span><button type="button" class="reports-button wizard-retry-button" data-upload-retry hidden>Tentar novamente</button></div>
+    </div>
+    <div class="wizard-actions"><button class="reports-button" type="button" data-step-back="1">← Voltar</button><button class="reports-button reports-button--primary" type="submit" data-submit-import>Criar competência</button></div>
+  </section>
+</form>
+{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% arion_js 'js/relatorios/competence-wizard.js' %}" defer></script>{% endblock %}

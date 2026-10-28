@@ -281,3 +281,10 @@
     wrapper.append(pre);
   });
 })();
+
+
+  document.querySelector("[data-release-picker]")?.addEventListener("change", (event) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("version", event.currentTarget.value);
+    window.location.assign(url);
+  });

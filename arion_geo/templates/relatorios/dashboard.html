@@ -1,0 +1,33 @@
+{% extends "relatorios/base.html" %}
+{% block reports_title %}Visão geral{% endblock %}
+{% block reports_content %}
+<header class="reports-heading">
+  <div><p class="reports-eyebrow">CENTRAL DE RELATÓRIOS</p><h1>Visão geral</h1><p>Acompanhe relatórios e competências operacionais.</p></div>
+</header>
+<section class="reports-kpis" aria-label="Resumo das competências">
+  {% if counts.total %}
+  <article class="reports-kpi"><span>Competências cadastradas</span><strong>{{ counts.total }}</strong><small>Claro Multas</small></article>
+  <article class="reports-kpi"><span>Em tratamento</span><strong>{% if counts.in_treatment is None %}—{% else %}{{ counts.in_treatment }}{% endif %}</strong><small>Tratamento ou revisão</small></article>
+  <article class="reports-kpi"><span>Finalizadas</span><strong>{% if counts.finalized is None %}—{% else %}{{ counts.finalized }}{% endif %}</strong><small>Competências concluídas</small></article>
+  {% else %}
+  <article class="reports-kpi reports-kpi--empty"><span>Indicadores operacionais</span><strong>—</strong><small>Disponíveis quando houver dados reais</small></article>
+  <article class="reports-kpi reports-kpi--empty"><span>Em tratamento</span><strong>—</strong><small>Sem competências cadastradas</small></article>
+  <article class="reports-kpi reports-kpi--empty"><span>Finalizadas</span><strong>—</strong><small>Sem competências cadastradas</small></article>
+  {% endif %}
+</section>
+<section class="reports-section">
+  <div class="reports-section__heading"><div><p class="reports-eyebrow">CATÁLOGO</p><h2>Relatórios disponíveis</h2></div></div>
+  <a class="report-module" href="{% url 'relatorios:claro-penalidades' %}">
+    <span class="report-module__icon" aria-hidden="true">▤</span><span class="report-module__copy"><strong>Claro Multas</strong><small>Organize competências mensais, arquivos originais e etapas de tratamento.</small></span><span class="report-module__meta">Disponível</span><span class="report-module__arrow" aria-hidden="true">→</span>
+  </a>
+</section>
+<div class="reports-dashboard-grid">
+  <section class="reports-panel"><div class="reports-panel__heading"><div><p class="reports-eyebrow">ATIVIDADE</p><h2>Competências recentes</h2></div><a href="{% url 'relatorios:claro-penalidades' %}">Ver todas <span aria-hidden="true">→</span></a></div>
+    {% if recent_competencies %}<div class="reports-recent-list">{% for competence in recent_competencies %}<a href="{% url 'relatorios:workspace' competence.pk %}" class="reports-recent-item"><span><strong>Claro Multas</strong><small>{{ competence.period_label }}{% if competence.created_by %} · {{ competence.created_by.get_full_name|default:competence.created_by.username }}{% endif %}</small></span><span class="report-status report-status--{{ competence.status|lower }}">{{ competence.get_status_display }}</span></a>{% endfor %}</div>
+    {% else %}<div class="reports-empty-inline"><strong>Nenhuma competência criada</strong><span>Cadastre a primeira competência em Claro Multas para iniciar o acompanhamento.</span><a href="{% url 'relatorios:claro-penalidades' %}">Abrir Claro Multas <span aria-hidden="true">→</span></a></div>{% endif %}
+  </section>
+  <section class="reports-panel"><div class="reports-panel__heading"><div><p class="reports-eyebrow">HISTÓRICO</p><h2>Atividade recente</h2></div></div>
+    {% if report_events %}<div class="reports-recent-list">{% for event in report_events %}<div class="reports-recent-item"><span><strong>{{ event.description|default:event.action }}</strong><small>{% if event.user %}{{ event.user.get_full_name|default:event.user.username }} · {% endif %}{{ event.timestamp|date:"d/m/Y H:i" }}</small></span></div>{% endfor %}</div>{% else %}<div class="reports-empty-inline"><strong>Sem atividade registrada</strong><span>Eventos reais do módulo aparecerão aqui.</span></div>{% endif %}
+  </section>
+</div>
+{% endblock %}

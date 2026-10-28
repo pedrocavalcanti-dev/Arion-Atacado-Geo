@@ -17,7 +17,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
-from .access_control import ALL_ACCESS_PERMISSIONS, ADMIN_PERMISSIONS, GROUP_SYSTEM_ADMIN, PERMISSION_LABELS, is_system_admin
+from .access_control import ADMIN_PERMISSIONS, GROUP_SYSTEM_ADMIN, PERMISSION_LABELS, is_system_admin, managed_permissions
 from .admin_forms import AccessGroupForm, GroupDataScopeForm, UserCreateForm, UserUpdateForm
 from .data_scope import DataScopeService
 from .forms import AccountForm
@@ -201,7 +201,8 @@ def group_edit(request, pk=None):
     group = get_object_or_404(Group, pk=pk) if pk else None
     form = AccessGroupForm(request.POST or None, instance=group)
     if request.method == "POST" and form.is_valid():
-        permissions_before = sorted(group.permissions.filter(content_type__app_label="configuracoes", codename__in=ALL_ACCESS_PERMISSIONS).values_list("codename", flat=True)) if group else []
+        managed_ids = managed_permissions().values_list("pk", flat=True)
+        permissions_before = sorted(group.permissions.filter(pk__in=managed_ids).values_list("content_type__app_label", "codename")) if group else []
         selected = set(form.cleaned_data["permissions"].values_list("codename", flat=True))
         if group and len(_active_system_admins()) <= 1 and group.name == GROUP_SYSTEM_ADMIN and not set(ADMIN_PERMISSIONS).issubset(selected):
             form.add_error(None, "Mantenha as permissões administrativas do último perfil de sistema ativo.")
@@ -209,7 +210,7 @@ def group_edit(request, pk=None):
             with transaction.atomic():
                 saved = form.save()
                 GroupDataScope.objects.get_or_create(group=saved, defaults={"mode": GroupDataScope.Mode.CUSTOM})
-            permissions_after = sorted(saved.permissions.filter(content_type__app_label="configuracoes", codename__in=ALL_ACCESS_PERMISSIONS).values_list("codename", flat=True))
+            permissions_after = sorted(saved.permissions.filter(pk__in=managed_permissions().values_list("pk", flat=True)).values_list("content_type__app_label", "codename"))
             if group and permissions_before != permissions_after:
                 AuditService.record(request=request, category="ADMINISTRATION", action="PERMISSIONS_CHANGED", description="Permissões do grupo alteradas", obj=saved, metadata={"group": saved.name, "permissions_before": permissions_before, "permissions_after": permissions_after})
             messages.success(request, "Perfil de acesso salvo.")
@@ -424,8 +425,14 @@ def documentation_search(request):
 @login_required
 def documentation_releases(request):
     catalog = release_catalog()
+    selected_version = request.GET.get("version", "").strip()
+    selected_release = next(
+        (release for release in catalog["releases"] if release["version"] == selected_version),
+        catalog["current_release"],
+    )
     return render(request, "documentacao/releases.html", {
         **catalog,
+        "selected_release": selected_release,
         "release_only": True,
         "active_section": "releases",
     })

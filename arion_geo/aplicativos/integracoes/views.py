@@ -14,7 +14,7 @@ from aplicativos.auditoria.services import AuditService
 from aplicativos.configuracoes.access_control import is_system_admin
 
 from .clients.cmdb import CMDBClient
-from .clients.otrs import OTRSReadOnlyClient
+from .clients.factory import configured_otrs_client
 from .forms import ArionDatabaseCandidateForm, CMDBConfigurationForm, CMDBGetForm, CMDBSearchForm, OTRSConfigurationForm
 from .models import (
     CMDBLinkMirror, CMDBOperatorMirror, Integration, IntegrationLease,
@@ -23,7 +23,6 @@ from .models import (
 from .services.errors import (
     IntegrationError,
     IntegrationNotConfigured,
-    OTRSCredentialDecryptionError,
     OTRSCredentialMissingError,
 )
 from .services.secrets import get_secret_protector
@@ -81,17 +80,7 @@ def _cmdb_client(integration):
 
 
 def _otrs_client(integration):
-    if not integration.username or not integration.secret_ciphertext:
-        raise OTRSCredentialMissingError()
-    try:
-        password = get_secret_protector().unprotect(integration.secret_ciphertext)
-    except Exception:
-        raise OTRSCredentialDecryptionError() from None
-    config = integration.config or {}
-    return OTRSReadOnlyClient(
-        host=config.get("host", ""), port=config.get("port", 3306), database=config.get("database", ""),
-        username=integration.username, password=password, timeout=config.get("timeout", 10),
-    )
+    return configured_otrs_client(integration)
 
 
 def _request_id(request):

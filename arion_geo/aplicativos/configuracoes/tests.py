@@ -1,4 +1,6 @@
 import json
+from datetime import date
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -412,3 +414,39 @@ class DataScopeIntegrationTests(TestCase):
         self.user.is_superuser = True
         self.user.save()
         self.assertEqual(self.client.get(reverse("base_links:index")).context["page_obj"].paginator.count, 3)
+
+
+class DocumentationReleaseNavigationTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="release-reader", password="test-password")
+        self.client.force_login(self.user)
+        current = {
+            "version": "2.0.0", "released_at": "2026-11-01", "released_on": date(2026, 11, 1),
+            "title": "Release atual", "summary": "Conteúdo atual da release.",
+            "sections": [{"category": "Novidades", "items": ["Item atual"]}],
+        }
+        older = {
+            "version": "1.1.0", "released_at": "2026-10-28", "released_on": date(2026, 10, 28),
+            "title": "Release anterior", "summary": "Conteúdo anterior da release.",
+            "sections": [{"category": "Correções", "items": ["Item anterior"]}],
+        }
+        self.catalog = {"version": "2.0.0", "current_release": current, "releases": [current, older]}
+
+    @patch("aplicativos.configuracoes.views.release_catalog")
+    def test_release_page_navigates_selected_version_and_returns_to_arion(self, release_catalog):
+        release_catalog.return_value = self.catalog
+        url = reverse("configuracoes:documentation-releases")
+        current = self.client.get(url)
+        older = self.client.get(url, {"version": "1.1.0"})
+
+        self.assertEqual(current.status_code, 200)
+        self.assertContains(current, "Conteúdo atual da release.")
+        self.assertContains(current, "data-release-picker")
+        self.assertContains(current, "v2.0.0")
+        self.assertContains(current, "v1.1.0")
+        self.assertContains(current, "Voltar ao ARION")
+        self.assertContains(current, f'{url}?version=1.1.0')
+        self.assertEqual(older.status_code, 200)
+        self.assertContains(older, "Conteúdo anterior da release.")
+        self.assertNotContains(older, "Conteúdo atual da release.")
+        self.assertContains(older, 'value="1.1.0" selected')

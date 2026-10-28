@@ -1,0 +1,66 @@
+{% extends "relatorios/base.html" %}
+{% block reports_title %}Conferir importação · {{ competence.period_label }}{% endblock %}
+{% block reports_content %}
+<header class="reports-heading reports-heading--compact">
+  <div><a class="reports-back-link" href="{% url 'relatorios:workspace' competence.pk %}">← Workspace da competência</a><p class="reports-eyebrow">CLARO MULTAS · IMPORTAÇÃO</p><h1>Conferir planilha</h1><p>Revise a aba, o cabeçalho, o mapeamento e os dados antes de confirmar.</p></div>
+</header>
+<section class="import-summary" aria-label="Resumo do arquivo">
+  <div><small>ARQUIVO ORIGINAL</small><strong>{{ competence.original_filename }}</strong><span>{{ competence.original_file_size|filesizeformat }} · {{ competence.original_file_extension|upper }} · SHA-256 registrado</span></div>
+  <div><small>COMPETÊNCIA</small><strong>{{ competence.period_label }}</strong><span>O arquivo Original permanece protegido contra substituição.</span></div>
+</section>
+
+{% if form.non_field_errors %}<div class="reports-form-errors" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+<section class="import-section">
+  <div class="import-section__heading"><div><p class="reports-eyebrow">ETAPA 01</p><h2>Estrutura do arquivo</h2><p>Encontramos {{ inspection.sheets|length }} aba{{ inspection.sheets|length|pluralize:"s" }}. A detecção considera cabeçalhos, não o nome do mês.</p></div></div>
+  <div class="workbook-sheet-list" aria-label="Abas encontradas">
+    {% for sheet in inspection.sheets %}
+    <div class="workbook-sheet{% if sheet.name == inspection.selected_sheet %} is-selected{% endif %}"><strong>{{ sheet.name }}</strong><span>{{ sheet.row_count }} linhas · {{ sheet.column_count }} colunas</span>{% if sheet.candidate %}<em>Compatível{% if sheet.header_row %} · cabeçalho na linha {{ sheet.header_row }}{% endif %}</em>{% else %}<small>{{ sheet.match_count }} campos reconhecidos</small>{% endif %}</div>
+    {% endfor %}
+  </div>
+  <form class="import-structure-form" method="get" action="{% url 'relatorios:import-review' competence.pk %}">
+    <label>Aba para inspeção<select class="reports-select" name="sheet_name" required><option value=""{% if not inspection.selected_sheet %} selected{% endif %}>Selecione uma aba</option>{% for sheet in inspection.sheets %}<option value="{{ sheet.name }}"{% if sheet.name == inspection.selected_sheet %} selected{% endif %}>{{ sheet.name }}{% if sheet.candidate %} · compatível{% endif %}</option>{% endfor %}</select></label>
+    <label>Linha do cabeçalho<select class="reports-select" name="header_row">{% for row_number in header_row_choices %}<option value="{{ row_number }}"{% if row_number == inspection.header_row %} selected{% endif %}>Linha {{ row_number }}{% if row_number == selected_sheet_info.header_row %} · detectada{% endif %}</option>{% endfor %}</select></label>
+    <button class="reports-button" type="submit">Atualizar prévia</button>
+  </form>
+  {% if inspection.warning %}<p class="import-notice{% if not inspection.header_detected %} import-notice--warning{% endif %}" role="status">{{ inspection.warning }}</p>{% endif %}
+</section>
+
+{% if inspection.selected_sheet %}
+<form class="import-confirm-form" method="post" action="{% url 'relatorios:import-review' competence.pk %}" data-import-form>
+  {% csrf_token %}
+  <input type="hidden" name="sheet_name" value="{{ inspection.selected_sheet }}">
+  <input type="hidden" name="header_row" value="{{ inspection.header_row }}">
+  {% if form.sheet_name.errors %}<div class="reports-form-errors" role="alert">{{ form.sheet_name.errors }}</div>{% endif %}
+  {% if form.header_row.errors %}<div class="reports-form-errors" role="alert">{{ form.header_row.errors }}</div>{% endif %}
+  <section class="import-section">
+    <div class="import-section__heading"><div><p class="reports-eyebrow">ETAPA 02</p><h2>Mapeamento de colunas</h2><p>Os cabeçalhos e valores Originais continuam como estão no arquivo. Escolha o campo interno equivalente.</p></div></div>
+    {% if form.errors and not form.non_field_errors %}<p class="import-notice import-notice--warning" role="alert">Revise os campos destacados. REC e Designação são obrigatórios e cada campo interno pode ser usado uma vez.</p>{% endif %}
+    {% if inspection.headers %}
+    <div class="mapping-list">
+      {% for field in form %}
+        {% if field.name != "sheet_name" and field.name != "header_row" %}
+        <label class="mapping-row" for="{{ field.id_for_label }}"><span class="mapping-row__source"><small>COLUNA DO ARQUIVO</small><strong>{{ field.label }}</strong></span><span class="mapping-row__arrow" aria-hidden="true">→</span><span class="mapping-row__target"><small>CAMPO INTERNO</small>{{ field }}{% if field.errors %}<span class="mapping-row__error">{{ field.errors }}</span>{% endif %}</span></label>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% else %}<div class="reports-empty-state reports-empty-state--short"><h2>Não foi possível ler as colunas desta aba</h2><p>Selecione outra aba ou linha do cabeçalho para continuar.</p></div>{% endif %}
+  </section>
+
+  <section class="import-section">
+    <div class="import-section__heading import-section__heading--split"><div><p class="reports-eyebrow">ETAPA 03</p><h2>Prévia dos dados Originais</h2><p>Exibindo {{ inspection.preview_rows|length }} de {{ inspection.source_row_count }} registros encontrados. A grade completa será paginada no workspace.</p></div><span class="report-status">Cabeçalho na linha {{ inspection.header_row }}</span></div>
+    {% if inspection.preview_rows %}
+    <div class="source-grid-wrap" role="region" aria-label="Prévia real das linhas do arquivo" tabindex="0">
+      <table class="source-grid"><thead><tr><th scope="col">Linha</th>{% for header in inspection.headers %}<th scope="col">{{ header|default:"Coluna sem título" }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in inspection.preview_rows %}<tr><th scope="row">{{ row.row_number }}</th>{% for cell in row.preview_cells %}<td{% if cell.formula %} title="Fórmula original: {{ cell.formula }}"{% endif %}>{{ cell.display|default:"—" }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}<div class="reports-empty-state reports-empty-state--short"><h2>Nenhum registro abaixo do cabeçalho</h2><p>Escolha outra aba ou ajuste a linha do cabeçalho.</p></div>{% endif %}
+  </section>
+  <p class="wizard-submit-status" data-import-status role="status" aria-live="polite" hidden><span class="loading-spinner" aria-hidden="true"></span><span data-import-status-copy>Processando planilha…</span></p>
+  <div class="import-confirm-actions"><a class="reports-button" href="{% url 'relatorios:workspace' competence.pk %}">Voltar ao workspace</a><button class="reports-button" type="submit" name="intent" value="preview">Atualizar prévia</button><button class="reports-button reports-button--primary" type="submit" name="intent" value="confirm"{% if not inspection.preview_rows %} disabled{% endif %}>Confirmar importação</button></div>
+</form>
+{% else %}
+<div class="reports-empty-state reports-empty-state--short"><h2>Selecione uma aba para continuar</h2><p>Não encontramos uma única aba claramente compatível. Escolha uma para conferir a estrutura e mapear os campos.</p></div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}{{ block.super }}<script src="{% arion_js 'js/relatorios/competence-wizard.js' %}" defer></script>{% endblock %}

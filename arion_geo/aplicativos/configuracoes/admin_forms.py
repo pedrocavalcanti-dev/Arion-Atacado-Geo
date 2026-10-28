@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import ValidationError
 
 from aplicativos.base_links.models import Operadora, Projeto
-from .access_control import ALL_ACCESS_PERMISSIONS, PERMISSION_LABELS
+from .access_control import PERMISSION_LABELS, managed_permissions
 from .models import GroupDataScope
 
 
@@ -81,9 +81,7 @@ class AccessGroupForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.managed_permissions = Permission.objects.filter(
-            content_type__app_label="configuracoes", codename__in=ALL_ACCESS_PERMISSIONS,
-        ).order_by("codename")
+        self.managed_permissions = managed_permissions().select_related("content_type").order_by("content_type__app_label", "codename")
         self.fields["permissions"].queryset = self.managed_permissions
         if self.instance.pk:
             self.fields["permissions"].initial = self.instance.permissions.filter(pk__in=self.managed_permissions.values("pk"))

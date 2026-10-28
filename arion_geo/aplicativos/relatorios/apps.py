@@ -1,7 +1,8 @@
-﻿from django.apps import AppConfig
+from django.apps import AppConfig
 
 
 class RelatoriosConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'aplicativos.relatorios'
-
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "aplicativos.relatorios"
+    label = "relatorios"
+    verbose_name = "Relatórios"

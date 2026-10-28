@@ -1,0 +1,33 @@
+{% extends "relatorios/base.html" %}
+{% block reports_title %}Claro Multas{% endblock %}
+{% block reports_content %}
+<header class="reports-heading reports-heading--split">
+  <div><p class="reports-eyebrow">RELATÓRIO OPERACIONAL · CLARO</p><h1>Claro Multas</h1><p>Competências mensais e arquivos recebidos para tratamento.</p></div>
+  <a class="reports-button reports-button--primary" href="{% url 'relatorios:competence-create' %}"><span aria-hidden="true">+</span> Nova competência</a>
+</header>
+<div class="reports-list-summary"><span><strong>{{ counts.total }}</strong> {% if counts.total == 1 %}competência cadastrada{% else %}competências cadastradas{% endif %}</span><span>As informações exibidas vêm dos registros salvos no ARION.</span></div>
+<form class="reports-filters" method="get" aria-label="Filtrar competências">
+  <label class="reports-search"><span>Buscar</span><input type="search" name="q" value="{{ query }}" placeholder="Arquivo ou competência"></label>
+  <label><span>Ano</span><select name="ano" class="reports-select"><option value="">Todos os anos</option>{% for year in years %}<option value="{{ year }}"{% if selected_year == year|stringformat:"s" %} selected{% endif %}>{{ year }}</option>{% endfor %}</select></label>
+  <label><span>Status</span><select name="status" class="reports-select"><option value="">Todos os status</option>{% for value, label in status_choices %}<option value="{{ value }}"{% if selected_status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <button class="reports-button" type="submit">Filtrar</button>
+</form>
+<section class="reports-table-wrap" aria-label="Competências Claro Multas">
+  {% if competencies %}
+  <table class="reports-table">
+    <thead><tr><th>Competência</th><th>Arquivo original</th><th>Status</th><th>Criada por</th><th>Atualizada</th><th><span class="visually-hidden">Abrir</span></th></tr></thead>
+    <tbody>{% for competence in competencies %}<tr>
+      <td data-label="Competência"><strong>{{ competence.period_label }}</strong><small>Claro Multas</small></td>
+      <td data-label="Arquivo original">{% if competence.original_filename %}{{ competence.original_filename }}{% else %}<span class="reports-muted">Não anexado</span>{% endif %}</td>
+      <td data-label="Status"><span class="report-status report-status--{{ competence.status|lower }}">{{ competence.get_status_display }}</span></td>
+      <td data-label="Criada por">{% if competence.created_by %}{{ competence.created_by.get_full_name|default:competence.created_by.username }}{% else %}<span class="reports-muted">—</span>{% endif %}</td>
+      <td data-label="Atualizada">{{ competence.updated_at|date:"d/m/Y H:i" }}</td>
+      <td class="reports-table__action"><a href="{% url 'relatorios:workspace' competence.pk %}" aria-label="Abrir competência {{ competence.period_label }}">Abrir <span aria-hidden="true">→</span></a></td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% else %}
+  <div class="reports-empty-state"><span class="reports-empty-state__icon" aria-hidden="true">▤</span><h2>{% if query or selected_year or selected_status %}Nenhuma competência encontrada{% else %}Nenhuma competência cadastrada{% endif %}</h2><p>{% if query or selected_year or selected_status %}Altere os filtros ou limpe a busca para ver outros registros.{% else %}Crie uma competência para organizar o período mensal. O arquivo poderá ser anexado em uma etapa futura.{% endif %}</p>{% if query or selected_year or selected_status %}<a class="reports-button" href="{% url 'relatorios:claro-penalidades' %}">Limpar filtros</a>{% else %}<a class="reports-button reports-button--primary" href="{% url 'relatorios:competence-create' %}">+ Nova competência</a>{% endif %}</div>
+  {% endif %}
+</section>
+{% if competencies.has_other_pages %}<nav class="reports-pagination" aria-label="Paginação"><span>Página {{ competencies.number }} de {{ competencies.paginator.num_pages }}</span>{% if competencies.has_previous %}<a href="?page={{ competencies.previous_page_number }}&q={{ query|urlencode }}&ano={{ selected_year }}&status={{ selected_status }}">Anterior</a>{% endif %}{% if competencies.has_next %}<a href="?page={{ competencies.next_page_number }}&q={{ query|urlencode }}&ano={{ selected_year }}&status={{ selected_status }}">Próxima</a>{% endif %}</nav>{% endif %}
+{% endblock %}

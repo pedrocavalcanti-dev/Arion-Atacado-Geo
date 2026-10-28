@@ -76,12 +76,15 @@ git pull --ff-only origin main
 npm ci
 npm run build:production
 .\.venv\Scripts\python.exe .\arion_geo\gerenciar.py collectstatic --noinput
+.\.venv\Scripts\python.exe .\arion_geo\gerenciar.py migrate --plan
+# Após backup confirmado e autorização operacional para o banco de produção:
+.\.venv\Scripts\python.exe .\arion_geo\gerenciar.py migrate --noinput
 .\.venv\Scripts\python.exe .\arion_geo\gerenciar.py check
 .\deploy\windows\restart-arion.ps1 -Role web
 .\deploy\windows\status-arion.ps1
 ```
 
-Esta release não exige migration nem reinício do processo Worker de integração. O serviço Web deve ser reiniciado para carregar o código Django novo; o Service Worker do navegador é atualizado pelo fluxo PWA.
+Esta estabilização adiciona a migration `0011_alter_penaltycompetence_options_and_more`, aplicada somente ao SQLite local de desenvolvimento. Ela adiciona os campos de arquivamento lógico; não foi aplicada em produção nesta tarefa. Antes de publicar este código, confira o plano de migrations e aplique a migration apenas após backup do banco alvo e autorização operacional. O Worker de integração não precisa ser reiniciado; o serviço Web deve ser reiniciado para carregar o código Django novo, e o Service Worker do navegador é atualizado pelo fluxo PWA.
 
 ## Cloudflare Tunnel e proteção perimetral
 
