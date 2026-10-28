@@ -21,7 +21,7 @@ Um chamado relacionado a vários ConfigItems do mesmo provedor conta uma vez par
 - **Links afetados:** links distintos com pelo menos um chamado válido no período.
 - **Reincidência:** um link reincide quando possui pelo menos dois chamados válidos distintos no período. A taxa é `links reincidentes / links afetados`; sem links afetados, é zero.
 - **Backlog atual:** chamados distintos em `OPEN`, `PENDING` ou `SCHEDULED`.
-- **ARION >24h:** chamados abertos há mais de 24 horas desde `source_created_at` e chamados `RESOLVED`/`CLOSED` do período cuja duração `terminal_state_at - source_created_at` supera 24 horas. `resolved_at` não substitui o timestamp terminal.
+- **ARION >24h:** chamados abertos há mais de 24 horas desde `source_created_at` e chamados `RESOLVED`/`CLOSED` da coorte criada no período cuja duração operacional supera 24 horas. Para os terminais, calcula `resolved_at - source_created_at`; usa `terminal_state_at` apenas quando `resolved_at` falta. Tickets sem nenhuma das duas datas não recebem duração inventada e ficam fora dos registros avaliáveis. Volume e coorte continuam definidos por `source_created_at`.
 - **Taxa de aging:** chamados acima de 24h divididos pelos chamados avaliáveis com timestamps suficientes. Registros sem timestamps necessários ficam fora do denominador.
 
 O limite de 24 horas é operacional do ARION e não representa necessariamente o SLA contratual. O módulo não estima disponibilidade, causa técnica, penalidade nem responsabilidade do provedor.
@@ -77,6 +77,12 @@ O drawer inclui resumo, barra proporcional, motivos com contagens de procedentes
 PDF e XLSX usam a análise e os filtros atuais. Ambos apresentam o Índice ARION V2 e seus cinco pontos componentes. O XLSX mantém as abas **Resumo**, **Ranking**, **Providers**, **Links** e **Tickets** (o cabeçalho em português é “Chamados”). Exportação, detalhe e navegação individual para Base respeitam `LinkQueryService.base(user)`; não há acesso fora do escopo autorizado.
 
 O link individual abre a Base por `config_item_id` exato, resolvido dentro do queryset já limitado por Data Scope. Dimensões herdadas/contraditórias não ampliam o acesso; um ConfigItem fora do escopo não retorna resultado. A ação de lista mantém o filtro do provedor para mostrar os links acessíveis.
+
+## Semântica de Tickets e Links
+
+Na janela histórica, `Tickets válidos` conta IDs distintos de tickets NOC nos estados operacionais válidos, pela data de criação. `Links afetados` conta Links distintos com pelo menos um desses Tickets no recorte. Tickets sem relação com Link não inventam impacto na base; um ticket associado a vários Links pode afetar cada Link, sem multiplicar o total nacional de tickets. As linhas de Provedor deduplicam Tickets entre os Links daquele Provedor; um Ticket relacionado a provedores diferentes pode aparecer uma vez em cada linha, por isso a soma das linhas pode exceder o total nacional.
+
+`Links reincidentes` conta Links distintos com ao menos dois Tickets distintos na janela. `Backlog atual` é um snapshot separado, limitado a `OPEN`, `PENDING` e `SCHEDULED`; no ranking por provedor considera somente Tickets relacionados aos Links atuais daquele provedor. Tickets e Links afetados são conceitos diferentes, e reincidência não equivale a impacto atual.
 
 ## Índice ARION V1 · histórico
 

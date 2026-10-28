@@ -8,7 +8,7 @@ O Dashboard combina os Links atuais do mirror CMDB e os tickets presentes na fil
 
 - `Tickets no período`, `Links reincidentes` e a evolução mensal usam `source_created_at`.
 - Reincidência é um Link associado a pelo menos dois Tickets distintos no intervalo; a relação N:N não duplica o total de Tickets.
-- `Chamados abertos agora` e `Situacao atual dos chamados` sao snapshots do espelho atual, independentes do periodo. Em atendimento, Pendentes e Agendados compoem o total aberto e sao exibidos separadamente; Resolvidos, Encerrados, Cancelados e nao classificados ficam fora do backlog.
+- `Chamados abertos agora` e `Situação atual dos chamados` são snapshots do espelho atual, independentes do período. Em atendimento, Pendentes e Agendados compõem o total aberto e são exibidos separadamente; Resolvidos, Encerrados, Cancelados e não classificados ficam fora do backlog. Os totais Resolvidos/Encerrados refletem `business_status` atual; `CLOSED` continua como estado oficial do OTRS, não como substituto da data de resolução operacional.
 - A situacao mostra Em atendimento, Pendentes, Agendados, Resolvidos, Encerrados, Cancelados e, somente quando houver, nao classificados.
 - O gráfico compara tickets criados no mês com a quantidade de Links que tiveram dois ou mais tickets distintos naquele mês. Não representa histórico de backlog.
 
@@ -31,3 +31,9 @@ A rota `/dashboard/` é servida por views/analytics do app `painel` e template `
 O seletor de período altera somente as métricas por criação de ticket e reincidência da coorte; totais atuais de Links/UF/Providers e backlog continuam sendo fotografia do mirror. Provider é o nome resolvido em `CMDBOperatorMirror`, não uma classificação manual VIVO/CLARO/ALGAR. Ticket total é distinto no agregado geral; uma relação Ticket-CI múltipla pode associar o ticket a mais de um Link em análises por Link.
 
 A página não calcula SLA cumprido, não reconstrói backlog histórico e não acessa fonte remota em request. Freshness é mantida pela integração e monitorada pela Central. Consulte [OTRS](../OTRS.md), [CMDB](../CMDB.md) e [Data Scope](usuarios-grupos-escopos.md).
+
+## Tickets ativos e Links afetados
+
+Os indicadores atuais usam a fila `NOC - ATACADO`, tickets presentes no snapshot e Data Scope aplicado primeiro. `Chamados abertos agora` conta tickets distintos em `OPEN`, `PENDING` ou `SCHEDULED`, independentemente de ConfigItem. `Links afetados` conta Links CMDB locais distintos, presentes e autorizados, associados a pelo menos um desses tickets por uma relação Ticket–ConfigItem presente. Um ticket sem ConfigItem ou com ConfigItem sem Link local continua no total de tickets, mas não cria Link afetado. Um ticket relacionado a mais de um Link pode afetar cada Link; vários tickets no mesmo Link afetam apenas um.
+
+O período do Dashboard altera métricas históricas por criação, não esses snapshots atuais. Sem filtros de fila, os indicadores atuais de tickets ativos e Links afetados correspondem aos cartões da Fila operacional no mesmo escopo.

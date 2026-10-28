@@ -8,7 +8,11 @@ from django.conf import settings
 from django.db.models import Case, CharField, Count, Value, When
 
 from aplicativos.integracoes.models import OTRSTicket, OTRSTicketConfigItem, OTRSStateMapping
-from aplicativos.integracoes.services.analytics import LinkQueryService, PeriodService, TicketQueryService
+from aplicativos.integracoes.services.analytics import (
+    BUSINESS_OPEN_STATUSES, OPERATIONAL_RESOLUTION_FIELD, LinkQueryService,
+    PeriodService, TicketQueryService, count_affected_links,
+    operational_resolution_expression,
+)
 from aplicativos.integracoes.services.closing_reason import ClosingReasonCanonicalizer
 
 STATE_NAMES = {
@@ -134,8 +138,8 @@ class AnalyticsQueryService:
         "pending_tickets": "Pendentes",
         "scheduled_tickets": "Agendados",
         "resolved_tickets": "Resolvidos no per\u00edodo",
-        "closed_tickets": "Encerrados no per\u00edodo",
-        "resolved_closed_tickets": "Resolvidos + Encerrados",
+        "closed_tickets": "Tickets em CLOSED, resolvidos no per\u00edodo",
+        "resolved_closed_tickets": "Resolvidos + CLOSED",
         "canceled_tickets": "Cancelados no per\u00edodo",
         "links_affected": "Links afetados no per\u00edodo",
         "recurrences": "Links reincidentes",
@@ -205,6 +209,10 @@ class AnalyticsQueryService:
         allowed_links = LinkQueryService.base(user)
         noc_tickets = TicketQueryService.base(user, links=allowed_links).order_by()
         metric_universe = self._metric_universe(noc_tickets, metric)
+        if metric in {"resolved_tickets", "closed_tickets", "resolved_closed_tickets"}:
+            metric_universe = metric_universe.annotate(**{
+                OPERATIONAL_RESOLUTION_FIELD: operational_resolution_expression(),
+            })
         options = self._options(metric_universe, allowed_links)
         filtered = self._apply_filters(metric_universe, allowed_links, filters)
         date_field = self._metric_date_field(metric)
@@ -290,7 +298,7 @@ class AnalyticsQueryService:
             "period_status_counts": period_status_counts,
             "metric_semantics": self._metric_semantics(metric),
             "period_date_label": ("snapshot atual" if metric == "backlog"
-                                  else "data de encerramento" if metric in {"resolved_tickets", "closed_tickets", "resolved_closed_tickets"}
+                                  else "data de resolu\u00e7\u00e3o" if metric in {"resolved_tickets", "closed_tickets", "resolved_closed_tickets"}
                                   else "data de cancelamento" if metric == "canceled_tickets"
                                   else "data de cria\u00e7\u00e3o"),
             "provider_count": len(options["provider"]), "options": options,
@@ -524,8 +532,8 @@ class AnalyticsQueryService:
         date_field = cls._metric_date_field(metric)
         base_labels = {
             "tickets": "Criado entre", "open_tickets": "Criado entre", "pending_tickets": "Criado entre",
-            "scheduled_tickets": "Criado entre", "resolved_tickets": "Data de encerramento entre",
-            "closed_tickets": "Data de encerramento entre", "resolved_closed_tickets": "Data terminal entre",
+            "scheduled_tickets": "Criado entre", "resolved_tickets": "Data de resolu\u00e7\u00e3o entre",
+            "closed_tickets": "Data de resolu\u00e7\u00e3o entre", "resolved_closed_tickets": "Data de resolu\u00e7\u00e3o entre",
             "canceled_tickets": "Cancelado entre",
         }
         base_evidence = (f"{base_labels.get(metric, 'Data base entre')} {start:%d/%m/%Y} e {end:%d/%m/%Y}"
@@ -536,7 +544,11 @@ class AnalyticsQueryService:
         if metric == "canceled_tickets":
             evidence.append("M\u00e9trica espec\u00edfica de cancelamentos")
         elif metric in {"resolved_tickets", "closed_tickets", "resolved_closed_tickets"}:
-            evidence.append(f"Data terminal e estado correspondente: {status}")
+            evidence.append(f"Data de resolu\u00e7\u00e3o operacional e estado OTRS correspondente: {status}")
+            if ticket.resolved_at:
+                evidence.append("Data usada: ticketResolvido")
+            elif ticket.terminal_state_at:
+                evidence.append("Fallback usado: StateUpdate terminal, pois ticketResolvido n\u00e3o tem data")
         if ticket.business_status in cls.OPERATIONAL_VALID_STATES:
             evidence.append("Estado operacional v\u00e1lido")
         for key, value in filters.items():
@@ -573,7 +585,7 @@ class AnalyticsQueryService:
             grain_label = {"day": "di\u00e1ria", "week": "semanal", "month": "mensal"}[grain]
             values = [row["value"] for row in series]
             if len(set(values)) > 1:
-                base_label = {"source_created_at": "data de cria\u00e7\u00e3o", "terminal_state_at": "data de encerramento",
+                base_label = {"source_created_at": "data de cria\u00e7\u00e3o", OPERATIONAL_RESOLUTION_FIELD: "data de resolu\u00e7\u00e3o",
                               "canceled_at": "data de cancelamento"}.get(cls._metric_date_field(metric), "data de cria\u00e7\u00e3o")
                 specs.append({"key": "temporal", "type": "temporal_overview", "grain": grain,
                               "title": "Vis\u00e3o geral do per\u00edodo",
@@ -838,9 +850,9 @@ class AnalyticsQueryService:
             status = cls.METRIC_STATUS[metric]
             return f"Data de cria\u00e7\u00e3o no per\u00edodo; tickets atualmente no estado {status}. CANCELED e UNKNOWN ficam de fora."
         if metric == "resolved_closed_tickets":
-            return "Data terminal no per\u00edodo; estados RESOLVED e CLOSED, sem CANCELED."
+            return "Data de resolu\u00e7\u00e3o operacional no per\u00edodo (resolved_at; fallback terminal_state_at); estados RESOLVED e CLOSED, sem CANCELED."
         if metric in {"resolved_tickets", "closed_tickets"}:
-            return "Data terminal no per\u00edodo; estado atual correspondente, sem CANCELED."
+            return "Data de resolu\u00e7\u00e3o operacional no per\u00edodo (resolved_at; fallback terminal_state_at); estado OTRS atual correspondente, sem CANCELED."
         if metric == "canceled_tickets":
             return "Data de cancelamento no per\u00edodo; estado CANCELED, em m\u00e9trica espec\u00edfica."
         if metric in cls.SNAPSHOT_METRICS:
@@ -921,7 +933,7 @@ class AnalyticsQueryService:
         if metric == "canceled_tickets":
             return "canceled_at"
         if metric in {"resolved_tickets", "closed_tickets", "resolved_closed_tickets"}:
-            return "terminal_state_at"
+            return OPERATIONAL_RESOLUTION_FIELD
         return "source_created_at"
 
     @classmethod
@@ -938,7 +950,7 @@ class AnalyticsQueryService:
         if metric == "backlog":
             return filtered.filter(
                 is_present_in_queue=True,
-                business_status__in=("OPEN", "PENDING", "SCHEDULED"),
+                business_status__in=BUSINESS_OPEN_STATUSES,
             )
         rows = historical
         if metric in cls.METRIC_STATUS:
@@ -1118,7 +1130,7 @@ class DashboardAnalyticsService:
         buckets = _month_buckets(start, end)
         period_tickets = tickets.filter(source_created_at__gte=start_at, source_created_at__lt=end_at)
         current_tickets = tickets.filter(is_present_in_queue=True)
-        business_open = current_tickets.filter(is_business_open=True)
+        business_open = TicketQueryService.business_open(queryset=current_tickets)
 
         total_links = links.count()
         state_rows = list(
@@ -1152,14 +1164,7 @@ class DashboardAnalyticsService:
         pending_count = status_counts[OTRSStateMapping.BusinessStatus.PENDING]
         scheduled_count = status_counts[OTRSStateMapping.BusinessStatus.SCHEDULED]
 
-        current_relations = OTRSTicketConfigItem.objects.filter(
-            is_present_in_source=True,
-            ticket__queue_name=TicketQueryService.QUEUE_NAME,
-            ticket__is_present_in_queue=True,
-            ticket__is_business_open=True,
-            cmdb_link__in=links,
-        )
-        links_affected = current_relations.values("cmdb_link_id").distinct().count()
+        links_affected = count_affected_links(business_open, links)
 
         calls = period_tickets.count()
         recurrence_base = OTRSTicketConfigItem.objects.filter(

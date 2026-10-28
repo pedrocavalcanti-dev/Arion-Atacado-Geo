@@ -1,10 +1,25 @@
 """Shared local-only querysets for operational analytics consumers."""
 from datetime import date
 
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
+from django.db.models.functions import Coalesce
 
 from aplicativos.configuracoes.data_scope import DataScopeService
 from aplicativos.integracoes.models import CMDBLinkMirror, OTRSTicket, OTRSTicketConfigItem
+
+
+OPERATIONAL_RESOLUTION_FIELD = "operational_resolution_at"
+BUSINESS_OPEN_STATUSES = ("OPEN", "PENDING", "SCHEDULED")
+
+
+def operational_resolution_expression(prefix=""):
+    """Resolve the operational end from ticketResolvido, falling back to terminal StateUpdate."""
+    return Coalesce(F(f"{prefix}resolved_at"), F(f"{prefix}terminal_state_at"))
+
+
+def operational_resolution_at(ticket):
+    """Python equivalent of operational_resolution_expression for loaded tickets."""
+    return getattr(ticket, "resolved_at", None) or getattr(ticket, "terminal_state_at", None)
 
 
 class LinkQueryService:
@@ -32,6 +47,15 @@ class TicketQueryService:
             ticket_id=OuterRef("pk"), is_present_in_source=True, cmdb_link__in=allowed,
         )
         return tickets.annotate(_has_allowed_link=Exists(related)).filter(_has_allowed_link=True)
+
+    @classmethod
+    def business_open(cls, user=None, *, links=None, queryset=None):
+        tickets = queryset if queryset is not None else cls.base(user, links=links)
+        return tickets.filter(
+            queue_name=cls.QUEUE_NAME,
+            is_present_in_queue=True,
+            business_status__in=BUSINESS_OPEN_STATUSES,
+        )
 
 
 class PeriodService:
@@ -69,16 +93,30 @@ class PeriodService:
 
 def ticket_counts_by_link(user=None):
     links = LinkQueryService.base(user)
+    open_tickets = TicketQueryService.business_open(user, links=links)
     relation = OTRSTicketConfigItem.objects.filter(
         cmdb_link_id=OuterRef("pk"), is_present_in_source=True,
-        ticket__queue_name=TicketQueryService.QUEUE_NAME,
-        ticket__is_present_in_queue=True, ticket__is_business_open=True,
+        cmdb_link__is_present_in_source=True, ticket_id__in=open_tickets.values("pk"),
     )
     return links.annotate(has_open_ticket=Exists(relation)).annotate(
         open_ticket_count=Count("ticket_relations__ticket_id", filter=Q(
             ticket_relations__is_present_in_source=True,
-            ticket_relations__ticket__queue_name=TicketQueryService.QUEUE_NAME,
-            ticket_relations__ticket__is_present_in_queue=True,
-            ticket_relations__ticket__is_business_open=True,
+            ticket_relations__cmdb_link__is_present_in_source=True,
+            ticket_relations__ticket_id__in=open_tickets.values("pk"),
         ), distinct=True),
     )
+
+
+def ticket_link_relations(tickets, links):
+    return OTRSTicketConfigItem.objects.filter(
+        ticket_id__in=tickets.order_by().values("pk"),
+        is_present_in_source=True,
+        cmdb_link__is_present_in_source=True,
+        cmdb_link__in=links,
+    )
+
+
+def count_affected_links(tickets, links):
+    return ticket_link_relations(tickets, links).aggregate(
+        total=Count("cmdb_link_id", distinct=True),
+    )["total"] or 0

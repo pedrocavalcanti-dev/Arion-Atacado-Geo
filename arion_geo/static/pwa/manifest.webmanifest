@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "ARION ATACADO GEO",
+  "short_name": "ARION",
+  "description": "Plataforma de inteligência operacional do NOC Atacado.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone"],
+  "orientation": "any",
+  "background_color": "#090a0a",
+  "theme_color": "#090a0a",
+  "icons": [
+    { "src": "/static/pwa/arion-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/pwa/arion-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/pwa/arion-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

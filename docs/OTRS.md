@@ -25,3 +25,8 @@ O painel não deve expor senha, ciphertext DPAPI, `DATABASE_URL`, artigos, anexo
 Configure host, schema, usuário read-only e segredo na Central de Integrações. Testes de conexão e exploração de schema são ações administrativas auditadas. Acompanhe a última execução FAST/FULL, cursor, lease, quantidade de tickets e estado do mirror em conjunto; uma tentativa malsucedida recente não substitui a última sincronização bem-sucedida.
 
 O procedimento de operação e recuperação está em [Worker e Sincronização](WORKER-E-SINCRONIZACAO.md). Os campos e regras de identidade estão em [Dicionário de Dados](DICIONARIO-DE-DADOS.md), e a relação entre OTRS e os demais mirrors está em [Fontes de Dados](FONTES-DE-DADOS.md).
+
+
+## Estado oficial e término operacional
+
+`business_status` preserva o estado oficial atual do OTRS, inclusive `CLOSED`; o mirror não converte `CLOSED` para `RESOLVED`. Para análises de término operacional, `resolved_at` (Dynamic Field `ticketResolvido.value_date`) é a data principal. Se estiver ausente, o ARION pode usar `terminal_state_at`, derivado do `StateUpdate` compatível com o estado terminal atual. Os dois campos continuam disponíveis separadamente para reconciliação e diagnóstico. Se ambos estiverem ausentes, métricas por data terminal e duração final não inventam uma data atual. `CANCELED` e `canceled_at` mantêm a política própria de cancelamento.

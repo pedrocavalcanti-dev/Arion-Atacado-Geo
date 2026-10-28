@@ -330,6 +330,44 @@ class CMDBViewsTests(TestCase):
         empty = CMDBLinkMirror.objects.get(source_config_item_id="page-ci-000")
         self.assertEqual(self.client.get(reverse("base_links:detail", args=[empty.pk])).json()["history"]["total"], 0)
 
+    def test_link_history_duration_uses_resolution_and_keeps_otrs_terminal_date(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        now = timezone.now()
+        created = now - timedelta(hours=40)
+        resolved = created + timedelta(hours=7)
+        terminal = created + timedelta(hours=31)
+        ticket = OTRSTicket.objects.create(
+            external_id=99002, ticket_number="202610240000002", queue_external_id=107,
+            queue_name="NOC - ATACADO", external_state_id=2, external_state_name="closed successful",
+            business_status="CLOSED", is_business_open=False, is_present_in_queue=True,
+            source_created_at=created, resolved_at=resolved, terminal_state_at=terminal,
+        )
+        OTRSTicketConfigItem.objects.create(
+            ticket=ticket, config_item_id="base-ci", cmdb_link=self.link,
+            relation_type="DependsOn", relation_state="Valid",
+        )
+        canceled_created = created - timedelta(hours=5)
+        canceled_at = canceled_created + timedelta(hours=2)
+        canceled = OTRSTicket.objects.create(
+            external_id=99003, ticket_number="202610240000003", queue_external_id=107,
+            queue_name="NOC - ATACADO", external_state_id=3, external_state_name="cancelled",
+            business_status="CANCELED", is_business_open=False, is_present_in_queue=True,
+            source_created_at=canceled_created, terminal_state_at=canceled_at, canceled_at=canceled_at,
+        )
+        self.client.force_login(self.user)
+
+        detail = self.client.get(reverse("base_links:detail", args=[self.link.pk])).json()
+        row = next(item for item in detail["history"]["tickets"] if item["id"] == ticket.pk)
+
+        self.assertEqual(row["duration_hours"], 7)
+        self.assertFalse(row["over_24h"])
+        self.assertEqual(row["resolved_at"], resolved.isoformat())
+        self.assertEqual(row["terminal_at"], terminal.isoformat())
+        from aplicativos.base_links.views import _ticket_duration_hours
+        self.assertEqual(_ticket_duration_hours(canceled, now), 2)
+
     def test_detail_endpoint_uses_one_local_mirror_query(self):
         self.client.force_login(self.user)
         with CaptureQueriesContext(connection) as queries:

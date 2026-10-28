@@ -144,6 +144,168 @@ class TicketQueueTests(TestCase):
         self.assertTrue(detail["ticket"]["closing_reason_label"])
         self.assertEqual(detail["tracking"]["internal_status_label"], "Em Aberto")
 
+    def test_historical_ticket_detail_is_read_only_and_queue_updates_stay_active_only(self):
+        ticket = self.make_ticket(559, "CLOSED", link=self.link)
+        detail = self.client.get(reverse("chamados:detail", args=(ticket.external_id,)))
+        self.assertEqual(detail.status_code, 200)
+        self.assertFalse(detail.json()["ticket"]["operational"])
+        update = self.client.post(reverse("chamados:tracking_update", args=(ticket.external_id,)), {
+            "action": "drawer", "internal_status": TicketTracking.InternalStatus.OPEN,
+            "internal_priority": "", "assigned_to": "", "next_action_at": "", "revision": 0,
+        })
+        self.assertEqual(update.status_code, 404)
+
+    def test_assignee_options_include_one_option_for_a_user_with_multiple_tickets(self):
+        pedro = get_user_model().objects.create_user(
+            username="pedro.cavalcanti", first_name="Pedro", last_name="Cavalcanti",
+            password="safe-password-6",
+        )
+        for ticket_id in (501, 502, 503):
+            ticket = self.make_ticket(ticket_id, link=self.link)
+            TicketTracking.objects.create(ticket_external_id=ticket.external_id, assigned_to=pedro)
+
+        response = self.client.get(reverse("chamados:index"))
+
+        self.assertEqual(response.context["filter_options"]["assignees"], [
+            {"value": pedro.pk, "label": "Pedro Cavalcanti"},
+        ])
+
+    def test_assignee_options_are_unique_and_alphabetical_by_friendly_name(self):
+        users = [
+            get_user_model().objects.create_user(
+                username=username, first_name=first_name, last_name=last_name,
+                password="safe-password-7",
+            )
+            for username, first_name, last_name in (
+                ("tiago.borges", "Tiago", "Borges"),
+                ("pedro.cavalcanti", "Pedro", "Cavalcanti"),
+                ("allan.carmo", "Allan", "Carmo"),
+            )
+        ]
+        for user, count, first_ticket in zip(users, (5, 3, 2), (510, 520, 530)):
+            for ticket_id in range(first_ticket, first_ticket + count):
+                ticket = self.make_ticket(ticket_id, link=self.link)
+                TicketTracking.objects.create(ticket_external_id=ticket.external_id, assigned_to=user)
+
+        options = TicketQueueService.build(self.user, {})["filter_options"]["assignees"]
+
+        self.assertEqual([option["label"] for option in options], [
+            "Allan Carmo", "Pedro Cavalcanti", "Tiago Borges",
+        ])
+        self.assertEqual([option["value"] for option in options], [
+            users[2].pk, users[1].pk, users[0].pk,
+        ])
+
+    def test_unassigned_filter_option_is_single_and_returns_all_unassigned_tickets(self):
+        tickets = [self.make_ticket(ticket_id, link=self.link) for ticket_id in (540, 541, 542)]
+
+        response = self.client.get(reverse("chamados:index"))
+        assignee_select = response.content.decode().partition('<select name="assignee">')[2].partition("</select>")[0]
+        self.assertEqual(assignee_select.count('value="unassigned"'), 1)
+
+        filtered = self.client.get(reverse("chamados:index"), {"assignee": "unassigned"})
+        self.assertEqual(
+            {row["external_id"] for row in filtered.context["rows"]},
+            {ticket.external_id for ticket in tickets},
+        )
+
+    def test_assignee_filter_returns_every_ticket_assigned_to_selected_user(self):
+        pedro = get_user_model().objects.create_user(username="pedro", password="safe-password-8")
+        allan = get_user_model().objects.create_user(username="allan", password="safe-password-9")
+        pedro_tickets = [self.make_ticket(ticket_id, link=self.link) for ticket_id in (550, 551, 552, 553)]
+        allan_ticket = self.make_ticket(554, link=self.link)
+        for ticket in pedro_tickets:
+            TicketTracking.objects.create(ticket_external_id=ticket.external_id, assigned_to=pedro)
+        TicketTracking.objects.create(ticket_external_id=allan_ticket.external_id, assigned_to=allan)
+
+        response = self.client.get(reverse("chamados:index"), {"assignee": str(pedro.pk)})
+
+        self.assertEqual(
+            {row["external_id"] for row in response.context["rows"]},
+            {ticket.external_id for ticket in pedro_tickets},
+        )
+        self.assertEqual(response.context["page"].paginator.count, 4)
+
+    def test_assignee_filter_combines_with_client_project_state_and_tab(self):
+        pedro = get_user_model().objects.create_user(username="pedro", password="safe-password-10")
+        matching_link = self.make_link("ticket-claro-project-a", "Projeto A", "SP")
+        matching_link.contracting_client = "Claro"
+        matching_link.save(update_fields=("contracting_client",))
+        other_project_link = self.make_link("ticket-claro-project-b", "Projeto B", "SP")
+        other_project_link.contracting_client = "Claro"
+        other_project_link.save(update_fields=("contracting_client",))
+        other_state_link = self.make_link("ticket-claro-project-a-rj", "Projeto A", "RJ")
+        other_state_link.contracting_client = "Claro"
+        other_state_link.save(update_fields=("contracting_client",))
+        matching = self.make_ticket(560, "PENDING", link=matching_link)
+        wrong_project = self.make_ticket(561, "PENDING", link=other_project_link)
+        wrong_state = self.make_ticket(562, "PENDING", link=other_state_link)
+        wrong_status = self.make_ticket(563, "OPEN", link=matching_link)
+        for ticket in (matching, wrong_project, wrong_state, wrong_status):
+            TicketTracking.objects.create(
+                ticket_external_id=ticket.external_id, assigned_to=pedro,
+                internal_status=TicketTracking.InternalStatus.FINANCIAL_PENDING,
+            )
+
+        response = self.client.get(reverse("chamados:index"), {
+            "assignee": str(pedro.pk), "client": "Claro", "project": "Projeto A", "uf": "SP",
+            "arion_status": TicketTracking.InternalStatus.FINANCIAL_PENDING,
+            "otrs_status": "PENDING", "tab": "PENDING",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["external_id"] for row in response.context["rows"]], [matching.external_id])
+
+    def test_assignee_filter_intersects_all_queue_tabs(self):
+        assigned_tickets = [
+            self.make_ticket(570, "OPEN", link=self.link),
+            self.make_ticket(571, "PENDING", link=self.link),
+            self.make_ticket(572, "SCHEDULED", link=self.link),
+        ]
+        unassigned = self.make_ticket(573, "PENDING", link=self.link)
+        for ticket in assigned_tickets:
+            TicketTracking.objects.create(ticket_external_id=ticket.external_id, assigned_to=self.user)
+
+        cases = (
+            ("all", str(self.user.pk), {570, 571, 572}),
+            ("OPEN", str(self.user.pk), {570}),
+            ("PENDING", str(self.user.pk), {571}),
+            ("SCHEDULED", str(self.user.pk), {572}),
+            ("mine", str(self.user.pk), {570, 571, 572}),
+            ("unassigned", "unassigned", {573}),
+            ("mine", "unassigned", set()),
+        )
+        for tab, assignee, expected_ids in cases:
+            with self.subTest(tab=tab, assignee=assignee):
+                response = self.client.get(reverse("chamados:index"), {"tab": tab, "assignee": assignee})
+                self.assertEqual(
+                    {row["external_id"] for row in response.context["rows"]},
+                    expected_ids,
+                )
+
+    def test_assignee_filter_and_page_size_are_preserved_in_pagination_and_tab_urls(self):
+        pedro = get_user_model().objects.create_user(username="pedro", password="safe-password-11")
+        for ticket_id in range(580, 606):
+            ticket = self.make_ticket(ticket_id, "PENDING", link=self.link)
+            TicketTracking.objects.create(ticket_external_id=ticket.external_id, assigned_to=pedro)
+
+        response = self.client.get(reverse("chamados:index"), {
+            "assignee": str(pedro.pk), "client": "Cliente A", "tab": "PENDING", "page_size": "25",
+        })
+        pagination_params = parse_qs(urlsplit(response.context["pagination_urls"]["next"]).query)
+        tab_params = parse_qs(urlsplit(response.context["tab_urls"]["PENDING"]).query)
+
+        self.assertEqual(pagination_params["assignee"], [str(pedro.pk)])
+        self.assertEqual(pagination_params["client"], ["Cliente A"])
+        self.assertEqual(pagination_params["page_size"], ["25"])
+        self.assertEqual(pagination_params["page"], ["2"])
+        self.assertEqual(tab_params["assignee"], [str(pedro.pk)])
+        self.assertEqual(tab_params["client"], ["Cliente A"])
+        self.assertEqual(tab_params["page_size"], ["25"])
+        page_two = self.client.get(reverse("chamados:index"), pagination_params)
+        self.assertEqual(page_two.context["page"].number, 2)
+        self.assertEqual(page_two.context["page"].paginator.count, 26)
+
     def test_ticket_with_multiple_links_has_one_queue_row_and_all_scoped_links_in_detail(self):
         second_link = self.make_link("ticket-link-2", "Projeto A", "RJ")
         ticket = self.make_ticket(20, link=self.link)
@@ -157,6 +319,35 @@ class TicketQueueTests(TestCase):
         detail = self.client.get(reverse("chamados:detail", args=(ticket.external_id,)))
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(len(detail.json()["links"]), 2)
+
+    def test_provider_and_project_filters_do_not_multiply_ticket_counts(self):
+        second_link = self.make_link("ticket-link-filter-2", "Projeto B", "RJ")
+        first_ticket = self.make_ticket(21, link=self.link)
+        OTRSTicketConfigItem.objects.create(
+            ticket=first_ticket, config_item_id=second_link.source_config_item_id,
+            cmdb_link=second_link, relation_type="DependsOn-second", relation_state="Valid",
+        )
+        second_provider = CMDBOperatorMirror.objects.create(
+            source_config_item_id="ticket-provider-2", name="ISP alternativo",
+        )
+        other_provider_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="ticket-link-filter-3", source_number="N-3",
+            designation="Link N-3", state="AM", contracting_client="Cliente A",
+            business_project="Projeto B", operator=second_provider,
+        )
+        self.make_ticket(22, link=other_provider_link)
+
+        provider_result = TicketQueueService.build(self.user, {"provider": self.operator.source_config_item_id})
+        project_result = TicketQueueService.build(self.user, {"project": "Projeto A"})
+
+        self.assertEqual(provider_result["active_count"], 1)
+        self.assertEqual(provider_result["affected_count"], 2)
+        self.assertEqual(project_result["active_count"], 1)
+        # The Project filter selects the Ticket through a matching Link; the card
+        # then counts every distinct scoped Link attached to that selected Ticket.
+        self.assertEqual(project_result["affected_count"], 2)
+        self.assertEqual(len(provider_result["rows"]), 1)
+        self.assertEqual(len(project_result["rows"]), 1)
 
     def test_tracking_is_virtual_until_first_change_then_status_assignment_note_and_events_persist(self):
         ticket = self.make_ticket(30, hours_old=30, link=self.link)
@@ -208,6 +399,14 @@ class TicketQueueTests(TestCase):
         denied_link = self.make_link("ticket-link-hidden", "Projeto B", "AM")
         allowed_ticket = self.make_ticket(40, link=self.link)
         hidden_ticket = self.make_ticket(41, link=denied_link)
+        visible_assignee = get_user_model().objects.create_user(
+            username="visible-assignee", password="safe-password-12",
+        )
+        hidden_assignee = get_user_model().objects.create_user(
+            username="hidden-assignee", password="safe-password-13",
+        )
+        TicketTracking.objects.create(ticket_external_id=allowed_ticket.external_id, assigned_to=visible_assignee)
+        TicketTracking.objects.create(ticket_external_id=hidden_ticket.external_id, assigned_to=hidden_assignee)
 
         analyst_group = Group.objects.get(name="Analista NOC")
         scope = GroupDataScope.objects.get(group=analyst_group)
@@ -222,6 +421,17 @@ class TicketQueueTests(TestCase):
         response = self.client.get(reverse("chamados:index"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row["external_id"] for row in response.context["rows"]], [allowed_ticket.external_id])
+        self.assertEqual(
+            [option["value"] for option in response.context["filter_options"]["assignees"]],
+            [visible_assignee.pk],
+        )
+        filtered_hidden = self.client.get(reverse("chamados:index"), {"assignee": str(hidden_assignee.pk)})
+        self.assertEqual(filtered_hidden.status_code, 200)
+        self.assertEqual(filtered_hidden.context["rows"], [])
+        self.assertEqual(
+            filtered_hidden.context["filter_options"]["assignees"],
+            response.context["filter_options"]["assignees"],
+        )
         allowed_note = self.client.post(
             reverse("chamados:note_create", args=(allowed_ticket.external_id,)),
             {"body": "Acompanhamento dentro do escopo.", "revision": 0},

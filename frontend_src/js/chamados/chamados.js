@@ -4,6 +4,66 @@
   const page = document.querySelector(".tickets-page");
   if (!page) return;
 
+  const mobileFilters = document.querySelector("[data-mobile-filter-sheet]");
+  const mobileFiltersOpen = document.querySelector("[data-mobile-filters-open]");
+  const mobileFiltersClose = document.querySelector("[data-mobile-filters-close]");
+  const mobileFilterCount = mobileFiltersOpen?.querySelector("[data-filter-count]");
+  const filterForm = document.querySelector(".ticket-filters");
+  const activeFilterChips = document.querySelector("[data-ticket-active-filters]");
+  const removeFilter = (name) => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete(name);
+    url.searchParams.delete("page");
+    window.location.assign(url.toString());
+  };
+  const renderActiveFilterChips = () => {
+    if (!filterForm || !activeFilterChips) return;
+    activeFilterChips.replaceChildren();
+    const addChip = (name, label) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "ticket-active-filter-chip";
+      chip.setAttribute("aria-label", `Remover filtro ${label}`);
+      const text = document.createElement("span");
+      text.textContent = label;
+      const close = document.createElement("span");
+      close.setAttribute("aria-hidden", "true");
+      close.textContent = "×";
+      chip.append(text, close);
+      chip.addEventListener("click", () => removeFilter(name));
+      activeFilterChips.append(chip);
+    };
+    const query = filterForm.querySelector('input[name="q"]');
+    if (query?.value.trim()) addChip("q", `Busca: ${query.value.trim()}`);
+    filterForm.querySelectorAll("select").forEach((select) => {
+      if (!select.value || (select.name === "sort" && select.value === "aging")) return;
+      const title = select.closest("label")?.querySelector("span")?.textContent.trim() || select.name;
+      addChip(select.name, `${title}: ${select.selectedOptions[0]?.textContent.trim() || select.value}`);
+    });
+    filterForm.querySelectorAll('input[type="checkbox"]:checked').forEach((input) => {
+      const title = input.closest("label")?.textContent.trim() || input.name;
+      addChip(input.name, title);
+    });
+    activeFilterChips.hidden = activeFilterChips.childElementCount === 0;
+  };
+  const refreshMobileFilterCount = () => {
+    if (!mobileFilters || !mobileFilterCount) return;
+    const activeSelects = [...mobileFilters.querySelectorAll("select")].filter((select) => select.value && !(select.name === "sort" && select.value === "aging"));
+    const checked = mobileFilters.querySelectorAll('input[type="checkbox"]:checked').length;
+    const search = filterForm?.querySelector('input[name="q"]')?.value.trim() ? 1 : 0;
+    const count = activeSelects.length + checked + search;
+    mobileFilterCount.hidden = count === 0;
+    mobileFilterCount.textContent = String(count);
+    mobileFiltersOpen.setAttribute("aria-label", count ? `Abrir filtros da fila, ${count} ativos` : "Abrir filtros da fila");
+  };
+  mobileFiltersOpen?.addEventListener("click", () => mobileFilters?.showModal());
+  mobileFiltersClose?.addEventListener("click", () => mobileFilters?.close());
+  mobileFilters?.addEventListener("click", (event) => { if (event.target === mobileFilters) mobileFilters.close(); });
+  mobileFilters?.querySelectorAll("select, input[type='checkbox']").forEach((control) => control.addEventListener("change", () => { refreshMobileFilterCount(); renderActiveFilterChips(); }));
+  filterForm?.querySelector('input[name="q"]')?.addEventListener("input", () => { refreshMobileFilterCount(); renderActiveFilterChips(); });
+  refreshMobileFilterCount();
+  renderActiveFilterChips();
+
   const drawer = document.querySelector("[data-ticket-drawer]");
   const backdrop = document.querySelector("[data-drawer-backdrop]");
   const queueDialog = document.querySelector("[data-queue-dialog]");
@@ -158,7 +218,7 @@
 
   const renderTrackingForm = (data) => {
     const form = drawer.querySelector("[data-tracking-form]");
-    form.hidden = !manage;
+    form.hidden = !manage || !data.ticket.operational;
     if (!manage) return;
     const initial = data.tracking.form.initial;
     fillSelect(form.elements.internal_status, data.tracking.form.statuses, initial.internal_status);
@@ -184,8 +244,9 @@
     const assignedId = data.tracking.assigned_to_id == null ? "" : String(data.tracking.assigned_to_id);
     if (noteForm && noteForm.elements.revision) noteForm.elements.revision.value = data.tracking.revision;
     assignee.textContent = data.tracking.assigned_to || "Sem responsável";
-    assume.hidden = !manage || Boolean(assignedId);
-    unassign.hidden = !manage || !assignedId || assignedId !== page.dataset.currentUser;
+    assume.hidden = !manage || !data.ticket.operational || Boolean(assignedId);
+    unassign.hidden = !manage || !data.ticket.operational || !assignedId || assignedId !== page.dataset.currentUser;
+    if (noteForm) noteForm.hidden = !manage || !data.ticket.operational;
   };
 
   const renderNotes = (notes) => {
@@ -539,4 +600,12 @@
       }).finally(() => { button.disabled = false; });
     }
   });
+  const routeParams = new URLSearchParams(window.location.search);
+  const requestedTicket = routeParams.get("open_ticket");
+  if (/^\d+$/.test(requestedTicket || "")) {
+    routeParams.delete("open_ticket");
+    const cleanUrl = window.location.pathname + (routeParams.toString() ? "?" + routeParams.toString() : "") + window.location.hash;
+    window.history.replaceState(null, "", cleanUrl);
+    loadDetail(requestedTicket, true);
+  }
 }());

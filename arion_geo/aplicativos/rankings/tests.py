@@ -175,20 +175,54 @@ class RankingsMirrorTests(TestCase):
         self.assertEqual(data["tickets_valid"], 1)
         self.assertEqual(sum(provider["tickets"] for provider in data["providers"]), 2)
 
-    def test_open_and_terminal_aging_use_required_timestamps(self):
+    def test_open_aging_uses_now_and_terminal_aging_uses_resolution_or_terminal_fallback(self):
         now = datetime(2026, 10, 24, 12, tzinfo=datetime_timezone.utc)
         self.make_ticket(status="OPEN", created_at=now - timedelta(hours=25))
         self.make_ticket(status="CLOSED", created_at=now - timedelta(hours=40), terminal_hours=30)
         missing = self.make_ticket(status="RESOLVED", created_at=now - timedelta(hours=60), terminal_missing=True)
-        # resolved_at is intentionally not treated as a universal terminal timestamp.
-        OTRSTicket.objects.filter(pk=missing.pk).update(resolved_at=now)
+        OTRSTicket.objects.filter(pk=missing.pk).update(resolved_at=now - timedelta(hours=58))
+        no_terminal_date = self.make_ticket(status="RESOLVED", created_at=now - timedelta(hours=60), terminal_missing=True)
         data = RankingService.build(self.user, date_from=datetime(2026, 10, 1).date(), date_to=datetime(2026, 10, 24).date(), now=now)
         provider = data["providers"][0]
         self.assertEqual(provider["aged_open"], 1)
         self.assertEqual(provider["terminal_over_24h"], 1)
         self.assertEqual(provider["tickets_over_24h"], 2)
-        self.assertEqual(provider["eligible_tickets"], 2)
-        self.assertEqual(provider["over_24h_rate"], 1)
+        self.assertEqual(provider["eligible_tickets"], 3)
+        self.assertEqual(provider["over_24h_rate"], 2 / 3)
+        self.assertEqual(OTRSTicket.objects.get(pk=no_terminal_date.pk).resolved_at, None)
+
+    def test_ranking_duration_and_xlsx_use_resolved_at_not_later_closed_date(self):
+        created = datetime(2026, 10, 10, 8, tzinfo=datetime_timezone.utc)
+        ticket = self.make_ticket(status="CLOSED", created_at=created, terminal_hours=31)
+        ticket.resolved_at = created + timedelta(hours=7)
+        ticket.save(update_fields=("resolved_at",))
+
+        data = RankingService.build(
+            self.user, date_from=created.date(), date_to=created.date(),
+            now=created + timedelta(days=2), detail_provider_id=self.operator.pk,
+        )
+        record = data["detail"]["ticket_records"][0]
+        self.assertEqual(record["status"], "CLOSED")
+        self.assertEqual(record["duration_hours"], 7)
+        self.assertEqual(record["resolved_at"], "10/10/2026 12:00")
+        self.assertEqual(record["terminal_at"], "11/10/2026 12:00")
+        self.assertEqual(record["operational_end_at"], "10/10/2026 12:00")
+        self.assertEqual(record["operational_end_source"], "resolved_at")
+
+        response = self.client.get(reverse("rankings:export", args=["xlsx"]), {
+            "view": "custom", "date_from": "2026-10-10", "date_to": "2026-10-10",
+        })
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(BytesIO(response.content), read_only=True, data_only=True)
+        sheet = workbook["Tickets"]
+        headers = [cell.value for cell in sheet[1]]
+        values = [cell.value for cell in sheet[2]]
+        row = dict(zip(headers, values))
+        self.assertEqual(row["Status"], "CLOSED")
+        self.assertEqual(row["Resolvido em"], "10/10/2026 12:00")
+        self.assertEqual(row["Terminal OTRS em"], "11/10/2026 12:00")
+        self.assertEqual(row["Término operacional usado"], "10/10/2026 12:00")
+        self.assertEqual(row["Duração (horas)"], 7)
 
     def test_provider_with_zero_tickets_has_zero_index_and_stays_in_the_service_universe(self):
         small = CMDBOperatorMirror.objects.create(source_config_item_id="op-small", name="Provider pequeno")

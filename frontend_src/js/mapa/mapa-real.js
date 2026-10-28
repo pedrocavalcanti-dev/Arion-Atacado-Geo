@@ -5,7 +5,7 @@
   const $ = selector => (page || root).querySelector(selector);
   const number = new Intl.NumberFormat("pt-BR");
   const stateNames = { AC:"Acre",AL:"Alagoas",AM:"Amazonas",AP:"Amapá",BA:"Bahia",CE:"Ceará",DF:"Distrito Federal",ES:"Espírito Santo",GO:"Goiás",MA:"Maranhão",MG:"Minas Gerais",MS:"Mato Grosso do Sul",MT:"Mato Grosso",PA:"Pará",PB:"Paraíba",PE:"Pernambuco",PI:"Piauí",PR:"Paraná",RJ:"Rio de Janeiro",RN:"Rio Grande do Norte",RO:"Rondônia",RR:"Roraima",RS:"Rio Grande do Sul",SC:"Santa Catarina",SE:"Sergipe",SP:"São Paulo",TO:"Tocantins" };
-  const modeLabels = { base:"Links CMDB",projects:"Links do projeto",calls:"Tickets criados no período",repeat:"Links reincidentes",motives:"Tickets encerrados" };
+  const modeLabels = { base:"Links CMDB",projects:"Links do projeto",calls:"Tickets criados no período",repeat:"Links reincidentes",motives:"Tickets resolvidos" };
   const brandPalettes = {
     light: {
       claro:["#f0d5cf","#d18b80","#a95047"], vivo:["#ece6f3","#a38bbc","#665087"],
@@ -60,12 +60,11 @@
     "[data-national-panel]", "[data-national-view]", "[data-national-content]", "[data-national-collapse]", "[data-national-expand]",
     "[data-national-tab='summary']", "[data-national-tab='ranking']", "[data-national-tab='distribution']", "[data-brazil-link]",
     "[data-state-panel]", "[data-panel-backdrop]", "[data-panel-close]", "[data-uf-previous]", "[data-uf-next]", "[data-panel-code]", "[data-panel-name]", "[data-panel-flag]",
-    "[data-panel-total]", "[data-panel-scope]", "[data-panel-context]", "[data-panel-clients]", "[data-panel-coverage]", "[data-panel-status]",
-    "[data-panel-projects]", "[data-panel-providers]", "[data-panel-cities]", "[data-panel-reasons]", "[data-panel-links]", "[data-panel-tickets]",
-    "[data-ticket-modal]", "[data-ticket-title]", "[data-ticket-content]", "[data-ticket-close]", "[data-ticket-filters]", "[data-status-filter]", "[data-priority-filter]",
+    "[data-panel-total]", "[data-panel-scope]", "[data-panel-context]", "[data-panel-overview]", "[data-panel-projects]", "[data-panel-providers]", "[data-panel-reasons]", "[data-panel-recurrence]", "[data-panel-tickets]", "[data-state-tab='overview']", "[data-state-tab='tickets']", "[data-panel-ticket-search]", "[data-panel-ticket-size]", "[data-panel-ticket-pagination]",
+    "[data-ticket-filters]", "[data-status-filter]", "[data-priority-filter]",
     "[data-open-base]", "[data-open-cockpit]", "[data-map-announcement]", "[data-state-search]", "[data-state-search-results]",
     "[data-mode]", "[data-client]", "[data-project-filter]", "[data-period-control]", "[data-period-filter]",
-    "[data-provider-filter]", "[data-motives-select]", "[data-motive-filter]", "[data-custom-period]",
+    "[data-provider-filter]", "[data-motives-select]", "[data-motive-filter]", "[data-custom-period]", "[data-arion-status-filter]", "[data-assignee-filter]", "[data-active-filters]",
     "[data-date-from]", "[data-date-to]", "[data-apply-period]", "[data-legend]",
   ];
   const missingRequired = required.filter(selector => !$(selector));
@@ -86,12 +85,13 @@
     panelTotal: $("[data-panel-total]"), panelScope: $("[data-panel-scope]"), panelContext: $("[data-panel-context]"),
     clients: $("[data-panel-clients]"), statuses: $("[data-panel-status]"), projects: $("[data-panel-projects]"), providers: $("[data-panel-providers]"), cities: $("[data-panel-cities]"),
     reasons: $("[data-panel-reasons]"), links: $("[data-panel-links]"), tickets: $("[data-panel-tickets]"),
-    ticketFilters: $("[data-ticket-filters]"), status: $("[data-status-filter]"), priority: $("[data-priority-filter]"), ticketModal: $("[data-ticket-modal]"), ticketTitle: $("[data-ticket-title]"), ticketContent: $("[data-ticket-content]"), ticketClose: $("[data-ticket-close]"),
+    ticketFilters: $("[data-ticket-filters]"), status: $("[data-status-filter]"), priority: $("[data-priority-filter]"), arionStatus: $("[data-arion-status-filter]"), assignee: $("[data-assignee-filter]"), activeFilters: $("[data-active-filters]"),
+    panelOverview: $("[data-panel-overview]"), panelOverviewContext: $("[data-panel-overview-context]"), panelRecurrence: $("[data-panel-recurrence]"), panelTicketSearch: $("[data-panel-ticket-search]"), panelTicketSize: $("[data-panel-ticket-size]"), panelTicketPagination: $("[data-panel-ticket-pagination]"),
     openBase: $("[data-open-base]"), openCockpit: $("[data-open-cockpit]"), ufPrevious: $("[data-uf-previous]"), ufNext: $("[data-uf-next]"), announce: $("[data-map-announcement]"), legend: $("[data-legend]"),
   };
-  const state = { mode:"base", client:"all", project:"", provider:"", period:"this_month", reason:"", status:"", priority:"", dateFrom:"", dateTo:"", selectedUF:"", panelTab:"summary", distributionDimension:"status", collapsed:false };
+  const state = { mode:"base", client:"all", project:"", provider:"", period:"this_month", reason:"", status:"", priority:"", arionStatus:"", assignee:"", dateFrom:"", dateTo:"", selectedUF:"", panelTab:"summary", ufTab:"overview", ticketPage:1, ticketPageSize:25, ticketSearch:"", distributionDimension:"status", collapsed:false };
   const initialParams=new URLSearchParams(location.search);
-  ["mode","client","project","provider","period","reason","status","priority"].forEach(key=>{if(initialParams.has(key))state[key]=initialParams.get(key);});
+  [["mode","mode"],["client","client"],["project","project"],["provider","provider"],["period","period"],["reason","reason"],["status","status"],["priority","priority"],["arion_status","arionStatus"],["assignee","assignee"]].forEach(([param,key])=>{if(initialParams.has(param))state[key]=initialParams.get(param);});
   state.selectedUF=(initialParams.get("uf")||"").toUpperCase();
   if(/^\d{4}-(0[1-9]|1[0-2])$/.test(state.period)){const [year,month]=state.period.split("-").map(Number);state.dateFrom=`${state.period}-01`;state.dateTo=new Date(Date.UTC(year,month,0)).toISOString().slice(0,10);}
   state.dateFrom=initialParams.get("date_from")||state.dateFrom;state.dateTo=initialParams.get("date_to")||state.dateTo;
@@ -99,19 +99,55 @@
   if(!["all","Claro","Vivo","Algar","other"].includes(state.client))state.client="all";
   ui.period.disabled = true;
   ui.reasonWrap.hidden = true;
-  let map = null, geojson = null, data = null, mapLoaded = false, requestSequence = 0, searchIndex = -1, periodHideTimer = 0, panelHideTimer = 0, ticketRows = [], ticketReturnFocus = null;
+  let map = null, geojson = null, data = null, mapLoaded = false, requestSequence = 0, searchIndex = -1, periodHideTimer = 0, panelHideTimer = 0, panelSearchTimer = 0;
   let requestController = null, detailController = null, detailSequence = 0, hoveredUF = "", appliedSelectedUF = "";
-  let popup = null, tooltipKey = "";
+  let popup = null, tooltipKey = "", tooltipCloseTimer = 0;
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const norm = value => String(value || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
   const reasonOption = () => (data?.reason_options || []).find(option => option.value === state.reason);
   const reasonLabel = () => reasonOption()?.label || state.reason;
+  function renderActiveFilters(){
+    if(!ui.activeFilters)return;
+    const chips=[];
+    if(state.client!=="all")chips.push(["client","Cliente: "+state.client]);
+    if(state.project)chips.push(["project","Projeto: "+displayProject(state.project)]);
+    if(state.provider)chips.push(["provider","Provedor: "+(data?.providers||[]).find(row=>String(row.id)===state.provider)?.name]);
+    if(state.mode==="motives"&&state.reason)chips.push(["reason","Motivo: "+reasonLabel()]);
+    if(["projects","calls","repeat","motives"].includes(state.mode)){
+      if(state.period!=="this_month")chips.push(["period","Per\u00edodo: "+(state.dateFrom&&state.dateTo?state.dateFrom+" a "+state.dateTo:state.period)]);
+      if(state.status)chips.push(["status","Status OTRS: "+(statusLabels[state.status]||state.status)]);
+      if(state.priority)chips.push(["priority","Prioridade: "+state.priority]);
+      if(state.arionStatus)chips.push(["arionStatus","Status ARION: "+((data?.arion_statuses||[]).find(row=>row.value===state.arionStatus)?.label||state.arionStatus)]);
+      if(state.assignee)chips.push(["assignee","Respons\u00e1vel: "+(state.assignee==="unassigned"?"Sem respons\u00e1vel":(data?.assignees||[]).find(row=>String(row.id)===state.assignee)?.name||"Selecionado")]);
+    }
+    ui.activeFilters.hidden=!chips.length;
+    ui.activeFilters.innerHTML=chips.map(([key,label])=>"<button type=\"button\" class=\"map-filter-chip\" data-clear-filter=\""+esc(key)+"\"><span>"+esc(label)+"</span><span aria-hidden=\"true\">&#215;</span></button>").join("")+(chips.length?"<button type=\"button\" class=\"map-clear-filters\" data-clear-all-filters>Limpar filtros</button>":"");
+  }
+  function clearFilterValue(key){
+    if(key==="client")state.client="all";
+    else if(key==="project")state.project="";
+    else if(key==="provider")state.provider="";
+    else if(key==="uf"){clearSelection();return;}
+    else if(key==="reason")state.reason="";
+    else if(key==="period"){state.period="this_month";state.dateFrom="";state.dateTo="";}
+    else if(key==="status")state.status="";
+    else if(key==="priority")state.priority="";
+    else if(key==="arionStatus")state.arionStatus="";
+    else if(key==="assignee")state.assignee="";
+    ui.project.value=state.project;ui.provider.value=state.provider;ui.reason.value=state.reason;
+    ui.status.value=state.status;ui.priority.value=state.priority;ui.arionStatus.value=state.arionStatus;
+    ui.assignee.value=state.assignee;ui.period.value=state.period;
+    ui.dateFrom.value=state.dateFrom;ui.dateTo.value=state.dateTo;
+    page.querySelectorAll("[data-client]").forEach(item=>{const selected=item.dataset.client===state.client;item.classList.toggle("is-selected",selected);item.setAttribute("aria-pressed",String(selected));});
+    fetchData().catch(()=>showError("Não foi possível limpar o filtro selecionado."));
+  }
   const theme = () => document.documentElement.dataset.theme === "light" ? "light" : "dark";
   function getProjectPalette(value){
     const key=norm(value).replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
     return projectPalettes[projectPaletteAliases[key]||key]||projectPalettes.default;
   }
   function closeTooltip(){popup?.remove();tooltipKey="";}
+  function deferCloseTooltip(){clearTimeout(tooltipCloseTimer);tooltipCloseTimer=setTimeout(()=>{if(!hoveredUF)closeTooltip();},90);}
   function closeSearch(clearValue=false){
     ui.results.hidden=true;ui.search.setAttribute("aria-expanded","false");ui.search.removeAttribute("aria-activedescendant");searchIndex=-1;
     if(clearValue)ui.search.value="";
@@ -134,54 +170,60 @@
   };
   function urlFor(path, overrides = {}) {
     const url = new URL(path, window.location.origin);
-    const params = { mode:state.mode, client:state.client, project:state.project, provider:state.provider, reason:state.reason, period:state.period, date_from:state.dateFrom, date_to:state.dateTo, status:state.status, priority:state.priority, ...overrides };
+    const params = { mode:state.mode, client:state.client, project:state.project, provider:state.provider, reason:state.reason, period:state.period, date_from:state.dateFrom, date_to:state.dateTo, status:state.status, priority:state.priority, arion_status:state.arionStatus, assignee:state.assignee, ...overrides };
     Object.entries(params).forEach(([key,value]) => { if (value) url.searchParams.set(key,value); });
     return url;
   }
   function syncUrl(){
     const url=new URL(location.href);
-    ["mode","client","project","period","uf","reason","provider","date_from","date_to","status","priority"].forEach(key=>url.searchParams.delete(key));
+    ["mode","client","project","period","uf","reason","provider","date_from","date_to","status","priority","arion_status","assignee","provenance"].forEach(key=>url.searchParams.delete(key));
     url.searchParams.set("mode",state.mode);
     if(state.client!=="all")url.searchParams.set("client",state.client);
     if(state.project)url.searchParams.set("project",state.project);
     if(state.provider)url.searchParams.set("provider",state.provider);
-    if(["calls","repeat","motives"].includes(state.mode)){
+    if(["projects","calls","repeat","motives"].includes(state.mode)){
       url.searchParams.set("period",state.period);
       if(state.dateFrom)url.searchParams.set("date_from",state.dateFrom);
       if(state.dateTo)url.searchParams.set("date_to",state.dateTo);
     }
     if(state.reason)url.searchParams.set("reason",state.reason);
-    if(state.mode==="calls"&&state.status)url.searchParams.set("status",state.status);
-    if(state.mode==="calls"&&state.priority)url.searchParams.set("priority",state.priority);
+    if(["projects","calls","repeat","motives"].includes(state.mode)&&state.status)url.searchParams.set("status",state.status);
+    if(["projects","calls","repeat","motives"].includes(state.mode)&&state.priority)url.searchParams.set("priority",state.priority);
+    if(["projects","calls","repeat","motives"].includes(state.mode)&&state.arionStatus)url.searchParams.set("arion_status",state.arionStatus);
+    if(["projects","calls","repeat","motives"].includes(state.mode)&&state.assignee)url.searchParams.set("assignee",state.assignee);
     if(state.selectedUF)url.searchParams.set("uf",state.selectedUF);
     history.replaceState(null,"",url.pathname+url.search+url.hash);
   }
   function updateModeControls(){
-    const temporal=["calls","repeat","motives"].includes(state.mode);
+    const temporal=["projects","calls","repeat","motives"].includes(state.mode);
     if(ui.periodControl){
       if(temporal){
         clearTimeout(periodHideTimer);ui.periodControl.hidden=false;
         requestAnimationFrame(()=>ui.periodControl.classList.add("is-visible"));
       }else{
         ui.periodControl.classList.remove("is-visible");
-        clearTimeout(periodHideTimer);periodHideTimer=setTimeout(()=>{if(!["calls","repeat","motives"].includes(state.mode))ui.periodControl.hidden=true;},180);
+        clearTimeout(periodHideTimer);periodHideTimer=setTimeout(()=>{if(!["projects","calls","repeat","motives"].includes(state.mode))ui.periodControl.hidden=true;},180);
       }
     }
     ui.period.disabled=!temporal;
     ui.dates.hidden=!(temporal&&(state.period==="custom"||/^\d{4}-(0[1-9]|1[0-2])$/.test(state.period)));
     ui.reasonWrap.hidden=state.mode!=="motives";
-    ui.ticketFilters.hidden=state.mode!=="calls";
-    ui.status.value=state.mode==="calls"?state.status:"";
-    ui.priority.value=state.mode==="calls"?state.priority:"";
+    ui.ticketFilters.hidden=!temporal;
+    ui.status.value=temporal?state.status:"";
+    ui.priority.value=temporal?state.priority:"";
+    ui.arionStatus.value=temporal?state.arionStatus:"";
+    ui.assignee.value=temporal?state.assignee:"";
     page.querySelectorAll("[data-mode]").forEach(item=>{const selected=item.dataset.mode===state.mode;item.classList.toggle("is-selected",selected);item.setAttribute("aria-pressed",String(selected));});
     if(["this_month","last_month","last_30","last_90","custom"].includes(state.period))ui.period.value=state.period;
     else ui.period.value="custom";
     ui.dateFrom.value=state.dateFrom;ui.dateTo.value=state.dateTo;
+    renderActiveFilters();
     const titlePeriod=state.period.match(/^\d{4}-(0[1-9]|1[0-2])$/)?periodLabel({date_from:`${state.period}-01`}):periodLabel({date_from:state.dateFrom||data?.period?.date_from});
-    const heading=state.mode==="base"?"Base de links":state.mode==="projects"?(state.project?`Projeto \u00b7 ${displayProject(state.project)}`:"Projetos"):state.mode==="motives"?`${state.reason?reasonLabel():"Motivos"} \u00b7 ${titlePeriod}`: ["calls","repeat"].includes(state.mode)?`${state.mode==="calls"?"Chamados":"Reincid\u00eancia"} \u00b7 ${titlePeriod}`:"Base de links";
+    const heading=state.mode==="base"?"Base de links":state.mode==="projects"?((state.project?"Projeto \u00b7 "+displayProject(state.project):"Projetos")+" \u00b7 "+titlePeriod):state.mode==="motives"?((state.reason?reasonLabel():"Motivos")+" \u00b7 "+titlePeriod):["calls","repeat"].includes(state.mode)?((state.mode==="calls"?"Chamados":"Reincid\u00eancia")+" \u00b7 "+titlePeriod):"Base de links";
     $("#geo-title").textContent=heading;
   }
   async function fetchData() {
+    state.ticketPage=1;
     closeTooltip();
     const seq = ++requestSequence;
     requestController?.abort();
@@ -216,7 +258,7 @@
     }
   }
   function displayProject(value){
-    const known={"BANCO DO BRASIL":"Banco do Brasil","CAIXA ECONOMICA FEDERAL":"Caixa Econ\u00f4mica Federal","CORREIOS":"Correios","BRADESCO":"Bradesco","ARCOS DOURADOS":"Arcos Dourados","DIVERSOS":"Diversos"};
+    const known={"BANCO DO BRASIL":"BANCO DO BRASIL","CAIXA ECONOMICA FEDERAL":"Caixa Econ\u00f4mica Federal","CORREIOS":"Correios","BRADESCO":"BRADESCO","ARCOS DOURADOS":"Arcos Dourados","DIVERSOS":"Diversos"};
     return known[norm(value).toLocaleUpperCase("pt-BR")]||String(value||"").toLocaleLowerCase("pt-BR").replace(/(^|\s)\S/g,letter=>letter.toLocaleUpperCase("pt-BR"));
   }
   function periodLabel(period){
@@ -225,12 +267,17 @@
     return new Intl.DateTimeFormat("pt-BR",{month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`));
   }
   function fillFilters() {
-    const oldProject = state.project;
     ui.project.innerHTML = '<option value="">Todos os projetos</option>' + data.projects.map(value=>`<option value="${esc(value)}">${esc(displayProject(value))}</option>`).join("");
-    if (data.projects.includes(oldProject)) ui.project.value = oldProject; else { state.project=""; ui.project.value=""; }
+    const selectedProject = data.selected_project || "";
+    state.project = data.projects.includes(selectedProject) ? selectedProject : "";
+    ui.project.value = state.project;
     ui.provider.innerHTML = '<option value="">Todos os provedores</option>' + data.providers.map(row=>`<option value="${esc(row.id)}">${esc(row.name)}</option>`).join("");
     ui.priority.innerHTML='<option value="">Todas</option>'+(data.priority_options||[]).map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join("");
+    ui.arionStatus.innerHTML='<option value="">Todos</option>'+(data.arion_statuses||[]).map(row=>`<option value="${esc(row.value)}">${esc(row.label)}</option>`).join("");
+    ui.assignee.innerHTML='<option value="">Todos</option><option value="unassigned">Sem responsável</option>'+(data.assignees||[]).map(row=>`<option value="${esc(row.id)}">${esc(row.name)}</option>`).join("");
     ui.provider.value = data.providers.some(row=>String(row.id)===state.provider) ? state.provider : "";
+    ui.arionStatus.value=(data.arion_statuses||[]).some(row=>row.value===state.arionStatus)?state.arionStatus:"";
+    ui.assignee.value=state.assignee==="unassigned"||((data.assignees||[]).some(row=>String(row.id)===state.assignee))?state.assignee:"";
     const oldReason = state.reason;
     const reasonOptions = data.reason_options || (data.reasons || []).map(label => ({value:label,label,raw_values:[label]}));
     ui.reason.innerHTML = '<option value="">Todos os motivos</option>' + reasonOptions.map(option=>`<option value="${esc(option.value)}">${esc(option.label)}</option>`).join("");
@@ -350,6 +397,8 @@
   }
   function renderNational() {
     if (!data || !ui.nationalView) return;
+    const unlinkedCount=Number(data.unlinked_ticket_count||0);
+    const unlinkedNote=unlinkedCount?`<p class="panel-empty">${number.format(unlinkedCount)} tickets sem Link CMDB local foram somados ao total nacional. Eles n\u00e3o s\u00e3o atribu\u00eddos a uma UF e n\u00e3o contam como Links afetados.</p>`:"";
     const rows=Object.entries(data.states).map(([code,row])=>({code,name:stateNames[code]||code,row,value:metricValue(row)})).sort((a,b)=>b.value-a.value);
     const active=rows.filter(row=>row.value>0).length;
     const total=selectedTotal();
@@ -368,15 +417,15 @@
       const topReason=Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1])[0];
       let kpis;
       if(state.mode==="base") kpis=[["Links CMDB",total],["UFs com links",active],["Cobertura Cliente",`${baseCoverage}%`],["Clientes",clients.size],["Projetos",projects.size],["Provedores",providers.size]];
-      else if(state.mode==="projects") kpis=[["Links CMDB",total],["UFs com links",active],["Clientes",clients.size],["Projetos",projects.size],["Provedores",providers.size]];
+      else if(state.mode==="projects") kpis=[["Links CMDB",total],["Tickets no período",data.ticket_count||0],["UFs com links",active],["Clientes",clients.size],["Projetos",projects.size],["Provedores",providers.size]];
       else if(state.mode==="calls") kpis=[["Tickets criados",data.ticket_count||0],["Links afetados",data.affected_link_count||0],["UFs com chamados",active],["Links reincidentes",data.recurrence_link_count||0]];
       else if(state.mode==="repeat") kpis=[["Links reincidentes",data.recurrence_link_count||0],["Tickets nesses links",data.recurrence_ticket_count||0],["UFs com reincidencia",active],["Projetos",projects.size]];
-      else kpis=[["Tickets encerrados",data.terminal_ticket_count||0],["Motivo dominante",topReason?.[0]||"Sem dados"],["UFs com encerramentos",active],["Links afetados",data.terminal_link_count||0]];
+      else kpis=[["Tickets resolvidos",data.terminal_ticket_count||0],["Motivo dominante",topReason?.[0]||"Sem dados"],["UFs com resolu\u00e7\u00f5es",active],["Links afetados",data.terminal_link_count||0]];
       const source=["base","projects"].includes(state.mode)?"CMDB atual":state.mode==="repeat"?"OTRS + CMDB":"OTRS local";
       const period=["base","projects"].includes(state.mode)?"Snapshot atual":`${data.period?.date_from||""} \u2013 ${data.period?.date_to||""}`;
-      ui.nationalView.innerHTML=`<div class="national-kpis">${kpis.map(([label,value])=>`<div><strong>${typeof value==="number"?number.format(value):esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div><div class="national-leaders"><div><span>Maior valor por UF</span><strong>${esc(top?.name||"Sem dados")}</strong><small>${number.format(top?.value||0)} ${esc(modeLabels[state.mode])}</small></div><div><span>Fonte / recorte</span><strong>${esc(source)}</strong><small>${esc(period)}</small></div></div>`;
+      ui.nationalView.innerHTML=`<div class="national-kpis">${kpis.map(([label,value])=>`<div><strong>${typeof value==="number"?number.format(value):esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div><div class="national-leaders"><div><span>Maior valor por UF</span><strong>${esc(top?.name||"Sem dados")}</strong><small>${number.format(top?.value||0)} ${esc(modeLabels[state.mode])}</small></div><div><span>Fonte / recorte</span><strong>${esc(source)}</strong><small>${esc(period)}</small></div></div>${unlinkedNote}`;
     } else if (state.panelTab==="ranking") {
-      ui.nationalView.innerHTML=`<div class="national-view-heading"><span>Top 5 por ${esc(modeLabels[state.mode])}</span><span class="demo-inline">Dados reais</span></div><ol class="national-ranking">${rows.filter(row=>row.value>0).slice(0,5).map((row,i)=>`<li><button type="button" class="national-rank-button" data-ranking-code="${row.code}" aria-label="Abrir ${esc(row.name)}, ${number.format(row.value)} ${esc(modeLabels[state.mode])}"><span class="national-rank-number">${String(i+1).padStart(2,"0")}</span><img src="${esc(flags[row.code]||"")}" alt="" width="22" height="15" loading="lazy"><span class="national-rank-name">${esc(row.name)}</span><strong>${number.format(row.value)}</strong></button></li>`).join("")||"<li>Nenhum dado para este recorte.</li>"}</ol>`;
+      ui.nationalView.innerHTML=`<div class="national-view-heading"><span>Top 5 por ${esc(modeLabels[state.mode])}</span><span class="demo-inline">Dados reais</span></div><ol class="national-ranking">${rows.filter(row=>row.value>0).slice(0,5).map((row,i)=>`<li><button type="button" class="national-rank-button" data-ranking-code="${row.code}" aria-label="Abrir ${esc(row.name)}, ${number.format(row.value)} ${esc(modeLabels[state.mode])}"><span class="national-rank-number">${String(i+1).padStart(2,"0")}</span><img src="${esc(flags[row.code]||"")}" alt="" width="22" height="15" loading="lazy"><span class="national-rank-name">${esc(row.name)}</span><strong>${number.format(row.value)}</strong></button></li>`).join("")||"<li>Nenhum dado para este recorte.</li>"}</ol>${unlinkedNote}`;
     } else {
       let distribution={},distributionLabel="",dimensionSelector="";
       if(state.mode==="base") { distributionLabel="Distribui\u00e7\u00e3o por cliente";Object.values(data.states).forEach(row=>Object.entries(row.client_counts||{}).forEach(([key,value])=>{const normKey=norm(key);const bucket=normKey==="claro"?"Claro":normKey==="vivo"?"Vivo":normKey==="algar"?"Algar":normKey==="cliente nao identificado"?"Cliente n\u00e3o identificado":"Outras";distribution[bucket]=(distribution[bucket]||0)+value;})); }
@@ -389,7 +438,7 @@
       else if(state.mode==="repeat") { distributionLabel="Links reincidentes por cliente";distribution=data.recurrence_client_counts||{}; }
       else { distributionLabel="Tickets por motivo";Object.values(data.states).forEach(row=>Object.entries(row.reason_counts||{}).forEach(([key,value])=>distribution[key]=(distribution[key]||0)+value)); }
       const allItems=Object.entries(distribution).filter(([,value])=>value>0).sort((a,b)=>b[1]-a[1]),sum=allItems.reduce((a,item)=>a+item[1],0),items=allItems.slice(0,8);
-      ui.nationalView.innerHTML=`<div class="national-view-heading"><span>${esc(distributionLabel)}</span>${dimensionSelector}<span class="demo-inline">${number.format(sum)} ${sum===1?"registro":"registros"}</span></div><div class="national-distribution">${items.map(([label,value])=>{const key=norm(label);const tone=key==="claro"?"claro":key==="vivo"?"vivo":key==="algar"?"algar":key==="cliente nao identificado"?"unidentified":"other";return `<div class="national-distribution-row"><span><i class="operator-swatch operator-swatch--${tone}"></i>${esc(label)}</span><strong>${sum?(value/sum*100).toLocaleString("pt-BR",{maximumFractionDigits:1}):0}%</strong><small>${number.format(value)}</small><i class="national-distribution-track"><b class="operator-fill--${tone}" style="width:${Math.max(0,value/sum*100)}%"></b></i></div>`;}).join("")||"<p>Nenhum dado para este recorte.</p>"}</div>`;
+      ui.nationalView.innerHTML=`<div class="national-view-heading"><span>${esc(distributionLabel)}</span>${dimensionSelector}<span class="demo-inline">${number.format(sum)} ${sum===1?"registro":"registros"}</span></div><div class="national-distribution">${items.map(([label,value])=>{const key=norm(label);const tone=key==="claro"?"claro":key==="vivo"?"vivo":key==="algar"?"algar":key==="cliente nao identificado"?"unidentified":"other";return `<div class="national-distribution-row"><span><i class="operator-swatch operator-swatch--${tone}"></i>${esc(label)}</span><strong>${sum?(value/sum*100).toLocaleString("pt-BR",{maximumFractionDigits:1}):0}%</strong><small>${number.format(value)}</small><i class="national-distribution-track"><b class="operator-fill--${tone}" style="width:${Math.max(0,value/sum*100)}%"></b></i></div>`;}).join("")||"<p>Nenhum dado para este recorte.</p>"}</div>${unlinkedNote}`;
     }
   }
   ui.nationalView.addEventListener("change",event=>{if(event.target.matches("[data-distribution-filter]")){state.distributionDimension=event.target.value;renderNational();}});
@@ -405,53 +454,95 @@
     const rows=Object.entries(values||{}).filter(([,count])=>count).sort((a,b)=>b[1]-a[1]).slice(0,6);
     target.innerHTML=rows.map(([label,count])=>`<div class="panel-reason-row"><span>${esc(label)}</span><b>${number.format(count)} ${suffix}</b></div>`).join("")||'<p class="panel-empty">Sem registros neste recorte.</p>';
   }
-  const statusLabels={OPEN:"Aberto",PENDING:"Pendente",SCHEDULED:"Agendado",RESOLVED:"Resolvido",CLOSED:"Fechado"};
-  function openTicket(ticket, trigger){
-    ticketReturnFocus=trigger;ui.ticketTitle.textContent=ticket.ticket_number||"Chamado";
-    const identity=ticket.identity||{},cmdb=ticket.cmdb||{};
-    const rows=[["T?tulo",ticket.title||"N?o informado"],["Cliente do ticket",identity.client||"N?o identificado"],["Cliente informado no t?tulo",identity.client_raw||"N?o identificado"],["Projeto",identity.project||"N?o identificado"],["Tipo",identity.occurrence||"N?o identificado"],["Servi?o",identity.service||"N?o identificado"],["Business ID",identity.business_id||"N?o identificado"],["Status",statusLabels[ticket.status]||"Status n?o mapeado"],["Prioridade",ticket.priority||"N?o informada"],["Criado em",ticket.created_at||"N?o informado"],["Alterado em",ticket.changed_at||"N?o informado"],["Encerrado em",ticket.terminal_at||"N?o informado"],["Motivo",ticket.closing_reason||"N?o informado"],["Item CMDB",cmdb.number||cmdb.name||"N?o relacionado"],["Designa??o",cmdb.designation||"N?o informada"],["Circuito",cmdb.circuit||"N?o informado"],["Cidade / UF",[cmdb.city,cmdb.uf].filter(Boolean).join(" / ")||"N?o informada"],["Provedor",cmdb.provider||"N?o identificado"]];
-    ui.ticketContent.innerHTML=rows.map(([label,value])=>`<div class="ticket-detail-row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join("")+`<p class="ticket-detail-note">Contexto associado ao recorte geogr?fico; ${esc(identity.source||"UNKNOWN")} ? a identidade do t?tulo n?o altera a classifica??o do link CMDB.</p>`;
-    ui.ticketModal.hidden=false;document.body.classList.add("ticket-dialog-open");ui.ticketClose.focus();
+  function listDimensionRows(target, linkValues, ticketValues, normalize=value=>value) {
+    const links={},tickets={};
+    Object.entries(linkValues||{}).forEach(([name,count])=>{const label=normalize(name);links[label]=(links[label]||0)+count;});
+    Object.entries(ticketValues||{}).forEach(([name,count])=>{const label=normalize(name);tickets[label]=(tickets[label]||0)+count;});
+    const names=[...new Set([...Object.keys(links),...Object.keys(tickets)])]
+      .sort((a,b)=>(links[b]||0)-(links[a]||0)||a.localeCompare(b,"pt-BR"))
+      .slice(0,8);
+    target.innerHTML=names.map(name=>`<div class="panel-reason-row"><span>${esc(name)}</span><b>${number.format(links[name]||0)} links · ${number.format(tickets[name]||0)} tickets</b></div>`).join("")||'<p class="panel-empty">Sem registros neste recorte.</p>';
   }
-  function closeTicket(){if(ui.ticketModal.hidden)return;ui.ticketModal.hidden=true;document.body.classList.remove("ticket-dialog-open");ticketReturnFocus?.focus();}
-  async function loadState(code) {
+  const statusLabels={OPEN:"Aberto",PENDING:"Pendente",SCHEDULED:"Agendado",RESOLVED:"Resolvido",CLOSED:"Fechado"};
+  async function loadState(code, tab=state.ufTab, pageNumber=state.ticketPage) {
     if (!data) return;
+    const allowedTabs=["overview","tickets","projects","providers","reasons","recurrence"];
+    if (!allowedTabs.includes(tab)) tab="overview";
+    if (state.mode==="base" && tab==="tickets") tab="overview";
+    if ((state.mode==="base"||state.mode==="motives") && tab==="recurrence") tab="overview";
+    if ((state.mode==="base"||state.mode==="repeat") && tab==="reasons") tab="overview";
+    state.ufTab=tab;
+    state.ticketPage=pageNumber;
     detailController?.abort();
     const controller=new AbortController(),sequence=++detailSequence;
     detailController=controller;
     const row=data.states[code]||{};
-    const url=urlFor(root.dataset.detailUrl,{uf:code});
+    const url=urlFor(root.dataset.detailUrl,{uf:code,tab:tab,ticket_page:state.ticketPage,ticket_page_size:state.ticketPageSize,ticket_search:state.ticketSearch});
     const response=await fetch(url,{headers:{"X-Requested-With":"XMLHttpRequest"},signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])});
-    if(!response.ok) throw new Error(`Não foi possível abrir os detalhes da UF (${response.status}).`);
+    if(!response.ok) throw new Error("N\u00e3o foi poss\u00edvel abrir os detalhes da UF ("+response.status+").");
     const detail=await response.json();
     if(sequence!==detailSequence||state.selectedUF!==code)return;
     ui.panelCode.textContent=code; ui.panelName.textContent=stateNames[code]||code;
-    ui.panelFlag.src=flags[code]||""; ui.panelFlag.alt=`Bandeira de ${stateNames[code]||code}`;
-    const count=metricValue(row); ui.panelTotal.textContent=number.format(count);
-    ui.panelScope.textContent=`${modeLabels[state.mode]} · ${["base","projects"].includes(state.mode)?"Atual":`${data.period?.date_from||""} – ${data.period?.date_to||""}`}`;
-    ui.panelContext.textContent=`${number.format(row.total_links||0)} links CMDB · ${number.format(row.ticket_count||0)} tickets no período · ${number.format(row.recurrence_links||0)} links reincidentes.`;
-    listRows(ui.clients,state.mode==="repeat"?row.recurrence_client_counts:["calls","motives"].includes(state.mode)?row.ticket_client_counts:row.client_counts); listRows(ui.projects,Object.entries(["calls","repeat","motives"].includes(state.mode)?(row.ticket_project_counts||{}):(row.project_counts||{})).reduce((items,[key,value])=>{const label=displayProject(key);items[label]=(items[label]||0)+value;return items;},{})); listRows(ui.providers,["calls","repeat","motives"].includes(state.mode)?row.ticket_provider_counts:row.provider_counts); listRows(ui.cities,["calls","repeat","motives"].includes(state.mode)?row.ticket_city_counts:row.city_counts);
-    listRows(ui.statuses,Object.fromEntries(Object.entries(row.ticket_status_counts||{}).map(([key,value])=>[statusLabels[key]||"Status n?o mapeado",value])),"tickets");
-    listRows(ui.reasons,state.mode==="calls"?row.ticket_reason_counts:row.reason_counts,"tickets");
-    const sectionData={clients:["base","projects","repeat","calls","motives"].includes(state.mode)&&(state.mode==="repeat"?Object.keys(row.recurrence_client_counts||{}).length>0:["calls","motives"].includes(state.mode)?Object.keys(row.ticket_client_counts||{}).length>0:Object.keys(row.client_counts||{}).length>0),coverage:state.mode==="base"&&(row.total_links||0)>0,status:state.mode==="calls"&&Object.keys(row.ticket_status_counts||{}).length>0,projects:["base","projects","calls","repeat","motives"].includes(state.mode)&&Object.keys(["calls","repeat","motives"].includes(state.mode)?(row.ticket_project_counts||{}):(row.project_counts||{})).length>0,providers:["base","projects","calls","repeat","motives"].includes(state.mode)&&Object.keys(["calls","repeat","motives"].includes(state.mode)?(row.ticket_provider_counts||{}):(row.provider_counts||{})).length>0,cities:["base","projects","calls","repeat","motives"].includes(state.mode)&&Object.keys(["calls","repeat","motives"].includes(state.mode)?(row.ticket_city_counts||{}):(row.city_counts||{})).length>0,reasons:["calls","repeat","motives"].includes(state.mode)&&Object.keys(state.mode==="calls"?(row.ticket_reason_counts||{}):(row.reason_counts||{})).length>0,links:["base","projects","calls","repeat","motives"].includes(state.mode)&&(detail.link_total||0)>0,tickets:["calls","repeat","motives"].includes(state.mode)&&(detail.ticket_total||0)>0};
-    page.querySelectorAll("[data-panel-section]").forEach(section=>{section.hidden=!sectionData[section.dataset.panelSection];});
-    const links=detail.links||[];
-    ui.links.innerHTML=links.slice(0,8).map(link=>`<div class="panel-reason-row"><span>${esc(link.number||link.name||"Link sem designa??o")}<small>${esc(link.city||"Cidade n?o informada")} ? ${esc(link.provider||"Provedor n?o identificado")}${link.ticket_count?` ? ${number.format(link.ticket_count)} tickets`:""}</small></span><b>${esc(`Projeto: ${link.project?displayProject(link.project):"Projeto n?o identificado"}`)}</b></div>`).join("")||'<p class="panel-empty">Nenhum link para este recorte.</p>';
-    if(detail.link_total>8) ui.links.insertAdjacentHTML("beforeend",`<p class="panel-empty">Exibindo 8 de ${number.format(detail.link_total)} links. Use “Ver links na Base” para a lista completa.</p>`);
-    const tickets=detail.tickets||[];ticketRows=tickets;
-    ui.tickets.innerHTML=tickets.slice(0,8).map((ticket,index)=>`<button type="button" class="panel-ticket-button" data-ticket-index="${index}"><span>${esc(ticket.ticket_number||"Ticket")}<small>${esc(statusLabels[ticket.status]||"Status n?o mapeado")} ? ${esc(ticket.link||"Link n?o informado")}</small></span><b>${esc(ticket.closing_reason||"Detalhes")}</b></button>`).join("")||'<p class="panel-empty">Nenhum ticket associado neste recorte.</p>';
-    if(detail.ticket_total>8) ui.tickets.insertAdjacentHTML("beforeend",`<p class="panel-empty">Exibindo 8 de ${number.format(detail.ticket_total)} tickets.</p>`);
-    const base=new URL(root.dataset.baseUrl,location.origin);base.searchParams.set("uf",code);if(state.client!=="all")base.searchParams.set("cliente",state.client);if(state.project)base.searchParams.set("projeto",state.project);if(state.provider)base.searchParams.set("provider_id",state.provider);ui.openBase.href=base.pathname+base.search;
+    ui.panelFlag.src=flags[code]||""; ui.panelFlag.alt="Bandeira de "+(stateNames[code]||code);
+    const count=metricValue(row);
+    ui.panelTotal.textContent=number.format(count);
+    ui.panelScope.textContent=modeLabels[state.mode]+" \u00b7 "+(state.mode==="base"?"Atual":periodLabel(data.period));
+    ui.panelContext.textContent=number.format(row.total_links||0)+" links CMDB \u00b7 "+number.format(row.ticket_count||0)+" tickets no per\u00edodo \u00b7 "+number.format(row.recurrence_links||0)+" links reincidentes.";
+    page.querySelectorAll("[data-state-tab]").forEach(button=>{
+      const selected=button.dataset.stateTab===tab;
+      button.setAttribute("aria-selected",String(selected));
+      button.hidden=(state.mode==="base"&&["tickets","reasons","recurrence"].includes(button.dataset.stateTab))
+        ||(state.mode==="motives"&&button.dataset.stateTab==="recurrence")
+        ||(state.mode==="repeat"&&button.dataset.stateTab==="reasons");
+    });
+    page.querySelectorAll("[data-panel-section]").forEach(section=>{section.hidden=section.dataset.panelSection!==tab;});
+    const projectCounts=["calls","repeat","motives"].includes(state.mode)?(row.ticket_project_counts||{}):(row.project_counts||{});
+    const canonicalProjects={};
+    Object.entries(projectCounts).forEach(([name,amount])=>{const label=displayProject(name);canonicalProjects[label]=(canonicalProjects[label]||0)+amount;});
+    const providerCounts=["calls","repeat","motives"].includes(state.mode)?(row.ticket_provider_counts||{}):(row.provider_counts||{});
+    const reasonCounts=state.mode==="calls"?(row.ticket_reason_counts||{}):(row.reason_counts||{});
+    if(["projects","calls","repeat","motives"].includes(state.mode)){
+      listDimensionRows(ui.projects,row.project_counts,row.ticket_project_counts,displayProject);
+      listDimensionRows(ui.providers,row.provider_counts,row.ticket_provider_counts);
+    }else{
+      listRows(ui.projects,canonicalProjects);
+      listRows(ui.providers,providerCounts);
+    }
+    listRows(ui.reasons,reasonCounts,"tickets");
+    const recurrenceRows=detail.recurrences||[];
+    ui.panelRecurrence.innerHTML="<div class=\"panel-recurrence-summary\"><strong>"+number.format(row.recurrence_links||0)+"</strong><span>links reincidentes</span><strong>"+number.format(row.recurrence_tickets||0)+"</strong><span>tickets nesses links</span></div>"+
+      (recurrenceRows.length?recurrenceRows.map(item=>"<div class=\"panel-reason-row panel-recurrence-row\"><span><strong>"+esc(item.link||"Link")+"</strong><small>"+esc(item.provider||"Provedor não identificado")+"</small></span><b>"+number.format(item.occurrences||0)+" ocorrências<br><small>Última: "+esc(item.last_occurrence?new Date(item.last_occurrence).toLocaleDateString("pt-BR"):"Sem data")+"</small></b></div>").join(""):"<p class=\"panel-empty\">Nenhum link reincidente neste recorte.</p>");
+    const projectCount=Object.keys(canonicalProjects).filter(name=>!norm(name).includes("nao identificado")).length;
+    const providerCount=Object.keys(providerCounts).filter(name=>!norm(name).includes("nao identificado")).length;
+    const ticketCount=state.mode==="motives"?Object.values(row.reason_counts||{}).reduce((a,b)=>a+b,0):state.mode==="repeat"?(row.recurrence_tickets||0):(row.ticket_count||0);
+    const kpis=[["Links CMDB",row.total_links||0],["Tickets no recorte",ticketCount],["Links afetados",row.affected_links||row.terminal_links||0],["Projetos",projectCount],["Provedores",providerCount],["Links reincidentes",row.recurrence_links||0]];
+    ui.panelOverview.innerHTML=kpis.map(([label,value])=>"<div class=\"panel-overview-kpi\"><strong>"+number.format(value)+"</strong><span>"+esc(label)+"</span></div>").join("");
+    const clientCounts=["calls","repeat","motives"].includes(state.mode)?(row.ticket_client_counts||{}):(row.client_counts||{});
+    const dominant=topAggregate(clientCounts,["cliente nao identificado"]);
+    ui.panelOverviewContext.innerHTML=dominant?"<p>Cliente predominante: <strong>"+esc(dominant[0])+"</strong> \u00b7 "+number.format(dominant[1])+" registros.</p>":"<p>Sem clientes identificados neste recorte.</p>";
+    const ticketRows=detail.tickets||[];
+    ui.panelTicketSearch.value=state.ticketSearch;
+    ui.panelTicketSize.value=String(detail.ticket_page_size||state.ticketPageSize);
+    ui.tickets.innerHTML=ticketRows.map(ticket=>{
+      const cmdb=ticket.cmdb||{}, identity=ticket.identity||{};
+      const created=ticket.created_at?new Date(ticket.created_at).toLocaleDateString("pt-BR"):"Sem data";
+      return "<article class=\"panel-ticket-row\"><div><strong>"+esc(ticket.ticket_number||"Chamado")+"</strong><span>"+esc(statusLabels[ticket.status]||ticket.status||"Status n\u00e3o informado")+" \u00b7 "+esc(created)+"</span><p>"+esc(ticket.title||"Sem t\u00edtulo")+"</p><small>"+esc(identity.client||"Cliente n\u00e3o identificado")+" \u00b7 "+esc(identity.project?displayProject(identity.project):"Projeto n\u00e3o identificado")+" \u00b7 "+esc(ticket.link||"Link n\u00e3o identificado")+" \u00b7 "+esc(cmdb.provider||"Provedor n\u00e3o identificado")+"</small><small>Prioridade: "+esc(ticket.priority||"Não informada")+(ticket.closing_reason?" \u00b7 Motivo: "+esc(ticket.closing_reason):"")+"</small></div><div class=\"panel-ticket-arion\"><span>"+esc(ticket.arion_status||"Em Aberto")+"</span><small>"+esc(ticket.assignee||"Sem respons\u00e1vel")+"</small><a class=\"panel-ticket-open\" href=\""+esc(ticket.chamados_url||"#")+"\">Abrir</a></div></article>";
+    }).join("")||"<p class=\"panel-empty\">Nenhum chamado corresponde a este recorte.</p>";
+    const current=Number(detail.ticket_page||1),pages=Number(detail.ticket_pages||1);
+    ui.panelTicketPagination.innerHTML="<span>"+number.format(detail.ticket_total||0)+" chamados \u00b7 P\u00e1gina "+number.format(current)+" de "+number.format(pages)+"</span><div><button type=\"button\" data-panel-ticket-page=\""+Math.max(1,current-1)+"\" "+(current<=1?"disabled":"")+">Anterior</button><button type=\"button\" data-panel-ticket-page=\""+Math.min(pages,current+1)+"\" "+(current>=pages?"disabled":"")+">Pr\u00f3xima</button></div>";
+    ui.openBase.href=root.dataset.baseUrl+"?uf="+encodeURIComponent(code)+(state.client!=="all"?"&cliente="+encodeURIComponent(state.client):"")+(state.project?"&projeto="+encodeURIComponent(state.project):"")+(state.provider?"&provider_id="+encodeURIComponent(state.provider):"");
     const cockpit=new URL(root.dataset.cockpitUrl,location.origin);cockpit.searchParams.set("group_by","uf");cockpit.searchParams.set("uf",code);
     cockpit.searchParams.set("metric",state.mode==="motives"?"resolved_closed_tickets":state.mode==="repeat"?"recurrences":"tickets");
     if(data.period?.date_from)cockpit.searchParams.set("start",data.period.date_from);if(data.period?.date_to)cockpit.searchParams.set("end",data.period.date_to);
-    if(state.mode==="motives"&&state.reason)cockpit.searchParams.set("termination_reason",state.reason);ui.openCockpit.href=cockpit.pathname+cockpit.search;
+    if(state.mode==="motives"&&state.reason)cockpit.searchParams.set("termination_reason",state.reason);
+    ui.openCockpit.href=cockpit.pathname+cockpit.search;
     ui.openCockpit.textContent=["base","projects"].includes(state.mode)?"Abrir UF no Cockpit":"Analisar no Cockpit";
-    openPanel(); ui.announce.textContent=`${stateNames[code]}, ${number.format(count)} ${modeLabels[state.mode]}.`;
+    openPanel();
+    ui.announce.textContent=(stateNames[code]||code)+", "+number.format(count)+" "+modeLabels[state.mode]+".";
   }
   function panelWidth(element,fallback){const width=parseFloat(getComputedStyle(element).width);return Number.isFinite(width)&&width>0?width:fallback;}
   function updateMapLayout(){
-    const drawerWidth=panelWidth(panel,356),nationalWidth=panelWidth(national,300);
+    const drawerWidth=panelWidth(panel,480),nationalWidth=panelWidth(national,300);
     root.style.setProperty("--map-drawer-width",`${drawerWidth}px`);
     root.style.setProperty("--map-national-width",`${nationalWidth}px`);
     root.style.setProperty("--map-control-inset",`${drawerWidth+16}px`);
@@ -494,8 +585,8 @@
   }
   function openPanel(){panel.hidden=false;panel.inert=false;panel.setAttribute("aria-hidden","false");panelBackdrop.classList.add("is-visible");updateMapLayout();requestAnimationFrame(()=>panel.classList.add("is-open"));}
   function closePanel(){detailSequence++;detailController?.abort();panel.classList.remove("is-open");panel.inert=true;panel.setAttribute("aria-hidden","true");panelBackdrop.classList.remove("is-visible");updateMapLayout();setTimeout(()=>{if(!state.selectedUF)panel.hidden=true;},220);}
-  function selectState(code,zoom=true){if(!stateNames[code])return;closeTooltip();state.selectedUF=code;syncUrl();ui.breadcrumb.hidden=false;ui.selectedName.textContent=stateNames[code];updateMapLayout();renderMap();loadState(code).catch(error=>{if(error.name!=="AbortError")showError(error.message,"Detalhes indisponíveis");});if(zoom)fitSelectedState();}
-  function clearSelection(){closeTooltip();state.selectedUF="";syncUrl();ui.breadcrumb.hidden=true;closePanel();renderMap();fitBrazil();}
+  function selectState(code,zoom=true){if(!stateNames[code])return;closeTooltip();if(state.selectedUF!==code){state.ufTab="overview";state.ticketPage=1;state.ticketSearch="";}state.selectedUF=code;syncUrl();ui.breadcrumb.hidden=false;ui.selectedName.textContent=stateNames[code];updateMapLayout();renderMap();loadState(code).catch(error=>{if(error.name!=="AbortError")showError(error.message,"Detalhes indisponíveis");});if(zoom)fitSelectedState();}
+  function clearSelection(){closeTooltip();state.selectedUF="";state.ufTab="overview";state.ticketPage=1;state.ticketSearch="";syncUrl();ui.breadcrumb.hidden=true;closePanel();renderMap();fitBrazil();}
   function updateSearchActive() {
     const options=[...ui.results.querySelectorAll("[data-search-code]")];
     options.forEach((option,index)=>option.setAttribute("aria-selected",String(index===searchIndex)));
@@ -512,12 +603,8 @@
   }
   function chooseSearchResult(code){closeSearch(true);closeTooltip();selectState(code);}
 
-  ui.ticketClose.addEventListener("click",closeTicket);
-  ui.ticketModal.addEventListener("click",event=>{if(event.target===ui.ticketModal)closeTicket();});
-  ui.tickets.addEventListener("click",event=>{const button=event.target.closest("[data-ticket-index]");if(button)openTicket(ticketRows[Number(button.dataset.ticketIndex)]||{},button);});
-  document.addEventListener("keydown",event=>{if(ui.ticketModal.hidden)return;if(event.key==="Escape"){event.preventDefault();closeTicket();return;}if(event.key==="Tab"){const focusables=[ui.ticketClose,...ui.ticketModal.querySelectorAll("a[href],button:not([disabled]),[tabindex]:not([tabindex='-1'])")];const first=focusables[0],last=focusables[focusables.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
   function bind(){
-    page.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>{state.mode=button.dataset.mode;if(state.mode!=="calls"){state.status="";state.priority="";}updateModeControls();fetchData().catch(error=>showError("Não foi possível carregar o recorte selecionado. Tente novamente."));}));
+    page.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>{state.mode=button.dataset.mode;if(!["projects","calls","repeat","motives"].includes(state.mode)){state.status="";state.priority="";state.arionStatus="";state.assignee="";}if(state.mode!=="motives")state.reason="";state.ufTab=state.mode==="base"&&state.ufTab!=="overview"?"overview":state.ufTab;updateModeControls();fetchData().catch(error=>showError("N\u00e3o foi poss\u00edvel carregar o recorte selecionado. Tente novamente."));}));
     page.querySelectorAll("[data-client]").forEach(button=>button.addEventListener("click",()=>{state.client=button.dataset.client;page.querySelectorAll("[data-client]").forEach(item=>{const selected=item===button;item.classList.toggle("is-selected",selected);item.setAttribute("aria-pressed",String(selected));});state.project="";ui.project.value="";fetchData().catch(()=>showError("Não foi possível filtrar os dados. Tente novamente."));}));
     ui.project.addEventListener("change",()=>{state.project=ui.project.value;fetchData().catch(()=>showError("Não foi possível filtrar os dados. Tente novamente."));});
     ui.provider.addEventListener("change",()=>{state.provider=ui.provider.value;fetchData().catch(()=>showError("Não foi possível filtrar os dados. Tente novamente."));});
@@ -526,6 +613,13 @@
     ui.reason.addEventListener("change",()=>{state.reason=ui.reason.value;fetchData().catch(()=>showError("Não foi possível filtrar os motivos."));});
     ui.status.addEventListener("change",()=>{state.status=ui.status.value;fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel filtrar o status."));});
     ui.priority.addEventListener("change",()=>{state.priority=ui.priority.value;fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel filtrar a prioridade."));});
+    ui.arionStatus.addEventListener("change",()=>{state.arionStatus=ui.arionStatus.value;fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel filtrar o status ARION."));});
+    ui.assignee.addEventListener("change",()=>{state.assignee=ui.assignee.value;fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel filtrar o respons\u00e1vel."));});
+    ui.activeFilters.addEventListener("click",event=>{const clear=event.target.closest("[data-clear-filter]");if(clear){clearFilterValue(clear.dataset.clearFilter);return;}if(event.target.closest("[data-clear-all-filters]")){state.mode="base";state.client="all";state.project="";state.provider="";state.period="this_month";state.reason="";state.status="";state.priority="";state.arionStatus="";state.assignee="";state.dateFrom="";state.dateTo="";clearSelection();updateModeControls();fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel limpar os filtros."));}});
+    page.querySelectorAll("[data-state-tab]").forEach(button=>button.addEventListener("click",()=>{if(!state.selectedUF)return;state.ticketPage=1;loadState(state.selectedUF,button.dataset.stateTab,1).catch(error=>showError(error.message,"Detalhes indispon\u00edveis"));}));
+    ui.panelTicketSearch.addEventListener("input",()=>{clearTimeout(panelSearchTimer);state.ticketSearch=ui.panelTicketSearch.value.trim();state.ticketPage=1;panelSearchTimer=setTimeout(()=>{if(state.selectedUF&&state.ufTab==="tickets")loadState(state.selectedUF,"tickets",1).catch(error=>showError(error.message,"Detalhes indispon\u00edveis"));},240);});
+    ui.panelTicketSize.addEventListener("change",()=>{state.ticketPageSize=Number(ui.panelTicketSize.value)||25;state.ticketPage=1;if(state.selectedUF&&state.ufTab==="tickets")loadState(state.selectedUF,"tickets",1).catch(error=>showError(error.message,"Detalhes indispon\u00edveis"));});
+    ui.panelTicketPagination.addEventListener("click",event=>{const button=event.target.closest("[data-panel-ticket-page]");if(!button||button.disabled||!state.selectedUF)return;loadState(state.selectedUF,"tickets",Number(button.dataset.panelTicketPage)).catch(error=>showError(error.message,"Detalhes indispon\u00edveis"));});
     ui.search.addEventListener("input",searchResults);ui.search.addEventListener("keydown",event=>{
       const options=[...ui.results.querySelectorAll("[data-search-code]")];
       if(event.key==="Escape")closeSearch();
@@ -541,7 +635,7 @@
     $("[data-national-collapse]").addEventListener("click",()=>setNationalCollapsed(true));
     $("[data-national-expand]").addEventListener("click",()=>setNationalCollapsed(false));
     page.querySelectorAll("[data-national-tab]").forEach(button=>button.addEventListener("click",()=>setPanelTab(button.dataset.nationalTab)));
-    $("[data-brazil-link]").addEventListener("click",clearSelection);$("[data-panel-close]").addEventListener("click",clearSelection);panelBackdrop.addEventListener("click",clearSelection);
+    $("[data-brazil-link]").addEventListener("click",clearSelection);$("[data-panel-close]").addEventListener("click",clearSelection);
     const moveState=step=>{const index=stateOrder.indexOf(state.selectedUF);if(index<0)return;selectState(stateOrder[(index+step+stateOrder.length)%stateOrder.length]);};
     ui.ufPrevious.addEventListener("click",()=>moveState(-1));ui.ufNext.addEventListener("click",()=>moveState(1));
     $("[data-map-retry]").addEventListener("click",initialize);
@@ -575,12 +669,12 @@
           map.on("click",layer,event=>{const code=event.features?.[0]?.properties?.sigla;if(code)selectState(code);});
           map.on("mouseenter",layer,()=>map.getCanvas().style.cursor="pointer");
           map.on("mousemove",layer,event=>{const code=event.features?.[0]?.properties?.sigla||"";if(code!==hoveredUF){if(hoveredUF)setFeatureState(hoveredUF,"hover",false);hoveredUF=code;if(code)setFeatureState(code,"hover",true);}showTooltip(event,code);});
-          map.on("mouseleave",layer,()=>{map.getCanvas().style.cursor="";if(hoveredUF)setFeatureState(hoveredUF,"hover",false);hoveredUF="";popup?.remove();tooltipKey="";});
+          map.on("mouseleave",layer,()=>{map.getCanvas().style.cursor="";if(hoveredUF)setFeatureState(hoveredUF,"hover",false);hoveredUF="";deferCloseTooltip();});
         });
         map.on("mouseenter","arion-state-callout-lines",()=>map.getCanvas().style.cursor="pointer");
         map.on("click","arion-state-callout-lines",event=>{const code=event.features?.[0]?.properties?.sigla;if(code)selectState(code);});
         map.on("mousemove","arion-state-callout-lines",event=>{const code=event.features?.[0]?.properties?.sigla||"";if(code!==hoveredUF){if(hoveredUF)setFeatureState(hoveredUF,"hover",false);hoveredUF=code;if(code)setFeatureState(code,"hover",true);}showTooltip(event,code);});
-        map.on("mouseleave","arion-state-callout-lines",()=>{map.getCanvas().style.cursor="";if(hoveredUF)setFeatureState(hoveredUF,"hover",false);hoveredUF="";popup?.remove();tooltipKey="";});
+        map.on("mouseleave","arion-state-callout-lines",()=>{map.getCanvas().style.cursor="";if(hoveredUF)setFeatureState(hoveredUF,"hover",false);hoveredUF="";deferCloseTooltip();});
         mapLoaded=true;message.hidden=true;renderMap();updateMapLayout();if(state.selectedUF)selectState(state.selectedUF);else fitBrazil();
       }catch(_error){showError("Não foi possível preparar as unidades do mapa.");}});
       map.on("error",()=>{if(!mapLoaded)showError("Confira a configuração pública e a conexão do Mapbox.");});
@@ -601,6 +695,8 @@
       state.mode==="repeat"?(amount===1?"link reincidente":"links reincidentes"):
       state.mode==="motives"?(amount===1?"encerramento":"encerramentos"):(amount===1?"ticket":"tickets");
     const project=topAggregate(row.project_counts,["projeto nao identificado"]);
+    const projectCounts=["calls","repeat","motives"].includes(state.mode)?(row.ticket_project_counts||{}):(row.project_counts||{});
+    const projectTotal=Object.keys(projectCounts).filter(value=>!["projeto nao identificado",""].includes(norm(value))).length;
     const provider=topAggregate(["calls","motives"].includes(state.mode)?row.ticket_provider_counts:state.mode==="repeat"?row.recurrence_provider_counts:row.provider_counts,["provedor nao identificado"]);
     const reason=topAggregate(state.mode==="calls"?row.ticket_reason_counts:row.reason_counts);
     let rows="";
@@ -611,10 +707,18 @@
       if (provider) rows+=tooltipLine("Provider principal",provider[0]);
     } else if (state.mode==="projects") {
       const projectName=state.project?displayProject(state.project):project?displayProject(project[0]):"";
+      rows+=tooltipLine("Projetos na UF",number.format(projectTotal));
       if (projectName) rows+=tooltipLine("Projeto",projectName);
+      rows+=tooltipLine("Links",number.format(row.total_links||0));
+      rows+=tooltipLine("Tickets no período",number.format(row.ticket_count||0));
       if (amount) rows+=tooltipLine("Cliente predominante",dominantClientLabel(row));
       if (provider) rows+=tooltipLine("Provider principal",provider[0]);
     } else if (state.mode==="calls") {
+      const statuses=row.ticket_status_counts||{};
+      const active=(statuses.OPEN||0)+(statuses.PENDING||0)+(statuses.SCHEDULED||0);
+      const resolved=(statuses.RESOLVED||0)+(statuses.CLOSED||0);
+      rows+=tooltipLine("Abertos / em andamento",number.format(active));
+      rows+=tooltipLine("Resolvidos / fechados",number.format(resolved));
       rows+=tooltipLine("Links afetados",`${number.format(row.affected_links||0)} ${(row.affected_links||0)===1?"link":"links"}`);
       rows+=tooltipLine("Links reincidentes",number.format(row.recurrence_links||0));
       if (reason) rows+=tooltipLine("Principal motivo",reason[0]);
@@ -632,6 +736,7 @@
     return `<div class="state-tooltip" role="tooltip"><div class="tooltip-heading"><img src="${esc(flag)}" alt="" width="28" height="19" loading="lazy"><div><strong>${esc(title)}</strong><span>${esc(code)} &#183; Brasil</span></div></div><div class="tooltip-primary-metric"><strong>${quantity}</strong><span>${esc(state.mode==="motives"&&state.reason?reasonLabel():metricLabel)}</span></div>${rows?`<div class="tooltip-details">${rows}</div>`:""}</div>`;
   }
   function showTooltip(event,codeOverride=""){
+    clearTimeout(tooltipCloseTimer);
     const code=codeOverride||event.features?.[0]?.properties?.sigla;if(!code){closeTooltip();return;}
     if(code===state.selectedUF){closeTooltip();return;}
     const row=data?.states?.[code]||{};

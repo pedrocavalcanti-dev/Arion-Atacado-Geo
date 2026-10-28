@@ -40,14 +40,19 @@ class MirrorAnalyticsTests(TestCase):
         allowed_project = Projeto.objects.create(name="Projeto A", normalized_name="projeto-a")
         scope.allowed_operators.set([allowed_operator])
         scope.allowed_projects.set([allowed_project])
+        CMDBLinkMirror.objects.filter(pk__in=(self.link.pk, self.other_link.pk)).update(
+            contracting_client=self.operator.name,
+        )
 
         CMDBLinkMirror.objects.create(
             source_config_item_id="analytics-invalid-state", state="N/A",
             operator=self.operator, legacy_project="Projeto A",
+            contracting_client=self.operator.name,
         )
         CMDBLinkMirror.objects.create(
             source_config_item_id="analytics-invalid-state-name", state="Sao Paulo",
             operator=self.operator, legacy_project="Projeto A",
+            contracting_client=self.operator.name,
         )
         hidden_provider = CMDBOperatorMirror.objects.create(
             source_config_item_id="analytics-hidden-provider", name="Fora do escopo",
@@ -145,6 +150,130 @@ class MirrorAnalyticsTests(TestCase):
         self.assertNotContains(response, "ALGAR")
         self.assertContains(response, "Top 10 Estados com mais Links")
         self.assertContains(response, "Provedores com mais Links")
+
+    def test_dashboard_and_queue_count_active_tickets_and_distinct_affected_links(self):
+        from aplicativos.chamados.services import TicketQueueService
+
+        same_link_tickets = [
+            self._ticket(1401, "OPEN", False, 5),
+            self._ticket(1402, "PENDING", True, 6),
+            self._ticket(1403, "SCHEDULED", True, 7),
+        ]
+        for ticket in same_link_tickets:
+            OTRSTicketConfigItem.objects.create(
+                ticket=ticket, config_item_id=self.link.source_config_item_id,
+                cmdb_link=self.link, relation_type=f"DependsOn-{ticket.external_id}",
+                relation_state="Valid",
+            )
+
+        third_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="analytics-ci-3", source_number="AN-3", state="SP",
+            operator=self.operator, legacy_project="Projeto A",
+        )
+        multi_link_ticket = self._ticket(1404, "OPEN", True, 8)
+        for index, link in enumerate((self.other_link, third_link)):
+            OTRSTicketConfigItem.objects.create(
+                ticket=multi_link_ticket, config_item_id=link.source_config_item_id,
+                cmdb_link=link, relation_type=f"DependsOn-multi-{index}", relation_state="Valid",
+            )
+
+        individual_ticket = self._ticket(1405, "OPEN", True, 9)
+        OTRSTicketConfigItem.objects.create(
+            ticket=individual_ticket, config_item_id=third_link.source_config_item_id,
+            cmdb_link=third_link, relation_type="DependsOn-individual", relation_state="Valid",
+        )
+        no_ci_ticket = self._ticket(1406, "OPEN", True, 10)
+        ci_without_local_link_ticket = self._ticket(1407, "OPEN", True, 11)
+        OTRSTicketConfigItem.objects.create(
+            ticket=ci_without_local_link_ticket, config_item_id="missing-local-ci",
+            cmdb_link=None, relation_type="DependsOn", relation_state="Valid",
+        )
+
+        # A terminal ticket with a stale true flag must remain outside business-open.
+        closed_ticket = self._ticket(1408, "CLOSED", True, 12)
+        OTRSTicketConfigItem.objects.create(
+            ticket=closed_ticket, config_item_id=self.link.source_config_item_id,
+            cmdb_link=self.link, relation_type="DependsOn-closed", relation_state="Valid",
+        )
+
+        dashboard = DashboardAnalyticsService.build(
+            user=self.user, start=date(2026, 10, 1), end=date(2026, 10, 31),
+        )
+        queue = TicketQueueService.build(self.user, {})
+
+        self.assertEqual(dashboard["business_open"], 7)
+        self.assertEqual(dashboard["links_affected"], 3)
+        self.assertEqual(queue["active_count"], dashboard["business_open"])
+        self.assertEqual(queue["affected_count"], dashboard["links_affected"])
+        self.assertEqual(no_ci_ticket.business_status, "OPEN")
+        self.assertEqual(ci_without_local_link_ticket.business_status, "OPEN")
+
+    def test_dashboard_and_queue_apply_custom_scope_before_current_counts(self):
+        from aplicativos.chamados.services import TicketQueueService
+
+        scope = self.user.groups.get(name="Analista NOC").data_scope
+        scope.mode = GroupDataScope.Mode.CUSTOM
+        scope.save()
+        allowed_operator = Operadora.objects.create(
+            name=self.operator.name, normalized_name="operadora-analytics",
+        )
+        allowed_project = Projeto.objects.create(name="Projeto A", normalized_name="projeto-a")
+        scope.allowed_operators.set([allowed_operator])
+        scope.allowed_projects.set([allowed_project])
+        self.link.contracting_client = self.operator.name
+        self.link.save(update_fields=("contracting_client",))
+
+        allowed = self._ticket(1411, "OPEN", True, 5)
+        OTRSTicketConfigItem.objects.create(
+            ticket=allowed, config_item_id=self.link.source_config_item_id,
+            cmdb_link=self.link, relation_type="DependsOn", relation_state="Valid",
+        )
+        hidden_provider = CMDBOperatorMirror.objects.create(
+            source_config_item_id="analytics-hidden-scope-op", name="Fora do escopo",
+        )
+        hidden_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="analytics-hidden-scope-ci", state="AM",
+            operator=hidden_provider, contracting_client="Outro cliente", business_project="Projeto B",
+        )
+        hidden = self._ticket(1412, "OPEN", True, 6)
+        OTRSTicketConfigItem.objects.create(
+            ticket=hidden, config_item_id=hidden_link.source_config_item_id,
+            cmdb_link=hidden_link, relation_type="DependsOn", relation_state="Valid",
+        )
+        unlinked = self._ticket(1413, "OPEN", True, 7)
+
+        dashboard = DashboardAnalyticsService.build(
+            user=self.user, start=date(2026, 10, 1), end=date(2026, 10, 31),
+        )
+        queue = TicketQueueService.build(self.user, {})
+
+        self.assertEqual(dashboard["business_open"], 1)
+        self.assertEqual(dashboard["links_affected"], 1)
+        self.assertEqual(queue["active_count"], 1)
+        self.assertEqual(queue["affected_count"], 1)
+        self.assertNotIn(hidden.external_id, {row["external_id"] for row in queue["rows"]})
+        self.assertNotIn(unlinked.pk, set(TicketQueryService.base(self.user).values_list("pk", flat=True)))
+
+    def test_dashboard_keeps_created_volume_and_official_closed_snapshot(self):
+        ticket = self._ticket(102, "CLOSED", False, 5)
+        ticket.source_created_at = datetime(2026, 10, 5, 12, tzinfo=datetime_timezone.utc)
+        ticket.resolved_at = datetime(2026, 11, 1, 12, tzinfo=datetime_timezone.utc)
+        ticket.terminal_state_at = datetime(2026, 11, 2, 12, tzinfo=datetime_timezone.utc)
+        ticket.is_present_in_queue = True
+        ticket.save()
+        OTRSTicketConfigItem.objects.create(
+            ticket=ticket, config_item_id="analytics-ci-1", cmdb_link=self.link,
+            relation_type="DependsOn", relation_state="Valid",
+        )
+
+        dashboard = DashboardAnalyticsService.build(
+            user=self.user, start=date(2026, 10, 1), end=date(2026, 10, 31),
+        )
+
+        self.assertEqual(dashboard["calls"], 1)
+        self.assertEqual(dashboard["monthly"][0]["calls"], 1)
+        self.assertEqual(dashboard["closed_count"], 1)
+        self.assertEqual(dashboard["resolved_count"], 0)
 
     def test_dashboard_period_and_snapshot_metrics_are_independent_and_noc_only(self):
         october_open = self._ticket(201, "OPEN", True, 5)
@@ -427,7 +556,7 @@ class MirrorAnalyticsTests(TestCase):
         self.assertEqual(backlog["value"], 3)
         self.assertEqual((resolved["value"], closed["value"], both["value"]), (1, 1, 2))
 
-    def test_terminal_metrics_use_terminal_date_and_reason_aliases_merge(self):
+    def test_terminal_metrics_use_resolution_with_terminal_fallback_and_reason_aliases_merge(self):
         resolved = self._ticket(813, "RESOLVED", False, 2)
         resolved.source_created_at = datetime(2026, 9, 2, tzinfo=datetime_timezone.utc)
         resolved.terminal_state_at = datetime(2026, 10, 8, tzinfo=datetime_timezone.utc)
@@ -450,9 +579,66 @@ class MirrorAnalyticsTests(TestCase):
         self.assertEqual(canceled_result["value"], 1)
         self.assertEqual(created["value"], 1)
         self.assertEqual(success["detail"][0]["dimension"], "Pendência Financeira")
-        self.assertEqual(success["period_date_label"], "data de encerramento")
+        self.assertEqual(success["period_date_label"], "data de resolução")
         self.assertEqual(closed_result["tickets"][0]["base_date"], "03/10/2026 00:00")
-        self.assertTrue(any(value.startswith("Data de encerramento entre 01/10/2026 e 31/10/2026") for value in closed_result["tickets"][0]["evidence"]))
+        self.assertTrue(any(value.startswith("Data de resolução entre 01/10/2026 e 31/10/2026") for value in closed_result["tickets"][0]["evidence"]))
+
+    def test_cockpit_resolution_date_precedes_otrs_terminal_date_for_periods_and_groups(self):
+        ticket = self._ticket(8131, "CLOSED", False, 10)
+        ticket.source_created_at = datetime(2026, 10, 10, 8, tzinfo=datetime_timezone.utc)
+        ticket.resolved_at = datetime(2026, 10, 10, 15, tzinfo=datetime_timezone.utc)
+        ticket.terminal_state_at = datetime(2026, 10, 11, 15, tzinfo=datetime_timezone.utc)
+        ticket.closing_code_raw = "PendenciaFinanceira"
+        ticket.save()
+
+        service = AnalyticsQueryService()
+        resolved_day = service.query({
+            "metric": "closed_tickets", "start": "2026-10-10", "end": "2026-10-10",
+            "group_by": "status", "filters": {},
+        }, user=self.user, include_all_rows=True)
+        terminal_day = service.query({
+            "metric": "closed_tickets", "start": "2026-10-11", "end": "2026-10-11",
+            "group_by": "status", "filters": {},
+        }, user=self.user, include_all_rows=True)
+
+        self.assertEqual(resolved_day["value"], 1)
+        self.assertEqual(resolved_day["period_date_label"], "data de resolução")
+        self.assertEqual(resolved_day["tickets"][0]["status_code"], "CLOSED")
+        self.assertEqual(resolved_day["tickets"][0]["resolved_at"], "10/10/2026 12:00")
+        self.assertEqual(resolved_day["tickets"][0]["terminal_at"], "11/10/2026 12:00")
+        self.assertEqual(resolved_day["tickets"][0]["base_date"], "10/10/2026 12:00")
+        self.assertTrue(any("ticketResolvido" in value for value in resolved_day["tickets"][0]["evidence"]))
+        self.assertEqual(terminal_day["value"], 0)
+
+    def test_resolution_month_changes_without_moving_created_ticket_month(self):
+        resolved_january = self._ticket(8132, "CLOSED", False, 10)
+        resolved_january.source_created_at = datetime(2026, 1, 10, 12, tzinfo=datetime_timezone.utc)
+        resolved_january.resolved_at = datetime(2026, 1, 31, 23, 30, tzinfo=datetime_timezone.utc)
+        resolved_january.terminal_state_at = datetime(2026, 2, 1, 23, 30, tzinfo=datetime_timezone.utc)
+        resolved_january.save()
+
+        resolved_february = self._ticket(8133, "CLOSED", False, 11)
+        resolved_february.source_created_at = datetime(2026, 1, 15, 12, tzinfo=datetime_timezone.utc)
+        resolved_february.resolved_at = datetime(2026, 2, 1, 15, tzinfo=datetime_timezone.utc)
+        resolved_february.terminal_state_at = datetime(2026, 2, 2, 15, tzinfo=datetime_timezone.utc)
+        resolved_february.save()
+
+        service = AnalyticsQueryService()
+        resolutions = service.query({
+            "metric": "closed_tickets", "start": "2026-01-01", "end": "2026-05-31",
+            "group_by": "month", "filters": {},
+        }, user=self.user)
+        created = service.query({
+            "metric": "tickets", "start": "2026-01-01", "end": "2026-05-31",
+            "group_by": "month", "filters": {},
+        }, user=self.user)
+        resolution_by_month = {row["key"]: row["value"] for row in resolutions["series"]}
+        creation_by_month = {row["key"]: row["value"] for row in created["series"]}
+
+        self.assertEqual(resolution_by_month["2026-01"], 1)
+        self.assertEqual(resolution_by_month["2026-02"], 1)
+        self.assertEqual(creation_by_month["2026-01"], 2)
+        self.assertEqual(creation_by_month["2026-02"], 0)
 
     def test_massive_failure_reason_filter_and_monthly_series_use_all_raw_aliases(self):
         raws = ("FalhaMassiva", "Defeito Massivo", "Falha Massiva")
@@ -703,7 +889,7 @@ class MirrorAnalyticsTests(TestCase):
         self.assertEqual(sum(row["value"] for row in expected["breakdown"]), 1)
         self.assertEqual(sum(row["value"] for row in expected["detail"]), 1)
         self.assertEqual(expected["detail"][0]["dimension"], self.operator.name)
-        self.assertEqual(expected["period_date_label"], "data de encerramento")
+        self.assertEqual(expected["period_date_label"], "data de resolução")
         self.assertEqual(expected["tickets"][0]["base_date"], "31/10/2026 23:59")
 
         api = self.client.post(reverse("analytics-query"), data=json.dumps(payload), content_type="application/json")
@@ -985,6 +1171,8 @@ class MirrorAnalyticsTests(TestCase):
 
     def test_calendar_respects_provider_filter_and_data_scope(self):
         ticket = self._ticket(1830, "OPEN", True, 5)
+        self.link.contracting_client = self.operator.name
+        self.link.save(update_fields=("contracting_client",))
         OTRSTicketConfigItem.objects.create(ticket=ticket, config_item_id=self.link.source_config_item_id,
                                             cmdb_link=self.link, relation_type="DependsOn", relation_state="Valid")
         hidden_provider = CMDBOperatorMirror.objects.create(source_config_item_id="calendar-hidden-op", name="Fora do escopo")
@@ -1094,6 +1282,8 @@ class MirrorAnalyticsTests(TestCase):
         allowed_project = Projeto.objects.create(name="Projeto A", normalized_name="projeto a")
         scope.allowed_operators.set([allowed_operator])
         scope.allowed_projects.set([allowed_project])
+        self.link.contracting_client = self.operator.name
+        self.link.save(update_fields=("contracting_client",))
         permitted = self._ticket(501, "OPEN", True, 5)
         hidden = self._ticket(502, "OPEN", True, 5)
         hidden_provider = CMDBOperatorMirror.objects.create(source_config_item_id="out-of-scope-provider", name="Fora do escopo")
@@ -1180,6 +1370,7 @@ class MirrorAnalyticsTests(TestCase):
     def test_cockpit_export_reason_analysis_keeps_terminal_period_and_count(self):
         ticket = self._ticket(950, "CLOSED", False, 3)
         ticket.source_created_at = datetime(2026, 9, 3, tzinfo=datetime_timezone.utc)
+        ticket.resolved_at = datetime(2026, 10, 16, 12, tzinfo=datetime_timezone.utc)
         ticket.terminal_state_at = datetime(2026, 10, 17, tzinfo=datetime_timezone.utc)
         ticket.closing_code_raw = "PendenciaFinanceira"
         ticket.save()
@@ -1187,6 +1378,7 @@ class MirrorAnalyticsTests(TestCase):
         result = AnalyticsQueryService().query(payload, user=self.user, include_all_rows=True)
         self.assertEqual(result["value"], 1)
         self.assertEqual(result["detail"][0]["dimension"], "Pendência Financeira")
+        self.assertEqual(result["tickets"][0]["base_date"], "16/10/2026 09:00")
         for export_format in ("csv", "pdf", "xlsx"):
             response = self.client.post(reverse("analytics-export"), data=json.dumps({**payload, "format": export_format}), content_type="application/json")
             self.assertEqual(response.status_code, 200, export_format)
@@ -1196,6 +1388,7 @@ class MirrorAnalyticsTests(TestCase):
                 self.assertIn("Pendência Financeira".encode(), response.content)
                 self.assertIn(b"closing_reason_raw", response.content)
                 self.assertIn(b"PendenciaFinanceira", response.content)
+                self.assertIn(b"16/10/2026 09:00", response.content)
             elif export_format == "xlsx":
                 from openpyxl import load_workbook
                 workbook = load_workbook(BytesIO(response.content), read_only=True)
@@ -1205,6 +1398,8 @@ class MirrorAnalyticsTests(TestCase):
                 headers = [cell.value for cell in workbook["Tickets"][1]]
                 raw_column = headers.index("closing_reason_raw") + 1
                 self.assertEqual(workbook["Tickets"].cell(row=2, column=raw_column).value, "PendenciaFinanceira")
+                base_column = headers.index("data_base") + 1
+                self.assertEqual(workbook["Tickets"].cell(row=2, column=base_column).value, "16/10/2026 09:00")
 
     def test_cockpit_export_denies_users_without_cockpit_permission(self):
         user = get_user_model().objects.create_user(username="no-cockpit-export", password="safe-password-4")

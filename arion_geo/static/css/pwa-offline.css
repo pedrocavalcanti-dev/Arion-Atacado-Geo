@@ -1,0 +1,7 @@
+:root { color-scheme:dark; background:#090a0a; color:#f2f3f2; font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+* { box-sizing:border-box; }
+body { display:grid; min-height:100dvh; place-items:center; margin:0; padding:env(safe-area-inset-top) 22px env(safe-area-inset-bottom); }
+main { width:min(100%,420px); padding:32px 4px; }
+img { width:52px; height:52px; border-radius:15px; }
+p { color:#a1a5a4; }
+a { display:inline-flex; min-height:46px; align-items:center; margin-top:10px; padding:0 18px; border:1px solid #414745; border-radius:8px; background:#171a1a; color:#f2f3f2; text-decoration:none; }

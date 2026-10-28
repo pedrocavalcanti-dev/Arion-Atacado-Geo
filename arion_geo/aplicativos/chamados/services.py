@@ -2,6 +2,7 @@ from datetime import timedelta
 from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, F, IntegerField, OuterRef, Q, Subquery, Value, When
@@ -9,7 +10,10 @@ from django.utils import timezone
 
 from aplicativos.auditoria.services import AuditService
 from aplicativos.integracoes.models import OTRSTicketConfigItem
-from aplicativos.integracoes.services.analytics import LinkQueryService, TicketQueryService
+from aplicativos.integracoes.services.analytics import (
+    BUSINESS_OPEN_STATUSES, LinkQueryService, TicketQueryService,
+    count_affected_links, ticket_link_relations,
+)
 from aplicativos.integracoes.services.closing_reason import ClosingReasonCanonicalizer
 from aplicativos.integracoes.services.semantics import provider_label
 from aplicativos.painel.services.analytics import AnalyticsQueryService
@@ -17,7 +21,7 @@ from aplicativos.painel.services.analytics import AnalyticsQueryService
 from .models import TicketTracking, TicketTrackingEvent
 
 
-ACTIVE_STATES = ("OPEN", "PENDING", "SCHEDULED")
+ACTIVE_STATES = BUSINESS_OPEN_STATUSES
 VALID_STATES = AnalyticsQueryService.OPERATIONAL_VALID_STATES
 STATUS_LABELS = {
     "OPEN": "Em atendimento",
@@ -288,15 +292,8 @@ class TicketQueueService:
         page_size = filters.get("page_size", 25)
 
         scoped_links = LinkQueryService.base(user)
-        scoped_tickets = TicketQueryService.base(user, links=scoped_links).filter(
-            business_status__in=ACTIVE_STATES,
-            is_present_in_queue=True,
-        )
-        related_links = OTRSTicketConfigItem.objects.filter(
-            is_present_in_source=True,
-            ticket_id__in=scoped_tickets.values("pk"),
-            cmdb_link__in=scoped_links,
-        )
+        scoped_tickets = TicketQueryService.business_open(user, links=scoped_links)
+        related_links = ticket_link_relations(scoped_tickets, scoped_links)
 
         recurrent_link_ids = recurrent_link_ids_for_user(user, scoped_links, now)
 
@@ -463,9 +460,7 @@ class TicketQueueService:
                 "assigned_to_self": tracking["assigned_to_id"] == user.pk,
             })
 
-        affected_count = related_links.filter(
-            ticket_id__in=counts_qs.values("pk"),
-        ).values("cmdb_link_id").distinct().count()
+        affected_count = count_affected_links(counts_qs, scoped_links)
         aged_count = counts_qs.filter(source_created_at__lte=aging_cutoff).count()
         filter_options = cls._options(scoped_tickets, related_links)
         return {
@@ -541,19 +536,12 @@ class TicketQueueService:
         ticket_options = list(scoped_tickets.values_list("priority_name", "closing_code_raw").distinct())
         priorities = sorted({row[0] for row in ticket_options if row[0]}, key=str.casefold)
         reasons = ClosingReasonCanonicalizer.options(row[1] for row in ticket_options if row[1])
-        assignees = list(
-            TicketTracking.objects.filter(
-                ticket_external_id__in=scoped_tickets.values("external_id"),
-                assigned_to__isnull=False,
-                assigned_to__is_active=True,
-            ).values(
-                "assigned_to_id", "assigned_to__username", "assigned_to__first_name", "assigned_to__last_name",
-            ).distinct()
-        )
-        assignees.sort(key=lambda row: (
-            (row["assigned_to__first_name"] + " " + row["assigned_to__last_name"]).strip()
-            or row["assigned_to__username"]
-        ).casefold())
+        assignee_ids = TicketTracking.objects.filter(
+            ticket_external_id__in=scoped_tickets.values("external_id"),
+            assigned_to__isnull=False,
+        ).order_by().values("assigned_to_id")
+        assignees = list(get_user_model().objects.filter(pk__in=assignee_ids, is_active=True))
+        assignees.sort(key=lambda user: _display_value("assigned_to", user).casefold())
         return {
             "clients": clients,
             "projects": projects,
@@ -562,12 +550,9 @@ class TicketQueueService:
             "priorities": priorities,
             "reasons": reasons,
             "assignees": [{
-                "value": row["assigned_to_id"],
-                "label": (
-                    (row["assigned_to__first_name"] + " " + row["assigned_to__last_name"]).strip()
-                    or row["assigned_to__username"]
-                ),
-            } for row in assignees],
+                "value": user.pk,
+                "label": _display_value("assigned_to", user),
+            } for user in assignees],
         }
 
 

@@ -261,11 +261,14 @@ html[data-theme="light"] .links-drawer-backdrop { background: rgba(20,25,22,.28)
 .drawer-back { margin: 0 0 9px; border: 0; padding: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: 10px; cursor: pointer; }
 .history-last { padding: 9px 10px; border-left: 2px solid var(--border-strong); color: var(--text-secondary); font-size: 9px; }
 .drawer-error { padding: 18px 0; color: var(--text-secondary); font-size: 11px; }
-.base-ticket-dialog { width: min(520px,calc(100vw - 32px)); max-height: min(78vh,650px); padding: 18px; border: 1px solid var(--border-primary); border-radius: 12px; background: var(--bg-elevated); color: var(--text-primary); }
+.base-ticket-dialog { width:min(520px,calc(100vw - 32px)); height:min(78vh,650px); height:min(78dvh,650px); max-height:calc(100dvh - 24px); padding:18px; overflow:hidden; border:1px solid var(--border-primary); border-radius:12px; background:var(--bg-elevated); color:var(--text-primary); }
+.base-ticket-dialog[open] { display:flex; flex-direction:column; }
 .base-ticket-dialog::backdrop { background: rgba(0,0,0,.45); backdrop-filter: blur(2px); }
-.base-ticket-dialog header { display: flex; justify-content: space-between; align-items: start; border-bottom: 1px solid var(--border-primary); padding-bottom: 12px; }
+.base-ticket-dialog header { position:sticky; top:0; z-index:1; display:flex; flex:0 0 auto; justify-content:space-between; align-items:start; gap:16px; padding-bottom:12px; border-bottom:1px solid var(--border-primary); background:var(--bg-elevated); }
 .base-ticket-dialog header h2 { margin: 4px 0; font-size: 18px; }
 .base-ticket-dialog header small { color: var(--text-muted); }
-.base-ticket-dialog header button { width: 30px; height: 30px; border: 1px solid var(--border-primary); border-radius: 50%; background: var(--surface-secondary); color: inherit; cursor: pointer; }
-.base-ticket-dialog section { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 14px; }
+.base-ticket-dialog header button { width:44px; height:44px; flex:0 0 44px; border:1px solid var(--border-primary); border-radius:50%; background:var(--surface-secondary); color:inherit; font-size:20px; cursor:pointer; }
+.base-ticket-dialog section { display:grid; min-height:0; flex:1 1 auto; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:12px; overflow-y:auto; overscroll-behavior:contain; padding:14px 4px 8px 0; scrollbar-width:thin; }
+@media(max-width:640px) { .base-ticket-dialog { position:fixed; inset:auto 0 0; width:100%; height:min(88dvh,780px); max-height:100dvh; margin:0 auto; padding:18px 18px calc(14px + env(safe-area-inset-bottom)); border-radius:18px 18px 0 0; }.base-ticket-dialog section { grid-template-columns:minmax(0,1fr); gap:10px; }.base-ticket-dialog header h2 { font-size:17px; } }
+@media(max-height:520px) and (orientation:landscape) and (max-width:900px) { .base-ticket-dialog { height:100dvh; border-radius:0; } }
 @media (max-width: 640px) { .links-drawer [data-drawer-content] { padding: 18px 20px 24px; }.links-drawer .drawer-heading { margin: -18px -20px 0; padding: 20px 55px 15px 20px; } }

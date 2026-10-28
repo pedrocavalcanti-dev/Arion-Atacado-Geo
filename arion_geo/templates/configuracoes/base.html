@@ -29,6 +29,25 @@
   <div class="settings-content">
     <a class="settings-back" href="{% url 'painel:index' %}"><span aria-hidden="true">←</span> Voltar ao início</a>
     <header class="settings-heading"><p class="settings-kicker">{% if administration %}ADMINISTRAÇÃO{% else %}CONTA{% endif %}</p><h1 id="settings-title">{% block settings_title %}{% endblock %}</h1><p>{% block settings_description %}{% endblock %}</p></header>
+    <details class="settings-mobile-sections">
+      <summary><span>Se&ccedil;&otilde;es</span><strong>{% if active_section == 'index' %}Vis&atilde;o geral{% elif active_section == 'account' %}Minha conta{% elif active_section == 'security' %}Seguran&ccedil;a{% elif active_section == 'appearance' %}Apar&ecirc;ncia{% elif active_section == 'users' %}Usu&aacute;rios{% elif active_section == 'groups' %}Grupos e acessos{% elif active_section == 'scopes' %}Escopos de dados{% elif active_section == 'audit' %}Auditoria{% elif active_section == 'documentation' %}Documenta&ccedil;&atilde;o{% elif active_section == 'integrations' %}Integra&ccedil;&otilde;es{% elif active_section == 'system' %}Sistema{% endif %}</strong><span aria-hidden="true">&#8964;</span></summary>
+      <nav aria-label="Se&ccedil;&otilde;es das configura&ccedil;&otilde;es">
+        <p>CONTA</p>
+        <a href="{% url 'configuracoes:index' %}"{% if active_section == 'index' %} aria-current="page"{% endif %}>Vis&atilde;o geral</a>
+        <a href="{% url 'configuracoes:account' %}"{% if active_section == 'account' %} aria-current="page"{% endif %}>Minha conta</a>
+        <a href="{% url 'configuracoes:security' %}"{% if active_section == 'security' %} aria-current="page"{% endif %}>Seguran&ccedil;a</a>
+        <a href="{% url 'configuracoes:appearance' %}"{% if active_section == 'appearance' %} aria-current="page"{% endif %}>Apar&ecirc;ncia</a>
+        {% if perms.configuracoes.manage_users or perms.configuracoes.manage_groups or perms.configuracoes.manage_data_scopes or perms.configuracoes.view_audit_log or perms.configuracoes.view_integrations or perms.configuracoes.view_system_info %}<p>ADMINISTRA&Ccedil;&Atilde;O</p>
+          {% if perms.configuracoes.manage_users %}<a href="{% url 'configuracoes:users' %}"{% if active_section == 'users' %} aria-current="page"{% endif %}>Usu&aacute;rios</a>{% endif %}
+          {% if perms.configuracoes.manage_groups %}<a href="{% url 'configuracoes:groups' %}"{% if active_section == 'groups' %} aria-current="page"{% endif %}>Grupos e acessos</a>{% endif %}
+          {% if perms.configuracoes.manage_data_scopes %}<a href="{% url 'configuracoes:scopes' %}"{% if active_section == 'scopes' %} aria-current="page"{% endif %}>Escopos de dados</a>{% endif %}
+          {% if perms.configuracoes.view_audit_log %}<a href="{% url 'configuracoes:audit' %}"{% if active_section == 'audit' %} aria-current="page"{% endif %}>Auditoria</a>{% endif %}
+          {% if perms.configuracoes.manage_groups %}<a href="{% url 'configuracoes:documentation' %}"{% if active_section == 'documentation' %} aria-current="page"{% endif %}>Documenta&ccedil;&atilde;o</a>{% endif %}
+          {% if perms.configuracoes.view_integrations %}<a href="{% url 'configuracoes:integrations' %}"{% if active_section == 'integrations' %} aria-current="page"{% endif %}>Integra&ccedil;&otilde;es</a>{% endif %}
+          {% if perms.configuracoes.view_system_info %}<a href="{% url 'configuracoes:system' %}"{% if active_section == 'system' %} aria-current="page"{% endif %}>Sistema</a>{% endif %}
+        {% endif %}
+      </nav>
+    </details>
     {% block settings_content %}{% endblock %}
   </div>
 </section>

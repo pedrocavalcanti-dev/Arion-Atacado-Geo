@@ -12,6 +12,7 @@ from django.urls import reverse
 
 from aplicativos.base_links.models import Operadora, Projeto
 from aplicativos.configuracoes.models import GroupDataScope
+from aplicativos.chamados.models import TicketTracking
 from aplicativos.integracoes.models import CMDBLinkMirror, CMDBOperatorMirror, OTRSTicket, OTRSTicketConfigItem
 from aplicativos.mapa.services.analytics import _bounds
 
@@ -58,12 +59,13 @@ class MapMirrorTests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def _ticket(self, external_id, status, day=5, reason=""):
+    def _ticket(self, external_id, status, day=5, reason="", responsibility="INDETERMINADO"):
         stamp = datetime(2026, 10, day, tzinfo=datetime_timezone.utc)
         return OTRSTicket.objects.create(
             external_id=external_id, ticket_number=f"MAP-{external_id}", queue_external_id=107,
             queue_name="NOC - ATACADO", external_state_id=external_id, external_state_name=status,
             business_status=status, is_business_open=status in {"OPEN", "PENDING", "SCHEDULED"},
+            responsibility_normalized=responsibility,
             source_created_at=stamp,
             terminal_state_at=stamp if status in {"RESOLVED", "CLOSED"} else None,
             closing_code_raw=reason,
@@ -117,6 +119,8 @@ class MapMirrorTests(TestCase):
         self.assertTrue(any(tag == "label" and "data-period-control" in attrs for tag, attrs in parser.elements),
                         "O wrapper do periodo precisa manter o marcador data-period-control")
         self.assertTrue(any(tag == "select" and "data-period-filter" in attrs for tag, attrs in parser.elements))
+        self.assertTrue({"overview", "tickets", "projects", "providers", "reasons", "recurrence"}.issubset(parser.values["data-state-tab"]))
+        self.assertIn("data-panel-ticket-pagination", parser.attributes)
 
     @override_settings(MAPBOX_PUBLIC_TOKEN="pk.test-token")
     def test_public_map_token_is_rendered_without_loading_demo_data(self):
@@ -311,7 +315,7 @@ class MapMirrorTests(TestCase):
             "mode": "calls", "period": "2026-10",
         }).json()
         self.assertEqual(data["ticket_client_counts"], {"Vivo": 1})
-        self.assertEqual(data["ticket_project_counts"], {"Bradesco": 1})
+        self.assertEqual(data["ticket_project_counts"], {"BRADESCO": 1})
         filtered = self.client.get(reverse("base_links:map-aggregates"), {
             "mode": "calls", "period": "2026-10", "client": "Vivo", "project": "Bradesco",
         }).json()
@@ -358,6 +362,249 @@ class MapMirrorTests(TestCase):
         self.assertEqual(data["ticket_status_counts"], {"OPEN": 1, "PENDING": 1, "SCHEDULED": 1, "RESOLVED": 1, "CLOSED": 1})
         self.assertEqual(data["states"]["RJ"]["ticket_count"], 0)
 
+    def test_operational_map_excludes_improper_and_unknown_provenance_but_keeps_valid_history(self):
+        included = [
+            self._ticket(610, "OPEN", reason="FalhaMassiva", responsibility="PROCEDENTE"),
+            self._ticket(611, "OPEN", reason="FalhaMassiva", responsibility="INDETERMINADO"),
+            self._ticket(615, "RESOLVED", reason="FalhaMassiva", responsibility="PROCEDENTE"),
+            self._ticket(616, "CLOSED", reason="FalhaMassiva", responsibility="INDETERMINADO"),
+        ]
+        excluded = [
+            self._ticket(612, "OPEN", reason="FalhaMassiva", responsibility="IMPROCEDENTE"),
+            self._ticket(613, "CANCELED", reason="FalhaMassiva", responsibility="PROCEDENTE"),
+            self._ticket(614, "UNKNOWN", reason="FalhaMassiva", responsibility="INDETERMINADO"),
+            self._ticket(617, "RESOLVED", reason="FalhaMassiva", responsibility="IMPROCEDENTE"),
+        ]
+        for ticket in (*included, *excluded):
+            self._relate(ticket)
+
+        calls = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "calls", "period": "2026-10",
+        }).json()
+        motives = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "motives", "period": "2026-10",
+        }).json()
+        detail = self.client.get(reverse("base_links:map-state-detail"), {
+            "uf": "SP", "mode": "calls", "period": "2026-10",
+        }).json()
+        motive_detail = self.client.get(reverse("base_links:map-state-detail"), {
+            "uf": "SP", "mode": "motives", "period": "2026-10",
+        }).json()
+
+        self.assertEqual(calls["ticket_count"], 4)
+        self.assertEqual(calls["active_ticket_count"], 2)
+        self.assertEqual(calls["affected_link_count"], 1)
+        self.assertEqual(calls["ticket_status_counts"], {"OPEN": 2, "RESOLVED": 1, "CLOSED": 1})
+        self.assertEqual(motives["terminal_ticket_count"], 2)
+        self.assertEqual(sum(motives["states"]["SP"]["reason_counts"].values()), 2)
+        self.assertEqual(
+            {row["ticket_number"] for row in motive_detail["tickets"]},
+            {f"MAP-{ticket.external_id}" for ticket in included if ticket.business_status in {"RESOLVED", "CLOSED"}},
+        )
+        self.assertEqual(
+            {row["ticket_number"] for row in detail["tickets"]},
+            {f"MAP-{ticket.external_id}" for ticket in included},
+        )
+
+    def test_tickets_without_a_local_link_count_nationally_without_affected_links(self):
+        self._ticket(620, "OPEN", responsibility="PROCEDENTE")
+        without_local_link = self._ticket(621, "OPEN", responsibility="INDETERMINADO")
+        resolved_without_link = self._ticket(
+            622, "RESOLVED", reason="FalhaMassiva", responsibility="PROCEDENTE",
+        )
+        OTRSTicketConfigItem.objects.create(
+            ticket=without_local_link, config_item_id="remote-ci-621",
+            cmdb_link=None, relation_type="DependsOn", relation_state="Valid",
+        )
+
+        data = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "calls", "period": "2026-10",
+        }).json()
+
+        self.assertEqual(data["ticket_count"], 3)
+        self.assertEqual(data["unlinked_ticket_count"], 3)
+        self.assertEqual(data["affected_link_count"], 0)
+        self.assertEqual(data["ticket_status_counts"], {"OPEN": 2, "RESOLVED": 1})
+        self.assertEqual(data["states"]["SP"]["ticket_count"], 0)
+
+        motives = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "motives", "period": "2026-10",
+        }).json()
+        self.assertEqual(motives["terminal_ticket_count"], 1)
+        self.assertEqual(motives["unlinked_ticket_count"], 1)
+        self.assertEqual(resolved_without_link.business_status, "RESOLVED")
+
+        for filter_params in (
+            {"client": "Claro"}, {"project": "BRADESCO"},
+            {"provider": str(self.provider.pk)}, {"uf": "SP"},
+        ):
+            filtered = self.client.get(reverse("base_links:map-aggregates"), {
+                "mode": "calls", "period": "2026-10", **filter_params,
+            }).json()
+            self.assertEqual(filtered["unlinked_ticket_count"], 0)
+            self.assertEqual(filtered["ticket_count"], 0)
+
+    def test_project_aliases_are_canonical_across_options_filters_details_and_groups(self):
+        bradesco_aliases = [self.link]
+        for external_id, raw_project in enumerate(("BDN", "BDN BRADESCO", "Bradesco", " brAdEsCo "), start=630):
+            bradesco_aliases.append(CMDBLinkMirror.objects.create(
+                source_config_item_id=f"map-ci-project-{external_id}", state="SP",
+                contracting_client="Claro", business_project=raw_project,
+            ))
+        banco_aliases = []
+        for external_id, raw_project in enumerate((
+            "BB", "PROJETO BB", "BANCO DO BRASIL", "Banco-do-Brasil", "Banco_do_Brasil",
+        ), start=640):
+            banco_aliases.append(CMDBLinkMirror.objects.create(
+                source_config_item_id=f"map-ci-project-{external_id}", state="SP",
+                contracting_client="Claro", business_project=raw_project,
+            ))
+        boticario_aliases = []
+        for external_id, raw_project in enumerate(("BOTICARIO", "O BOTICÁRIO"), start=646):
+            boticario_aliases.append(CMDBLinkMirror.objects.create(
+                source_config_item_id=f"map-ci-project-{external_id}", state="SP",
+                contracting_client="Claro", business_project=raw_project,
+            ))
+        separate_projects = [
+            CMDBLinkMirror.objects.create(
+                source_config_item_id="map-ci-project-bradesco-seguros", state="SP",
+                contracting_client="Claro", business_project="BRADESCO SEGUROS",
+            ),
+            CMDBLinkMirror.objects.create(
+                source_config_item_id="map-ci-project-bb-seguros", state="SP",
+                contracting_client="Claro", business_project="BB SEGUROS",
+            ),
+        ]
+
+        catalog = self.client.get(reverse("base_links:map-aggregates"), {"mode": "projects"}).json()
+        bradesco = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "projects", "project": " bdn ",
+        }).json()
+        banco = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "projects", "project": "banco-do-brasil",
+        }).json()
+        detail = self.client.get(reverse("base_links:map-state-detail"), {
+            "uf": "SP", "mode": "projects", "project": "BDN",
+        }).json()
+
+        self.assertEqual(catalog["projects"].count("BRADESCO"), 1)
+        self.assertEqual(catalog["projects"].count("BANCO DO BRASIL"), 1)
+        self.assertEqual(catalog["projects"].count("O BOTICÁRIO"), 1)
+        self.assertIn("BRADESCO SEGUROS", catalog["projects"])
+        self.assertIn("BB SEGUROS", catalog["projects"])
+        self.assertEqual(bradesco["selected_project"], "BRADESCO")
+        self.assertEqual(bradesco["states"]["SP"]["total_links"], len(bradesco_aliases))
+        self.assertEqual(bradesco["states"]["SP"]["project_counts"], {"BRADESCO": len(bradesco_aliases)})
+        self.assertEqual(
+            CMDBLinkMirror.objects.get(pk=bradesco_aliases[1].pk).business_project,
+            "BDN",
+        )
+        self.assertEqual(banco["selected_project"], "BANCO DO BRASIL")
+        self.assertEqual(banco["states"]["SP"]["total_links"], len(banco_aliases))
+        self.assertEqual(banco["states"]["SP"]["project_counts"], {"BANCO DO BRASIL": len(banco_aliases)})
+        boticario = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "projects", "project": "BOTICARIO",
+        }).json()
+        self.assertEqual(boticario["selected_project"], "O BOTICÁRIO")
+        self.assertEqual(boticario["states"]["SP"]["total_links"], len(boticario_aliases))
+        self.assertEqual(len(detail["links"]), len(bradesco_aliases))
+        self.assertEqual({row["project"] for row in detail["links"]}, {"BRADESCO"})
+        bradesco_ticket = self._ticket(650, "OPEN", responsibility="PROCEDENTE")
+        bradesco_raw_ticket = self._ticket(651, "OPEN", responsibility="INDETERMINADO")
+        improper_alias_ticket = self._ticket(652, "OPEN", responsibility="IMPROCEDENTE")
+        canceled_alias_ticket = self._ticket(653, "CANCELED", responsibility="PROCEDENTE")
+        self._relate(bradesco_ticket, bradesco_aliases[1])
+        self._relate(bradesco_raw_ticket, bradesco_aliases[0])
+        self._relate(improper_alias_ticket, bradesco_aliases[1])
+        self._relate(canceled_alias_ticket, bradesco_aliases[1])
+        calls = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "calls", "period": "2026-10", "project": "BDN",
+        }).json()
+        ticket_detail = self.client.get(reverse("base_links:map-state-detail"), {
+            "uf": "SP", "mode": "calls", "period": "2026-10", "project": "BDN",
+        }).json()
+        self.assertEqual(calls["selected_project"], "BRADESCO")
+        self.assertEqual(calls["ticket_count"], 2)
+        self.assertEqual(calls["affected_link_count"], 2)
+        self.assertEqual(calls["ticket_project_counts"], {"BRADESCO": 2})
+        self.assertEqual(
+            {row["identity"]["project"] for row in ticket_detail["tickets"]},
+            {"BRADESCO"},
+        )
+
+        banco_tickets = [
+            self._ticket(654, "OPEN", responsibility="PROCEDENTE"),
+            self._ticket(655, "OPEN", responsibility="INDETERMINADO"),
+        ]
+        self._relate(banco_tickets[0], banco_aliases[0])
+        self._relate(banco_tickets[1], banco_aliases[1])
+        banco_calls = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "calls", "period": "2026-10", "project": "BB",
+        }).json()
+        self.assertEqual(banco_calls["ticket_count"], 2)
+        self.assertEqual(banco_calls["ticket_project_counts"], {"BANCO DO BRASIL": 2})
+
+        bradesco_seguros = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "projects", "project": "BRADESCO SEGUROS",
+        }).json()
+        bb_seguros = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "projects", "project": "BB SEGUROS",
+        }).json()
+        self.assertEqual(bradesco_seguros["states"]["SP"]["total_links"], 1)
+        self.assertEqual(bb_seguros["states"]["SP"]["total_links"], 1)
+        self.assertEqual(len(separate_projects), 2)
+
+    def test_project_aliases_are_applied_only_after_custom_data_scope(self):
+        allowed_alias = CMDBLinkMirror.objects.create(
+            source_config_item_id="map-ci-project-allowed-bdn", state="SP",
+            contracting_client="Claro", business_project="BDN",
+        )
+        outside_alias = CMDBLinkMirror.objects.create(
+            source_config_item_id="map-ci-project-outside-bradesco", state="RJ",
+            contracting_client="Claro", business_project="BRADESCO",
+        )
+        group = self.user.groups.get(name="Analista NOC")
+        scope = group.data_scope
+        scope.mode = GroupDataScope.Mode.CUSTOM
+        scope.save()
+        scope.allowed_operators.set([Operadora.objects.create(name="Claro", normalized_name="claro")])
+        scope.allowed_projects.set([Projeto.objects.create(name="BDN", normalized_name="bdn")])
+
+        data = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "projects", "project": "BRADESCO",
+        }).json()
+
+        self.assertEqual(data["source_total"], 1)
+        self.assertEqual(data["filtered_source_total"], 1)
+        self.assertEqual(data["projects"], ["BRADESCO"])
+        self.assertEqual(data["states"]["SP"]["total_links"], 1)
+        self.assertEqual(data["states"]["SP"]["project_counts"], {"BRADESCO": 1})
+        self.assertEqual(allowed_alias.business_project, "BDN")
+
+        unauthorized_ticket = self._ticket(660, "OPEN", responsibility="PROCEDENTE")
+        self._relate(unauthorized_ticket, outside_alias)
+        calls = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "calls", "period": "2026-10", "project": "BRADESCO",
+        }).json()
+        self.assertEqual(calls["ticket_count"], 0)
+        self.assertEqual(calls["unlinked_ticket_count"], 0)
+
+    def test_multiple_relations_to_one_link_do_not_duplicate_ticket_or_affected_link(self):
+        ticket = self._ticket(670, "OPEN", responsibility="PROCEDENTE")
+        self._relate(ticket, self.link)
+        OTRSTicketConfigItem.objects.create(
+            ticket=ticket, config_item_id="map-ci-secondary-alias-relation",
+            cmdb_link=self.link, relation_type="ConnectedTo", relation_state="Valid",
+        )
+
+        data = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "calls", "period": "2026-10", "project": "BDN",
+        }).json()
+
+        self.assertEqual(data["ticket_count"], 1)
+        self.assertEqual(data["affected_link_count"], 1)
+        self.assertEqual(data["states"]["SP"]["affected_links"], 1)
+
     def test_repeat_mode_counts_distinct_links_with_two_valid_tickets(self):
         for external_id in (40, 41):
             self._relate(self._ticket(external_id, "RESOLVED"))
@@ -369,7 +616,27 @@ class MapMirrorTests(TestCase):
         self.assertEqual(data["states"]["SP"]["recurrence_links"], 1)
         self.assertEqual(data["recurrence_client_counts"], {"Claro": 1})
 
-    def test_motive_mode_uses_terminal_date_normalized_reason_and_valid_terminal_states(self):
+    def test_repeat_mode_deduplicates_tickets_shared_by_multiple_recurrent_links(self):
+        second_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="map-ci-repeat-2", source_number="MAP-R2",
+            state="SP", contracting_client="Claro", business_project="BRADESCO",
+        )
+        tickets = [self._ticket(420, "RESOLVED"), self._ticket(421, "CLOSED")]
+        for ticket in tickets:
+            self._relate(ticket, self.link)
+            self._relate(ticket, second_link)
+
+        data = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "repeat", "period": "custom",
+            "date_from": "2026-10-01", "date_to": "2026-10-31",
+        }).json()
+
+        self.assertEqual(data["recurrence_link_count"], 2)
+        self.assertEqual(data["recurrence_ticket_count"], 2)
+        self.assertEqual(data["states"]["SP"]["recurrence_links"], 2)
+        self.assertEqual(data["states"]["SP"]["recurrence_tickets"], 2)
+
+    def test_motive_mode_uses_resolution_date_normalized_reason_and_valid_terminal_states(self):
         self._relate(self._ticket(50, "RESOLVED", day=10, reason="PendenciaFinanceira"))
         self._relate(self._ticket(51, "CLOSED", day=11, reason="Pendência Financeira"))
         self._relate(self._ticket(52, "CANCELED", day=12, reason="ChamadoCancelado"))
@@ -379,6 +646,37 @@ class MapMirrorTests(TestCase):
         reason = next(iter(data["states"]["SP"]["reason_counts"]))
         self.assertEqual(data["states"]["SP"]["reason_counts"][reason], 2)
         self.assertNotIn("ChamadoCancelado", data["states"]["SP"]["reason_counts"])
+
+    def test_motive_period_uses_resolved_at_before_later_terminal_state_update(self):
+        ticket = self._ticket(53, "CLOSED", day=20, reason="FalhaMassiva")
+        ticket.resolved_at = datetime(2026, 10, 31, 22, tzinfo=datetime_timezone.utc)
+        ticket.terminal_state_at = datetime(2026, 11, 1, 22, tzinfo=datetime_timezone.utc)
+        ticket.save()
+        self._relate(ticket)
+
+        october = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "motives", "period": "custom", "date_from": "2026-10-01", "date_to": "2026-10-31",
+        }).json()
+        november = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "motives", "period": "custom", "date_from": "2026-11-01", "date_to": "2026-11-30",
+        }).json()
+        october_detail = self.client.get(reverse("base_links:map-state-detail"), {
+            "uf": "SP", "mode": "motives", "period": "custom",
+            "date_from": "2026-10-01", "date_to": "2026-10-31",
+        }).json()
+        november_detail = self.client.get(reverse("base_links:map-state-detail"), {
+            "uf": "SP", "mode": "motives", "period": "custom",
+            "date_from": "2026-11-01", "date_to": "2026-11-30",
+        }).json()
+
+        self.assertEqual(october["terminal_ticket_count"], 1)
+        self.assertEqual(november["terminal_ticket_count"], 0)
+        self.assertEqual(len(october_detail["tickets"]), 1)
+        self.assertEqual(october_detail["tickets"][0]["status"], "CLOSED")
+        self.assertEqual(october_detail["tickets"][0]["resolved_at"], ticket.resolved_at.isoformat())
+        self.assertEqual(october_detail["tickets"][0]["terminal_at"], ticket.terminal_state_at.isoformat())
+        self.assertEqual(november_detail["tickets"], [])
+        self.assertEqual(OTRSTicket.objects.get(pk=ticket.pk).business_status, "CLOSED")
 
     def test_provider_filter_uf_normalization_and_invalid_provider_validation(self):
         CMDBLinkMirror.objects.create(source_config_item_id="map-ci-name-uf", state="São Paulo", operator=self.provider, contracting_client="Claro", business_project="BRADESCO")
@@ -398,10 +696,18 @@ class MapMirrorTests(TestCase):
         scope.save()
         scope.allowed_operators.set([Operadora.objects.create(name="Claro", normalized_name="claro")])
         scope.allowed_projects.set([Projeto.objects.create(name="BRADESCO", normalized_name="bradesco")])
+        outside_ticket = self._ticket(880, "OPEN")
+        self._relate(outside_ticket, CMDBLinkMirror.objects.get(source_config_item_id="map-out-ci"))
+        outside_assignee = get_user_model().objects.create_user(username="outside-assignee", password="safe-password-8")
+        TicketTracking.objects.create(ticket_external_id=outside_ticket.external_id, assigned_to=outside_assignee)
         data = self.client.get(reverse("base_links:map-aggregates"), {"mode": "base"}).json()
         self.assertEqual(data["source_total"], 1)
         self.assertEqual(data["states"]["SP"]["total_links"], 1)
         self.assertNotIn("RJ", data["states"])
+        calls = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "calls", "period": "2026-10",
+        }).json()
+        self.assertEqual(calls["assignees"], [])
 
     def test_state_detail_returns_links_and_ticket_rows_from_scoped_sources(self):
         self._relate(self._ticket(70, "OPEN"))
@@ -410,6 +716,120 @@ class MapMirrorTests(TestCase):
         self.assertEqual(response.json()["links"][0]["provider"], "FIERCE TELECOM")
         self.assertEqual(response.json()["tickets"][0]["ticket_number"], "MAP-70")
         self.assertNotIn("subject", response.json()["tickets"][0])
+
+    def test_map_state_ticket_tab_filters_arion_tracking_and_paginates_on_server(self):
+        tickets = []
+        for external_id in range(800, 830):
+            ticket = self._ticket(external_id, "OPEN", day=20)
+            self._relate(ticket)
+            tickets.append(ticket)
+        TicketTracking.objects.create(
+            ticket_external_id=tickets[0].external_id,
+            internal_status=TicketTracking.InternalStatus.ISP_IN_PROGRESS,
+            assigned_to=self.user,
+        )
+        params = {"uf": "SP", "mode": "calls", "period": "2026-10", "tab": "tickets", "ticket_page_size": "25"}
+        first = self.client.get(reverse("base_links:map-state-detail"), params)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()["ticket_total"], 30)
+        self.assertEqual(first.json()["ticket_pages"], 2)
+        self.assertEqual(len(first.json()["tickets"]), 25)
+        self.assertIn("chamados_url", first.json()["tickets"][0])
+        second = self.client.get(reverse("base_links:map-state-detail"), {**params, "ticket_page": "2"})
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["ticket_page"], 2)
+        self.assertEqual(len(second.json()["tickets"]), 5)
+        filtered = self.client.get(reverse("base_links:map-state-detail"), {
+            **params, "arion_status": TicketTracking.InternalStatus.ISP_IN_PROGRESS,
+            "assignee": str(self.user.pk), "ticket_search": "MAP-800",
+        })
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(filtered.json()["ticket_total"], 1)
+        self.assertEqual(filtered.json()["tickets"][0]["assignee"], self.user.get_username())
+        summary = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "calls", "period": "2026-10",
+            "arion_status": TicketTracking.InternalStatus.ISP_IN_PROGRESS,
+            "assignee": str(self.user.pk),
+        }).json()
+        self.assertEqual(summary["ticket_count"], 1)
+        self.assertEqual(summary["assignees"], [{"id": self.user.pk, "name": self.user.get_username()}])
+
+    def test_project_mode_keeps_cmdb_snapshot_and_ticket_period_filter_separate(self):
+        self._relate(self._ticket(830, "OPEN", day=20))
+        data = self.client.get(reverse("base_links:map-aggregates"), {
+            "mode": "projects", "period": "2026-10", "project": "BDN",
+        }).json()
+        self.assertEqual(data["filtered_source_total"], 1)
+        self.assertEqual(data["states"]["SP"]["total_links"], 1)
+        self.assertEqual(data["ticket_count"], 1)
+        self.assertEqual(data["states"]["SP"]["ticket_project_counts"], {"BRADESCO": 1})
+        self.assertEqual(data["states"]["SP"]["ticket_provider_counts"], {"FIERCE TELECOM": 1})
+        detail = self.client.get(reverse("base_links:map-state-detail"), {
+            "mode": "projects", "period": "2026-10", "project": "BRADESCO",
+            "uf": "SP", "tab": "tickets",
+        }).json()
+        self.assertEqual(detail["ticket_total"], 1)
+        self.assertEqual(detail["tickets"][0]["ticket_number"], "MAP-830")
+
+    def test_map_ticket_search_preserves_state_and_canonical_project_context(self):
+        bahia_bradesco = CMDBLinkMirror.objects.create(
+            source_config_item_id="map-ci-bahia-bdn", source_number="MAP-BA-BDN",
+            state="BA", city="Salvador", operator=self.provider,
+            contracting_client="Claro", business_project="BDN BRADESCO",
+        )
+        bahia_correios = CMDBLinkMirror.objects.create(
+            source_config_item_id="map-ci-bahia-correios", source_number="MAP-BA-CORREIOS",
+            state="BA", city="Salvador", operator=self.provider,
+            contracting_client="Claro", business_project="Correios",
+        )
+        sp_bradesco = CMDBLinkMirror.objects.create(
+            source_config_item_id="map-ci-sp-bradesco", source_number="MAP-SP-BRADESCO",
+            state="SP", city="Sao Paulo", operator=self.provider,
+            contracting_client="Claro", business_project="BRADESCO",
+        )
+        for external_id, link in (
+            (2026102701, bahia_bradesco),
+            (2026102702, bahia_correios),
+            (2026102703, sp_bradesco),
+        ):
+            self._relate(self._ticket(external_id, "OPEN"), link)
+
+        response = self.client.get(reverse("base_links:map-state-detail"), {
+            "uf": "BA", "mode": "calls", "project": "BRADESCO", "period": "2026-10",
+            "tab": "tickets", "ticket_search": "20261027",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["ticket_total"], 1)
+        self.assertEqual(response.json()["tickets"][0]["ticket_number"], "MAP-2026102701")
+        self.assertEqual(response.json()["tickets"][0]["cmdb"]["uf"], "BA")
+        self.assertEqual(response.json()["tickets"][0]["identity"]["project"], "BRADESCO")
+
+    def test_recurrence_tab_lists_distinct_links_occurrences_and_latest_ticket(self):
+        self._relate(self._ticket(832, "OPEN", day=20))
+        self._relate(self._ticket(833, "RESOLVED", day=26))
+        response = self.client.get(reverse("base_links:map-state-detail"), {
+            "mode": "repeat", "period": "2026-10", "uf": "SP", "tab": "recurrence",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["state"]["recurrence_links"], 1)
+        self.assertEqual(len(response.json()["recurrences"]), 1)
+        self.assertEqual(response.json()["recurrences"][0]["link"], "MAP-1")
+        self.assertEqual(response.json()["recurrences"][0]["occurrences"], 2)
+        self.assertTrue(response.json()["recurrences"][0]["last_occurrence"].startswith("2026-10-26"))
+
+    def test_map_ticket_action_routes_to_the_existing_chamados_drawer(self):
+        self._relate(self._ticket(831, "OPEN"))
+        detail = self.client.get(reverse("base_links:map-state-detail"), {
+            "mode": "calls", "period": "2026-10", "uf": "SP", "tab": "tickets",
+        }).json()
+        self.assertEqual(
+            detail["tickets"][0]["chamados_url"],
+            reverse("chamados:index") + "?open_ticket=831&ignore_default=1",
+        )
+        script = _frontend_js("chamados/chamados.js").read_text(encoding="utf-8")
+        self.assertIn('routeParams.get("open_ticket")', script)
+        self.assertIn("loadDetail(requestedTicket, true)", script)
 
     def test_superuser_bypasses_scope_using_existing_rule(self):
         CMDBLinkMirror.objects.create(source_config_item_id="map-out-ci", state="RJ", business_project="Outside")
@@ -421,6 +841,9 @@ class MapMirrorTests(TestCase):
 
     def test_project_palette_catalog_is_deterministic_and_isolated_to_project_mode(self):
         script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
+        self.assertIn("data.selected_project", script)
+        self.assertIn("data.unlinked_ticket_count", script)
+        self.assertIn('"BRADESCO":"BRADESCO"', script)
         match = re.search(r"const projectPalettes = \{(.*?)\n  \};", script, re.DOTALL)
         self.assertIsNotNone(match)
         palette_keys = set(re.findall(r"^\s{4}([a-z_]+):", match.group(1), re.MULTILINE))

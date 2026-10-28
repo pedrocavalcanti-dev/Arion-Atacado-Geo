@@ -213,7 +213,7 @@ def home(request):
         cmdb_links=CMDBLinkMirror.objects.filter(is_present_in_source=True).count(),
         cmdb_operators=CMDBOperatorMirror.objects.filter(is_present_in_source=True).count(),
         otrs_tickets=TicketQueryService.noc_tickets().count(),
-        otrs_open=TicketQueryService.noc_tickets().filter(is_business_open=True).count(),
+        otrs_open=TicketQueryService.business_open().count(),
         otrs_fast=IntegrationRun.objects.filter(operation=IntegrationRun.Operation.OTRS_FAST_SYNC).first(),
         otrs_full=IntegrationRun.objects.filter(operation=IntegrationRun.Operation.OTRS_FULL_SYNC).first(),
         mapbox_configured=bool(settings.MAPBOX_PUBLIC_TOKEN),

@@ -20,10 +20,12 @@ from django.views.generic import RedirectView
 
 from aplicativos.autenticacao.views import home
 from aplicativos.painel.views import cockpit, dashboard
-from .views import health
+from .views import health, pwa_manifest, pwa_service_worker
 
 urlpatterns = [
     path('health/', health, name='health'),
+    path('manifest.webmanifest', pwa_manifest, name='pwa-manifest'),
+    path('service-worker.js', pwa_service_worker, name='pwa-service-worker'),
     path('favicon.ico', RedirectView.as_view(url='/static/favicon/arion.svg', permanent=True), name='favicon'),
     path('admin/', admin.site.urls),
     path('', home, name='home'),

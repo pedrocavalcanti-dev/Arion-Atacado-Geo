@@ -37,8 +37,8 @@ Este índice é a referência para localizar campos pelo nome, model, tipo, orig
 | `closing_code_raw` | OTRSTicket | `CharField(250)` | {{badge:OTRS}} | Valor bruto de `CodigoFechamento`; canonicalizador não apaga o original. | Índice simples |
 | `responsibility_raw` | OTRSTicket | `CharField(120)` | {{badge:OTRS}} | Valor original de `RvalidacaoProcedenteImprocedente`. | Índice simples |
 | `responsibility_normalized` | OTRSTicket | `CharField(20)` | {{badge:DERIVADO}} | PROCEDENTE, IMPROCEDENTE ou INDETERMINADO; informativo. | Índice simples |
-| `resolved_at` | OTRSTicket | `DateTimeField` | {{badge:OTRS}} | `ticketResolvido.value_date`; data dinâmica explícita. | Índice simples |
-| `terminal_state_at` | OTRSTicket | `DateTimeField` | {{badge:DERIVADO}} | Último StateUpdate compatível com estado terminal atual. | Índice simples |
+| `resolved_at` | OTRSTicket | `DateTimeField` | {{badge:OTRS}} | `ticketResolvido.value_date`; data operacional principal de resolução. | Índice simples |
+| `terminal_state_at` | OTRSTicket | `DateTimeField` | {{badge:DERIVADO}} | Último StateUpdate compatível com o estado terminal atual; diagnóstico e fallback quando `resolved_at` não existe. | Índice simples |
 | `canceled_at` | OTRSTicket | `DateTimeField` | {{badge:DERIVADO}} | Data terminal de cancelamento mantida à parte. | Índice simples |
 | `is_present_in_queue` | OTRSTicket | `BooleanField` | {{badge:DERIVADO}} | Presença na fila no snapshot FULL válido. | Índice simples e composto |
 | `config_item_id` | [OTRSTicketConfigItem](BANCO-DE-DADOS.md#otrsticketconfigitem) | `CharField(40)` | {{badge:OTRS}} | ConfigItemID da relação remota, preservado mesmo se não houver mirror. | Índice e unique composto |
@@ -86,3 +86,12 @@ Este índice é a referência para localizar campos pelo nome, model, tipo, orig
 | Auditoria e analytics | `AuditEvent`, `SavedAnalyticsView` | [Auditoria](funcionalidades/auditoria.md), [Cockpit](funcionalidades/cockpit.md) |
 
 As relações, os tipos de coluna e as constraints completas estão em [Banco de Dados e Modelos](BANCO-DE-DADOS.md). Verifique também migrations antes de alterar schema.
+
+## Glossário operacional de contagens
+
+- **Tickets**: quantidade de IDs de chamados distintos no universo, estados, período e filtros definidos pela métrica em questão.
+- **Tickets ativos agora / backlog**: tickets atuais da fila `NOC - ATACADO` presentes no snapshot e com `business_status` em `OPEN`, `PENDING` ou `SCHEDULED`.
+- **Links afetados**: quantidade distinta de Links CMDB locais presentes que têm ao menos uma relação Ticket–ConfigItem válida no conjunto de Tickets contado. Ticket sem CI ou CI sem Link local continua podendo contar como Ticket, mas não produz Link afetado.
+- **Links reincidentes**: quantidade distinta de Links que satisfazem a regra de reincidência do recorte, normalmente pelo menos dois Tickets distintos; não é sinônimo de Links afetados.
+
+O Data Scope é aplicado antes das agregações. A cobertura geográfica do Mapa, os filtros da Fila, as linhas de Provedor e os períodos históricos podem definir universos próprios; consulte a documentação do módulo antes de comparar contagens entre telas.

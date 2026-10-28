@@ -48,6 +48,23 @@ def _scoped_active_ticket(user, external_id):
     return ticket, relations
 
 
+def _scoped_ticket_for_detail(user, external_id):
+    links = LinkQueryService.base(user)
+    ticket = get_object_or_404(
+        TicketQueryService.base(user, links=links),
+        external_id=external_id,
+    )
+    relations = list(
+        OTRSTicketConfigItem.objects.filter(
+            ticket=ticket,
+            is_present_in_source=True,
+            cmdb_link__in=links,
+        ).select_related("cmdb_link", "cmdb_link__operator")
+        .order_by("cmdb_link__designation", "config_item_id")
+    )
+    return ticket, relations
+
+
 @login_required
 @access_required("view_operational_tickets")
 @require_GET
@@ -130,7 +147,7 @@ def _queue_params(request):
 @access_required("view_operational_tickets")
 @require_GET
 def detail(request, external_id):
-    ticket, relations = _scoped_active_ticket(request.user, external_id)
+    ticket, relations = _scoped_ticket_for_detail(request.user, external_id)
     links_scope = LinkQueryService.base(request.user)
     recurrent_ids = recurrent_link_ids_for_user(request.user, links_scope, timezone.now())
     tracking = TicketTracking.objects.filter(ticket_external_id=ticket.external_id).select_related(
@@ -183,6 +200,7 @@ def detail(request, external_id):
             "queue": ticket.queue_name,
             "external_state": ticket.external_state_name,
             "business_status": ticket.business_status,
+            "operational": ticket.business_status in ACTIVE_STATES,
             "status_label": STATUS_LABELS.get(ticket.business_status, ticket.business_status),
             "priority": ticket.priority_name or "Não informada",
             "created_at": timezone.localtime(ticket.source_created_at).isoformat() if ticket.source_created_at else None,

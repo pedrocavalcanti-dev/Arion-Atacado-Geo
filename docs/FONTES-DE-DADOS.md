@@ -22,7 +22,7 @@ Worker lê OTRS via MySQL read-only e CMDB via GenericInterface, valida o result
 
 ## Status e universos
 
-Estados normalizados: OPEN, PENDING, SCHEDULED, RESOLVED, CLOSED, CANCELED e UNKNOWN. Backlog atual é OPEN + PENDING + SCHEDULED. Universo geral válido para performance pode incluir RESOLVED e CLOSED; CANCELED/UNKNOWN não entram nesse universo. Volume por período usa `source_created_at`; backlog e estado são foto atual, não reconstrução histórica diária.
+Estados normalizados: OPEN, PENDING, SCHEDULED, RESOLVED, CLOSED, CANCELED e UNKNOWN. Backlog atual é OPEN + PENDING + SCHEDULED. Universo geral válido para performance pode incluir RESOLVED e CLOSED; CANCELED/UNKNOWN não entram nesse universo. Volume por período usa `source_created_at`; análises de término operacional usam `resolved_at`, com `terminal_state_at` apenas como fallback se a resolução estiver ausente. Backlog e estado são foto atual, não reconstrução histórica diária. O estado bruto `CLOSED` continua preservado.
 
 KPIs gerais contam tickets distintos. O mesmo ticket pode aparecer em cada Link relacionado em agregação por Link. Com Data Scope CUSTOM, ticket sem relação confirmável com Link autorizado não é exposto.
 

@@ -10,14 +10,17 @@ from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from aplicativos.integracoes.models import OTRSTicketConfigItem
-from aplicativos.integracoes.services.analytics import LinkQueryService, TicketQueryService
+from aplicativos.integracoes.services.analytics import (
+    BUSINESS_OPEN_STATUSES, LinkQueryService, TicketQueryService,
+    operational_resolution_at,
+)
 from aplicativos.integracoes.services.closing_reason import ClosingReasonCanonicalizer
 from aplicativos.integracoes.services.semantics import provider_label
 from aplicativos.painel.services.analytics import AnalyticsQueryService
 
 
 VALID_STATES = AnalyticsQueryService.OPERATIONAL_VALID_STATES
-BACKLOG_STATES = ("OPEN", "PENDING", "SCHEDULED")
+BACKLOG_STATES = BUSINESS_OPEN_STATUSES
 TERMINAL_STATES = ("RESOLVED", "CLOSED")
 SMALL_SAMPLE_LINK_THRESHOLD = 5
 BEST_RANKING_MIN_LINKS = 5
@@ -293,9 +296,10 @@ class RankingService:
                     recurrent_link_ids.add(link_id)
             for ticket_id in selected_ticket_ids:
                 ticket = tickets[ticket_id]
-                if ticket.business_status in TERMINAL_STATES and ticket.source_created_at and ticket.terminal_state_at:
+                operational_end = operational_resolution_at(ticket)
+                if ticket.business_status in TERMINAL_STATES and ticket.source_created_at and operational_end:
                     eligible_ids.add(ticket_id)
-                    if ticket.terminal_state_at - ticket.source_created_at > timedelta(hours=24):
+                    if operational_end - ticket.source_created_at > timedelta(hours=24):
                         terminal_aged_ids.add(ticket_id)
                 elif ticket.business_status in BACKLOG_STATES and ticket.source_created_at:
                     eligible_ids.add(ticket_id)
@@ -485,8 +489,8 @@ class RankingService:
         terminal_over_ids = {
             ticket_id for ids in period_ids_by_link.values() for ticket_id in ids
             if tickets[ticket_id].business_status in TERMINAL_STATES
-            and tickets[ticket_id].source_created_at and tickets[ticket_id].terminal_state_at
-            and tickets[ticket_id].terminal_state_at - tickets[ticket_id].source_created_at > timedelta(hours=24)
+            and tickets[ticket_id].source_created_at and operational_resolution_at(tickets[ticket_id])
+            and operational_resolution_at(tickets[ticket_id]) - tickets[ticket_id].source_created_at > timedelta(hours=24)
         }
         total_over_ids = open_aged_ids | terminal_over_ids
         if filters.get("only_recurrent"):
@@ -659,8 +663,9 @@ class RankingService:
             } for link in linked]
             created = ticket.source_created_at
             terminal = ticket.terminal_state_at
-            is_terminal = ticket.business_status in TERMINAL_STATES and terminal is not None
-            duration = (terminal if is_terminal else now) - created if created else None
+            is_terminal = ticket.business_status in TERMINAL_STATES
+            operational_end = operational_resolution_at(ticket) if is_terminal else now
+            duration = (operational_end - created) if created and operational_end else None
             in_period = ticket_id in row["period_ticket_ids"]
             recurrent_link = any(link.pk in row["recurrent_link_ids"] for link in linked)
             normalized = ticket.responsibility_normalized or "INDETERMINADO"
@@ -675,6 +680,10 @@ class RankingService:
                 why.insert(0, "Criado no período selecionado")
             elif ticket_id in row["backlog_ticket_ids"]:
                 why.insert(0, "Backlog atual em OPEN/PENDING/SCHEDULED")
+            if is_terminal and ticket.resolved_at:
+                why.append("Duração encerrada em ticketResolvido")
+            elif is_terminal and terminal:
+                why.append("Fallback de duração: StateUpdate terminal, pois ticketResolvido não tem data")
             records.append({
                 "id": ticket.pk,
                 "external_id": ticket.external_id,
@@ -690,8 +699,14 @@ class RankingService:
                 "priority": ticket.priority_name,
                 "created_at": timezone.localtime(created).strftime("%d/%m/%Y %H:%M") if created else "",
                 "created_sort": created.isoformat() if created else "",
+                "resolved_at": timezone.localtime(ticket.resolved_at).strftime("%d/%m/%Y %H:%M") if ticket.resolved_at else "",
                 "terminal_at": timezone.localtime(terminal).strftime("%d/%m/%Y %H:%M") if terminal else "",
-                "duration_hours": round(duration.total_seconds() / 3600, 1) if duration else None,
+                "operational_end_at": timezone.localtime(operational_end).strftime("%d/%m/%Y %H:%M") if is_terminal and operational_end else "",
+                "operational_end_source": (
+                    "resolved_at" if is_terminal and ticket.resolved_at else
+                    "terminal_state_at" if is_terminal and terminal else ""
+                ),
+                "duration_hours": round(duration.total_seconds() / 3600, 1) if duration is not None else None,
                 "over_24h": ticket_id in row["over_24h_ticket_ids"],
                 "backlog": ticket_id in row["backlog_ticket_ids"],
                 "in_period": in_period,

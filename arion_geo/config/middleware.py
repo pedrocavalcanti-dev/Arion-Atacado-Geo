@@ -89,6 +89,10 @@ class ProductionSecurityHeadersMiddleware:
         is_authenticated = bool(user and user.is_authenticated)
         static_prefix = settings.STATIC_URL.rstrip("/") + "/"
         is_static = request.path_info.startswith(static_prefix)
-        if is_authenticated or not is_static:
+        if request.path_info == "/service-worker.js":
+            response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        elif request.path_info == "/manifest.webmanifest":
+            response["Cache-Control"] = "public, max-age=300, must-revalidate"
+        elif is_authenticated or not is_static:
             response["Cache-Control"] = "private, no-store"
         return response

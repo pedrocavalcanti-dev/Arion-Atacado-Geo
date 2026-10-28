@@ -80,3 +80,11 @@ Motivos de encerramento usam `ClosingReasonCanonicalizer` compartilhado. Por exe
 
 Veja também [Data Scope](usuarios-grupos-escopos.md), [OTRS](../OTRS.md), [CMDB](../CMDB.md), [Worker](../WORKER-E-SINCRONIZACAO.md), [Banco de Dados](../BANCO-DE-DADOS.md) e [Ranking de Provedores](rankings.md).
 
+## Tickets ativos e Links afetados
+
+Os cartões da Fila são calculados no backend para o conjunto inteiro, sem depender da página visível. Tickets ativos são distintos e pertencem à fila atual `NOC - ATACADO`, presentes no snapshot e nos estados `OPEN`, `PENDING` ou `SCHEDULED`. Links afetados são Links CMDB locais distintos, presentes e no Data Scope, relacionados a pelo menos um ticket do conjunto contado. Vários tickets no mesmo Link contam um Link; um ticket ligado a dois Links válidos conta dois Links.
+
+Busca, Cliente, Projeto, Provedor, UF, Status ARION, Responsável, Prioridade, Motivo, aging e reincidência reduzem o conjunto de Tickets dos cartões. Quando um filtro de dimensão seleciona um Ticket por um Link correspondente, `Links afetados` conta todos os Links distintos e autorizados associados aos Tickets selecionados, ainda que outro Link do mesmo Ticket tenha outra dimensão. Os filtros `otrs_status` e as abas `OPEN`/`PENDING`/`SCHEDULED`/`Meus`/`Sem responsável` são aplicados à tabela depois dos cartões e não alteram seus totais. A paginação também não altera os totais. Assim, sem filtros adicionais os dois cartões correspondem aos snapshots atuais do Dashboard; com recorte de fila, refletem o conjunto filtrado descrito acima.
+
+No escopo global, tickets sem ConfigItem e ConfigItems sem Link local continuam sendo Tickets, mas não contam como Links afetados. Em `CUSTOM`, tickets sem relação com Link autorizado não podem ser atribuídos ao escopo e ficam fora dos resultados. Filtros por Cliente/Projeto/Provedor/UF contam cada Ticket selecionado uma vez, sem multiplicação por joins; o contador de Links considera as relações locais distintas do Ticket selecionado dentro do escopo autorizado.
+

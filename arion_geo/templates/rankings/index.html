@@ -70,7 +70,7 @@
     <article class="ranking-kpi"><span>Chamados válidos</span><strong>{{ tickets_valid|intcomma }}</strong><small>Chamados nacionais distintos</small></article>
     <article class="ranking-kpi"><span>Links afetados</span><strong>{{ links_affected|intcomma }}</strong></article>
     <article class="ranking-kpi"><span>Links reincidentes</span><strong>{{ links_recurrent|intcomma }}</strong></article>
-    <article class="ranking-kpi" title="Indicador operacional provisório do ARION. Não representa necessariamente o SLA contratual do cliente."><span>ARION &gt;24h</span><strong>{{ tickets_over_24h|intcomma }}</strong><small>{{ aged_open|intcomma }} abertos · {{ terminal_over_24h|intcomma }} terminais</small></article>
+    <article class="ranking-kpi" title="Indicador operacional provisório do ARION. Não representa necessariamente o SLA contratual do cliente."><span>ARION &gt;24h</span><strong>{{ tickets_over_24h|intcomma }}</strong><small>{{ aged_open|intcomma }} abertos · {{ terminal_over_24h|intcomma }} RESOLVED/CLOSED</small></article>
     <article class="ranking-kpi"><span>Backlog atual</span><strong>{{ backlog_current|intcomma }}</strong><small>Em atendimento · Pendente · Agendado</small></article>
   </section>
 
@@ -264,7 +264,7 @@
         <p>Os cinco componentes somam um único Índice ARION V2. No consolidado de 3 meses, os dados brutos são agregados e os componentes recalculados uma vez. O histórico calcula o índice V2 separadamente por mês.</p>
         <p>Amostra pequena: menos de {{ scoring.small_sample_threshold }} links. O provedor continua visível e pode aparecer no pódio de risco.</p>
       </div>
-      <p class="aging-disclaimer">O envelhecimento dos chamados ARION considera chamados OPEN/PENDING/SCHEDULED envelhecidos desde a criação e RESOLVED/CLOSED com duração terminal superior a 24h, quando as datas existem. A classificação de responsabilidade é informativa e não altera o índice.</p>
+      <p class="aging-disclaimer">O envelhecimento dos chamados ARION considera chamados OPEN/PENDING/SCHEDULED envelhecidos desde a criação e RESOLVED/CLOSED com duração operacional superior a 24h, usando resolved_at e, somente quando ausente, terminal_state_at. A classificação de responsabilidade é informativa e não altera o índice.</p>
     </div>
   </dialog>
 

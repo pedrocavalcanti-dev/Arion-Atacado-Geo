@@ -224,7 +224,7 @@
     overviewGrid.innerHTML = overview ? renderOverview(overview, data.time_grain) : '<p class="cockpit-empty">A consulta não apresenta variação temporal suficiente.</p>';
     dimensionGrid.innerHTML = dimensions.length ? dimensions.map(renderDimension).join("") : '<p class="cockpit-empty">Não há dimensões complementares relevantes para esta consulta.</p>';
     renderCalendar(data.temporal);
-    const baseLabels = { tickets: "data de criação", open_tickets: "data de criação", pending_tickets: "data de criação", scheduled_tickets: "data de criação", resolved_tickets: "data de encerramento", closed_tickets: "data de encerramento", resolved_closed_tickets: "data terminal", canceled_tickets: "data de cancelamento", backlog: "snapshot atual" };
+    const baseLabels = { tickets: "data de criação", open_tickets: "data de criação", pending_tickets: "data de criação", scheduled_tickets: "data de criação", resolved_tickets: "data de resolu\u00e7\u00e3o", closed_tickets: "data de resolu\u00e7\u00e3o", resolved_closed_tickets: "data de resolu\u00e7\u00e3o", canceled_tickets: "data de cancelamento", backlog: "snapshot atual" };
     const base = page.querySelector("[data-period-semantics]");
     base.textContent = `Base: ${baseLabels[data.metric] || "data de criação"}`;
     base.title = data.metric === "canceled_tickets" ? "Métrica específica de cancelamentos." : data.metric === "backlog" ? "Backlog considera tickets atuais em atendimento, pendentes ou agendados." : "Considera estados operacionais válidos; tickets cancelados e estados não classificados são excluídos.";
@@ -366,7 +366,7 @@
     if (!row || !dialog) return;
     dialog.querySelector("[data-drawer-title]").textContent = `Ticket ${row.ticket}`;
     dialog.querySelector("[data-drawer-status]").textContent = `${row.status} · ${sourceStateLabels.get(String(row.source_state)) || row.source_state}`;
-    const details = [["Criado em", row.created_at], ["Alterado em", row.changed_at], ["Base da análise", row.base_date], ["Resolvido em", row.resolved_at], ["Encerrado em", row.terminal_at], ["Cancelado em", row.canceled_at], ["Motivo de encerramento", row.reason], ["Prioridade", row.priority], ["SLA", row.sla]];
+    const details = [["Criado em", row.created_at], ["Alterado em", row.changed_at], ["Base da análise", row.base_date], ["Resolvido em", row.resolved_at], ["Terminal StateUpdate OTRS em", row.terminal_at], ["Cancelado em", row.canceled_at], ["Motivo de encerramento", row.reason], ["Prioridade", row.priority], ["SLA", row.sla]];
     dialog.querySelector("[data-drawer-fields]").innerHTML = details.map(([label,value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value || "—")}</dd></div>`).join("");
     dialog.querySelector("[data-drawer-links]").innerHTML = row.links?.length ? row.links.map(link => `<article><strong>ConfigItem ${escapeHTML(link.config_item_id)}</strong><dl><div><dt>Number</dt><dd>${escapeHTML(link.number || "—")}</dd></div><div><dt>Designação</dt><dd>${escapeHTML(link.designation || "—")}</dd></div><div><dt>Circuito</dt><dd>${escapeHTML(link.circuit || "—")}</dd></div><div><dt>Provedor</dt><dd>${escapeHTML(link.provider || "Não identificado")}</dd></div><div><dt>UF</dt><dd>${escapeHTML(link.uf || "—")}</dd></div></dl></article>`).join("") : "<p>Sem vínculo CMDB disponível.</p>";
     dialog.querySelector("[data-drawer-evidence]").innerHTML = (row.evidence || []).map(item => `<li>${escapeHTML(item)}</li>`).join("");

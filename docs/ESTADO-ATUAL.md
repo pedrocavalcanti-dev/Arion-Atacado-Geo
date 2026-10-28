@@ -1,6 +1,6 @@
 ﻿# Estado atual do ARION ATACADO GEO
 
-Revisão do workspace em 25/10/2026. A matriz descreve capacidades encontradas no código, sem publicar contagens voláteis de uma base específica.
+Revisão do workspace em 28/10/2026. A matriz descreve capacidades encontradas no código, sem publicar contagens voláteis de uma base específica.
 
 ## Matriz de módulos
 
@@ -27,6 +27,10 @@ A seleção suporta SQLite e MySQL. O processo consultado neste workspace estava
 A preparação de produção V1 inclui modo Django explícito, Waitress localhost, supervisor Windows para Web/Worker, build de assets production, `collectstatic`, production-check, preparação do serviço Cloudflare Tunnel e backup MySQL. Isso descreve código/script disponível; domínio, host novo, MySQL restaurado, conta Cloudflare/Tunnel e credenciais de serviço ainda precisam ser configurados e verificados no ambiente de destino. Consulte [Implantação e Produção](IMPLANTACAO-E-PRODUCAO.md).
 
 OTRS/CMDB são fontes oficiais. `CMDBLinkMirror`, `CMDBOperatorMirror`, `OTRSTicket` e `OTRSTicketConfigItem` são cópias locais. `TicketTracking` representa trabalho interno do ARION.
+
+## Frontend mobile e PWA
+
+O frontend Django usa navegação dedicada em tablet/mobile e adaptações por módulo; a Fila apresenta Tickets como cartões em telas estreitas. O PWA possui manifest, ícones derivados do favicon, instalação Chromium/iOS, modo standalone e aviso de atualização sob ação do usuário. O Service Worker não armazena conteúdo operacional autenticado: páginas e APIs seguem para rede e o modo offline mostra apenas indisponibilidade. Build de produção/`collectstatic` e validação em dispositivos no servidor continuam necessários antes de publicar.
 
 ## Não anunciar como implementado
 

@@ -5,12 +5,12 @@
 {% block settings_content %}
 <section class="settings-section">
   <form method="get" class="admin-filters admin-filters--search"><label class="visually-hidden" for="scope-search">Buscar grupos</label><input id="scope-search" type="search" name="q" value="{{ query }}" placeholder="Nome do grupo"><button class="settings-button settings-button--secondary" type="submit">Buscar</button></form>
-  <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Grupo</th><th>Tipo</th><th>Operadoras</th><th>Projetos</th><th>Usuários</th><th></th></tr></thead><tbody>
-    {% for group in page_obj %}<tr><td><strong>{{ group.name }}</strong></td>
-      <td>{% if group.data_scope and group.data_scope.mode == "all" %}Todos os dados{% elif group.data_scope %}Personalizado{% else %}<span class="table-muted">Sem configuração</span>{% endif %}</td>
-      <td>{% if group.data_scope and group.data_scope.mode == "all" %}Todas{% elif group.data_scope %}{% for item in group.data_scope.allowed_operators.all %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="table-muted">Nenhuma</span>{% endfor %}{% else %}—{% endif %}</td>
-      <td>{% if group.data_scope and group.data_scope.mode == "all" %}Todos{% elif group.data_scope %}{% for item in group.data_scope.allowed_projects.all %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="table-muted">Nenhum</span>{% endfor %}{% else %}—{% endif %}</td>
-      <td>{{ group.member_count }} {% if group.member_count == 1 %}usuário{% else %}usuários{% endif %}</td><td class="admin-actions"><a href="{% url 'configuracoes:scope-edit' group.pk %}">Editar</a></td></tr>
+  <div class="admin-table-wrap"><table class="admin-table admin-table--cards"><thead><tr><th>Grupo</th><th>Tipo</th><th>Operadoras</th><th>Projetos</th><th>Usuários</th><th></th></tr></thead><tbody>
+    {% for group in page_obj %}<tr><td data-label="Grupo"><strong>{{ group.name }}</strong></td>
+      <td data-label="Tipo">{% if group.data_scope and group.data_scope.mode == "all" %}Todos os dados{% elif group.data_scope %}Personalizado{% else %}<span class="table-muted">Sem configuração</span>{% endif %}</td>
+      <td data-label="Operadoras">{% if group.data_scope and group.data_scope.mode == "all" %}Todas{% elif group.data_scope %}{% for item in group.data_scope.allowed_operators.all %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="table-muted">Nenhuma</span>{% endfor %}{% else %}—{% endif %}</td>
+      <td data-label="Projetos">{% if group.data_scope and group.data_scope.mode == "all" %}Todos{% elif group.data_scope %}{% for item in group.data_scope.allowed_projects.all %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="table-muted">Nenhum</span>{% endfor %}{% else %}—{% endif %}</td>
+      <td data-label="Usuários">{{ group.member_count }} {% if group.member_count == 1 %}usuário{% else %}usuários{% endif %}</td><td data-label="Ações" class="admin-actions"><a href="{% url 'configuracoes:scope-edit' group.pk %}">Editar</a></td></tr>
     {% empty %}<tr><td colspan="6" class="table-empty">Nenhum grupo encontrado.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>

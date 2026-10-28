@@ -57,7 +57,8 @@ def _ticket_values(item):
         " | ".join(link.get("config_item_id", "") for link in links),
         " | ".join(link.get("name", "") for link in links), item.get("status"), item.get("priority"),
         "Período" if item.get("in_period") else "Backlog atual",
-        item.get("created_at"), item.get("terminal_at"), item.get("duration_hours"),
+        item.get("created_at"), item.get("resolved_at"), item.get("terminal_at"),
+        item.get("operational_end_at"), item.get("operational_end_source"), item.get("duration_hours"),
         "Sim" if item.get("over_24h") else "Não", item.get("reason"),
         item.get("responsibility_raw"), item.get("responsibility_class"),
     ]
@@ -120,7 +121,11 @@ def build_xlsx(data, filters, providers, podium, generated_at, generated_by):
         links_sheet.append([_safe_cell(row.get(key)) for key in ("name", "config_item_id", "number", "provider", "client", "project", "state", "tickets")] + ["Sim" if row.get("recurrent") else "Não", row.get("over_24h", 0)])
 
     tickets_sheet = workbook.create_sheet("Tickets")
-    tickets_sheet.append(["Chamado", "Provedor / ISP", "Cliente", "Projeto", "UF", "ConfigItemID", "Link", "Status", "Prioridade", "Origem no recorte", "Criado em", "Terminal em", "Duração (horas)", "ARION >24h", "Motivo", "Procedência raw", "Classificação"])
+    tickets_sheet.append([
+        "Chamado", "Provedor / ISP", "Cliente", "Projeto", "UF", "ConfigItemID", "Link", "Status", "Prioridade",
+        "Origem no recorte", "Criado em", "Resolvido em", "Terminal OTRS em", "Término operacional usado",
+        "Origem do término operacional", "Duração (horas)", "ARION >24h", "Motivo", "Procedência raw", "Classificação",
+    ])
     for item in data["ticket_export_rows"]:
         tickets_sheet.append([_safe_cell(value) for value in _ticket_values(item)])
 

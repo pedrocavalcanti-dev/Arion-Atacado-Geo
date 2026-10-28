@@ -1,19 +1,11 @@
 {% extends "base.html" %}
 {% load static %}
-{% block body_class %}integration-portal-body{% endblock %}
 {% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/integracoes/integracoes.css' %}">{% endblock %}
 {% block extra_js %}{{ block.super }}<script src="{% arion_js 'js/integracoes/confirmacoes.js' %}" defer></script>{% endblock %}
 {% block content %}
 <div class="integration-portal">
-  <span class="integration-sr-only">ADMINISTRAÇÃO</span>
-  <header class="integration-portal-header">
-    <a class="integration-portal-brand" href="{% url 'configuracoes:integrations' %}" aria-label="Portal de Integrações">
-      <span class="integration-portal-mark" aria-hidden="true">N</span>
-      <span><strong>NOC ATACADO</strong><small>INTEGRAÇÕES</small></span>
-    </a>
-    <a class="integration-portal-return" href="{% url 'configuracoes:index' %}"><span aria-hidden="true">←</span> Voltar para Configurações</a>
-  </header>
   <main class="integration-portal-main">
+    <a class="integration-portal-return" href="{% url 'configuracoes:index' %}">Voltar para Configura&ccedil;&otilde;es</a>
     {% if integration or runs or run %}<header class="integration-page-heading"><p class="integration-eyebrow">CENTRAL DE INTEGRAÇÕES</p><h1>{% block integration_title %}{% endblock %}</h1><p>{% block integration_description %}{% endblock %}</p></header>{% endif %}
     {% block integration_content %}{% endblock %}
   </main>
