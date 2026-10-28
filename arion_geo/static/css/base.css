@@ -1,4 +1,5 @@
 :root {
+  --arion-global-header-height: 60px;
   color-scheme: dark;
   --bg-primary: #090a0a;
   --bg-secondary: #0d0f0f;
@@ -111,7 +112,7 @@ button, input { font: inherit; }
 a { color: inherit; }
 :focus-visible { outline: 2px solid var(--text-primary); outline-offset: 3px; }
 
-.app-header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; height: 60px; padding: 0 clamp(18px, 3vw, 48px); border-bottom: 1px solid var(--border-primary); background: var(--bg-primary); }
+.app-header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; height: var(--arion-global-header-height); padding: 0 clamp(18px, 3vw, 48px); border-bottom: 1px solid var(--border-primary); background: var(--bg-primary); }
 .brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; white-space: nowrap; }
 .brand-mark { display: flex; align-items: end; gap: 2px; width: 19px; height: 19px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 6px; transform: rotate(-8deg); }
 .brand-mark i { display: block; width: 3px; border-radius: 2px; background: var(--text-secondary); }
@@ -210,7 +211,8 @@ html[data-theme="light"] .theme-switch-thumb { box-shadow: 0 1px 3px rgba(20, 28
 @keyframes menu-out { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-4px) scale(.98); } }
 
 @media (max-width: 640px) {
-  .app-header { height: 56px; padding-inline: 16px; }
+  :root { --arion-global-header-height: 56px; }
+  .app-header { height: var(--arion-global-header-height); padding-inline: 16px; }
   .brand-name { font-size: 10px; letter-spacing: .08em; }
   .header-nav { gap: 13px; margin-left: auto; margin-right: 12px; }
   .header-link { font-size: 11px; }

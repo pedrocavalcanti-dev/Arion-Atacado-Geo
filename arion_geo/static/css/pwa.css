@@ -34,10 +34,33 @@
 .pwa-launch-pending .pwa-launch { opacity:1; pointer-events:auto; }
 .pwa-launch-pending .pwa-launch img { animation:pwa-mark-in 420ms cubic-bezier(.2,.75,.25,1) both; }
 .pwa-launch-pending .pwa-launch strong,.pwa-launch-pending .pwa-launch span { animation:pwa-copy-in 320ms ease 90ms both; }
-.pwa-update { position:fixed; z-index:1800; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); display:flex; max-width:min(540px,calc(100vw - 32px)); align-items:center; gap:12px; padding:10px 11px 10px 15px; border:1px solid var(--border-primary); border-radius:12px; background:var(--bg-elevated); color:var(--text-secondary); box-shadow:var(--shadow-soft); font-size:12px; }
+.pwa-update { position:fixed; z-index:1800; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); display:flex; max-width:min(660px,calc(100vw - 32px)); align-items:center; gap:12px; padding:10px 11px 10px 15px; border:1px solid var(--border-primary); border-radius:12px; background:var(--bg-elevated); color:var(--text-secondary); box-shadow:var(--shadow-soft); font-size:12px; }
 .pwa-update[hidden] { display:none; }
-.pwa-update button { min-height:40px; padding:0 12px; border:1px solid var(--border-primary); border-radius:8px; background:var(--surface-secondary); color:var(--text-primary); font:inherit; cursor:pointer; }
-.pwa-update button:last-child { width:40px; flex:0 0 40px; padding:0; font-size:19px; }
+.pwa-update__copy { display:grid; min-width:0; gap:3px; flex:1 1 auto; }
+.pwa-update__copy strong { color:var(--text-primary); font-size:12px; font-weight:600; }
+.pwa-update__copy span { color:var(--text-muted); font-size:10px; }
+.pwa-update__actions { display:flex; flex:0 0 auto; align-items:center; gap:8px; }
+.pwa-update button,.pwa-update__news { display:inline-flex; min-height:40px; align-items:center; justify-content:center; padding:0 12px; border:1px solid var(--border-primary); border-radius:8px; background:var(--surface-secondary); color:var(--text-primary); font:inherit; text-decoration:none; white-space:nowrap; cursor:pointer; }
+.pwa-update__accept { border-color:var(--border-strong) !important; background:var(--surface-primary) !important; font-weight:600 !important; }
+.pwa-update button:disabled { cursor:wait; opacity:.7; }
+.pwa-update__dismiss { min-width:70px; }
+.pwa-update__status { color:var(--warning) !important; font-size:10px !important; }
+.pwa-update-menu { position:relative; z-index:1810; flex:0 0 auto; }
+.pwa-update-menu[hidden],.pwa-update-popover[hidden] { display:none; }
+.pwa-update-indicator { display:inline-flex; min-height:34px; align-items:center; gap:7px; padding:0 11px; border:1px solid var(--border-primary); border-radius:999px; background:var(--surface-primary); color:var(--text-secondary); font:inherit; font-size:10px; cursor:pointer; white-space:nowrap; }
+.pwa-update-indicator:hover,.pwa-update-indicator[aria-expanded="true"] { border-color:var(--border-strong); background:var(--surface-hover); color:var(--text-primary); }
+.pwa-update-indicator:focus-visible { outline-offset:2px; }
+.pwa-update-indicator svg { width:13px; height:13px; flex:0 0 13px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.pwa-update-indicator small { color:var(--text-muted); font-size:9px; font-variant-numeric:tabular-nums; }
+.pwa-update-popover { position:absolute; z-index:1811; top:calc(100% + 7px); right:0; display:grid; width:min(292px,calc(100vw - 24px)); gap:6px; padding:14px; border:1px solid var(--border-primary); border-radius:12px; background:var(--bg-elevated); color:var(--text-secondary); box-shadow:var(--shadow-soft); font-size:11px; }
+.pwa-update-popover > strong { color:var(--text-primary); font-size:12px; font-weight:600; }
+.pwa-update-popover > span { color:var(--text-muted); font-size:10px; }
+.pwa-update-popover__status { color:var(--warning) !important; }
+.pwa-update-popover__actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px; }
+.pwa-update-popover__actions a,.pwa-update-popover__actions button { display:flex; min-height:38px; align-items:center; justify-content:center; padding:0 8px; border:1px solid var(--border-primary); border-radius:8px; background:var(--surface-secondary); color:var(--text-primary); font:inherit; font-size:10px; text-align:center; text-decoration:none; cursor:pointer; }
+.pwa-update-popover__actions a:hover,.pwa-update-popover__actions button:hover { background:var(--surface-hover); }
+.pwa-update-popover__actions button:disabled { cursor:wait; opacity:.7; }
+.pwa-update-menu--overview .pwa-update-indicator { min-height:36px; padding-inline:12px; font-size:11px; }
 .pwa-install-help { position:fixed; inset:0; width:min(380px,calc(100vw - 32px)); max-width:none; margin:auto; padding:28px; border:1px solid var(--border-primary); border-radius:18px; background:var(--bg-elevated); color:var(--text-primary); box-shadow:var(--shadow-soft); }
 .pwa-install-help::backdrop { background:rgba(0,0,0,.52); backdrop-filter:blur(2px); }
 .pwa-install-help__close { position:absolute; top:12px; right:12px; }
@@ -51,15 +74,18 @@
 .docs-sidebar .pwa-install-action { display:none; }
 .docs-sidebar .pwa-install-action[hidden] { display:none; }
 @media (max-width:900px) {
-  .app-header { height:calc(56px + env(safe-area-inset-top)); padding:env(safe-area-inset-top) 16px 0; }
+  :root { --arion-global-header-height:calc(56px + env(safe-area-inset-top)); }
+  .app-header { height:var(--arion-global-header-height); padding:env(safe-area-inset-top) 16px 0; }
   .header-nav,.app-header > .user-menu { display:none; }
   .mobile-nav-toggle { display:grid; }
   .brand-name { font-size:10px; letter-spacing:.08em; }
   .main-content { min-height:calc(100dvh - 56px - env(safe-area-inset-top)); }
   .main-content--public { min-height:100dvh; }
   .toast-stack { top:calc(66px + env(safe-area-inset-top)); right:12px; }
-  .pwa-update { right:10px; bottom:calc(10px + env(safe-area-inset-bottom)); left:10px; max-width:none; gap:7px; font-size:11px; }
-  .pwa-update > span { flex:1; }
+  .pwa-update { right:10px; bottom:calc(10px + env(safe-area-inset-bottom)); left:10px; max-width:none; display:grid; grid-template-columns:minmax(0,1fr); gap:8px; padding:10px; font-size:11px; }
+  .pwa-update__copy { min-width:0; }
+  .pwa-update__actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(82px,1fr)); gap:6px; }
+  .pwa-update__news,.pwa-update button { min-width:0; min-height:40px; padding:0 5px; font-size:10px; }
 }
 @media (max-width:820px) {
   .docs-sidebar .pwa-install-action:not([hidden]) { display:flex; }

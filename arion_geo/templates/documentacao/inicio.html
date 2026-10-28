@@ -37,6 +37,7 @@
     <div class="docs-section-heading docs-section-heading--compact"><div><p class="docs-eyebrow">PARA COMEÇAR</p><h2 id="docs-popular-title">Acessos rápidos</h2></div></div>
     <nav class="docs-popular-links" aria-label="Acessos rápidos">
       {% for item in popular_documents %}<a href="{% url 'configuracoes:documentation-page' slug=item.slug %}">{{ item.title }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>{% endfor %}
+      <a href="{% url 'configuracoes:documentation-releases' %}">Atualizações e versões<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
     </nav>
   </section>
 

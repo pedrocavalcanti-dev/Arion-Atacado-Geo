@@ -86,6 +86,7 @@
     clients: $("[data-panel-clients]"), statuses: $("[data-panel-status]"), projects: $("[data-panel-projects]"), providers: $("[data-panel-providers]"), cities: $("[data-panel-cities]"),
     reasons: $("[data-panel-reasons]"), links: $("[data-panel-links]"), tickets: $("[data-panel-tickets]"),
     ticketFilters: $("[data-ticket-filters]"), status: $("[data-status-filter]"), priority: $("[data-priority-filter]"), arionStatus: $("[data-arion-status-filter]"), assignee: $("[data-assignee-filter]"), activeFilters: $("[data-active-filters]"),
+    moreFilters: $("[data-more-filters]"), moreFiltersContent: $("[data-more-filters-content]"), hoverTooltip: $("[data-state-hover-tooltip]"),
     panelOverview: $("[data-panel-overview]"), panelOverviewContext: $("[data-panel-overview-context]"), panelRecurrence: $("[data-panel-recurrence]"), panelTicketSearch: $("[data-panel-ticket-search]"), panelTicketSize: $("[data-panel-ticket-size]"), panelTicketPagination: $("[data-panel-ticket-pagination]"),
     openBase: $("[data-open-base]"), openCockpit: $("[data-open-cockpit]"), ufPrevious: $("[data-uf-previous]"), ufNext: $("[data-uf-next]"), announce: $("[data-map-announcement]"), legend: $("[data-legend]"),
   };
@@ -99,9 +100,9 @@
   if(!["all","Claro","Vivo","Algar","other"].includes(state.client))state.client="all";
   ui.period.disabled = true;
   ui.reasonWrap.hidden = true;
-  let map = null, geojson = null, data = null, mapLoaded = false, requestSequence = 0, searchIndex = -1, periodHideTimer = 0, panelHideTimer = 0, panelSearchTimer = 0;
+  let map = null, geojson = null, data = null, mapLoaded = false, requestSequence = 0, searchIndex = -1, periodHideTimer = 0, panelHideTimer = 0, panelSearchTimer = 0, moreFiltersTimer = 0, tooltipMoveFrame = 0;
   let requestController = null, detailController = null, detailSequence = 0, hoveredUF = "", appliedSelectedUF = "";
-  let popup = null, tooltipKey = "", tooltipCloseTimer = 0;
+  let tooltipKey = "", tooltipCloseTimer = 0, tooltipPoint = null;
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const norm = value => String(value || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
   const reasonOption = () => (data?.reason_options || []).find(option => option.value === state.reason);
@@ -111,6 +112,7 @@
     const chips=[];
     if(state.client!=="all")chips.push(["client","Cliente: "+state.client]);
     if(state.project)chips.push(["project","Projeto: "+displayProject(state.project)]);
+    if(state.selectedUF)chips.push(["uf","UF: "+state.selectedUF]);
     if(state.provider)chips.push(["provider","Provedor: "+(data?.providers||[]).find(row=>String(row.id)===state.provider)?.name]);
     if(state.mode==="motives"&&state.reason)chips.push(["reason","Motivo: "+reasonLabel()]);
     if(["projects","calls","repeat","motives"].includes(state.mode)){
@@ -121,7 +123,7 @@
       if(state.assignee)chips.push(["assignee","Respons\u00e1vel: "+(state.assignee==="unassigned"?"Sem respons\u00e1vel":(data?.assignees||[]).find(row=>String(row.id)===state.assignee)?.name||"Selecionado")]);
     }
     ui.activeFilters.hidden=!chips.length;
-    ui.activeFilters.innerHTML=chips.map(([key,label])=>"<button type=\"button\" class=\"map-filter-chip\" data-clear-filter=\""+esc(key)+"\"><span>"+esc(label)+"</span><span aria-hidden=\"true\">&#215;</span></button>").join("")+(chips.length?"<button type=\"button\" class=\"map-clear-filters\" data-clear-all-filters>Limpar filtros</button>":"");
+    ui.activeFilters.innerHTML=chips.map(([key,label])=>"<button type=\"button\" class=\"map-filter-chip\" aria-label=\"Remover filtro: "+esc(label)+"\" data-clear-filter=\""+esc(key)+"\"><span>"+esc(label)+"</span><span aria-hidden=\"true\">&#215;</span></button>").join("")+(chips.length?"<button type=\"button\" class=\"map-clear-filters\" aria-label=\"Limpar todos os filtros aplicados\" data-clear-all-filters>Limpar filtros</button>":"");
   }
   function clearFilterValue(key){
     if(key==="client")state.client="all";
@@ -146,8 +148,38 @@
     const key=norm(value).replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
     return projectPalettes[projectPaletteAliases[key]||key]||projectPalettes.default;
   }
-  function closeTooltip(){popup?.remove();tooltipKey="";}
+  function closeTooltip(){
+    clearTimeout(tooltipCloseTimer);cancelAnimationFrame(tooltipMoveFrame);tooltipMoveFrame=0;
+    tooltipPoint=null;ui.hoverTooltip.hidden=true;ui.hoverTooltip.innerHTML="";tooltipKey="";
+  }
   function deferCloseTooltip(){clearTimeout(tooltipCloseTimer);tooltipCloseTimer=setTimeout(()=>{if(!hoveredUF)closeTooltip();},90);}
+  function syncMoreFiltersOpen(){
+    const open=ui.moreFilters.open,toolbar=page.querySelector(".geo-toolbar--map");
+    toolbar.classList.toggle("is-more-filters-open",open);
+    if(!open){clearTimeout(moreFiltersTimer);ui.moreFiltersContent.style.removeProperty("--more-filters-top");return;}
+    requestAnimationFrame(()=>{
+      if(!ui.moreFilters.open)return;
+      const anchor=ui.moreFilters.getBoundingClientRect(),controls=toolbar.querySelector(".geo-analysis-controls").getBoundingClientRect();
+      const activeFiltersBottom=ui.activeFilters.hidden?0:ui.activeFilters.getBoundingClientRect().bottom;
+      const viewportWidth=window.innerWidth,panelWidth=Math.min(500,Math.max(0,viewportWidth-24));
+      const left=Math.min(Math.max(12,viewportWidth-panelWidth-12),Math.max(12,anchor.right-panelWidth));
+      ui.moreFiltersContent.style.setProperty("--more-filters-top",`${Math.ceil(Math.max(7,Math.max(controls.bottom,activeFiltersBottom)-anchor.top+8))}px`);
+      ui.moreFiltersContent.style.setProperty("--more-filters-left",`${Math.round(left-anchor.left)}px`);
+      scheduleMoreFiltersClose();
+    });
+  }
+  function closeMoreFilters(returnFocus=false){
+    if(!ui.moreFilters.open)return;
+    ui.moreFilters.open=false;syncMoreFiltersOpen();
+    if(returnFocus)ui.moreFilters.querySelector("summary").focus();
+  }
+  function scheduleMoreFiltersClose(){
+    clearTimeout(moreFiltersTimer);
+    if(!ui.moreFilters.open||ui.moreFiltersContent.contains(document.activeElement))return;
+    moreFiltersTimer=setTimeout(()=>{
+      if(ui.moreFilters.open&&!ui.moreFiltersContent.contains(document.activeElement))closeMoreFilters();
+    },12000);
+  }
   function closeSearch(clearValue=false){
     ui.results.hidden=true;ui.search.setAttribute("aria-expanded","false");ui.search.removeAttribute("aria-activedescendant");searchIndex=-1;
     if(clearValue)ui.search.value="";
@@ -585,8 +617,8 @@
   }
   function openPanel(){panel.hidden=false;panel.inert=false;panel.setAttribute("aria-hidden","false");panelBackdrop.classList.add("is-visible");updateMapLayout();requestAnimationFrame(()=>panel.classList.add("is-open"));}
   function closePanel(){detailSequence++;detailController?.abort();panel.classList.remove("is-open");panel.inert=true;panel.setAttribute("aria-hidden","true");panelBackdrop.classList.remove("is-visible");updateMapLayout();setTimeout(()=>{if(!state.selectedUF)panel.hidden=true;},220);}
-  function selectState(code,zoom=true){if(!stateNames[code])return;closeTooltip();if(state.selectedUF!==code){state.ufTab="overview";state.ticketPage=1;state.ticketSearch="";}state.selectedUF=code;syncUrl();ui.breadcrumb.hidden=false;ui.selectedName.textContent=stateNames[code];updateMapLayout();renderMap();loadState(code).catch(error=>{if(error.name!=="AbortError")showError(error.message,"Detalhes indisponíveis");});if(zoom)fitSelectedState();}
-  function clearSelection(){closeTooltip();state.selectedUF="";state.ufTab="overview";state.ticketPage=1;state.ticketSearch="";syncUrl();ui.breadcrumb.hidden=true;closePanel();renderMap();fitBrazil();}
+  function selectState(code,zoom=true){if(!stateNames[code])return;closeTooltip();if(state.selectedUF!==code){state.ufTab="overview";state.ticketPage=1;state.ticketSearch="";}state.selectedUF=code;syncUrl();ui.breadcrumb.hidden=false;ui.selectedName.textContent=stateNames[code];renderActiveFilters();updateMapLayout();renderMap();loadState(code).catch(error=>{if(error.name!=="AbortError")showError(error.message,"Detalhes indisponíveis");});if(zoom)fitSelectedState();}
+  function clearSelection(){closeTooltip();state.selectedUF="";state.ufTab="overview";state.ticketPage=1;state.ticketSearch="";syncUrl();ui.breadcrumb.hidden=true;renderActiveFilters();closePanel();renderMap();fitBrazil();}
   function updateSearchActive() {
     const options=[...ui.results.querySelectorAll("[data-search-code]")];
     options.forEach((option,index)=>option.setAttribute("aria-selected",String(index===searchIndex)));
@@ -615,7 +647,12 @@
     ui.priority.addEventListener("change",()=>{state.priority=ui.priority.value;fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel filtrar a prioridade."));});
     ui.arionStatus.addEventListener("change",()=>{state.arionStatus=ui.arionStatus.value;fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel filtrar o status ARION."));});
     ui.assignee.addEventListener("change",()=>{state.assignee=ui.assignee.value;fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel filtrar o respons\u00e1vel."));});
-    ui.activeFilters.addEventListener("click",event=>{const clear=event.target.closest("[data-clear-filter]");if(clear){clearFilterValue(clear.dataset.clearFilter);return;}if(event.target.closest("[data-clear-all-filters]")){state.mode="base";state.client="all";state.project="";state.provider="";state.period="this_month";state.reason="";state.status="";state.priority="";state.arionStatus="";state.assignee="";state.dateFrom="";state.dateTo="";clearSelection();updateModeControls();fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel limpar os filtros."));}});
+    ui.activeFilters.addEventListener("click",event=>{const clear=event.target.closest("[data-clear-filter]");if(clear){clearFilterValue(clear.dataset.clearFilter);return;}if(event.target.closest("[data-clear-all-filters]")){closeMoreFilters();state.mode="base";state.client="all";state.project="";state.provider="";state.period="this_month";state.reason="";state.status="";state.priority="";state.arionStatus="";state.assignee="";state.dateFrom="";state.dateTo="";ui.project.value="";ui.provider.value="";ui.reason.value="";ui.status.value="";ui.priority.value="";ui.arionStatus.value="";ui.assignee.value="";ui.dateFrom.value="";ui.dateTo.value="";page.querySelectorAll("[data-client]").forEach(item=>{const selected=item.dataset.client==="all";item.classList.toggle("is-selected",selected);item.setAttribute("aria-pressed",String(selected));});clearSelection();updateModeControls();fetchData().catch(()=>showError("N\u00e3o foi poss\u00edvel limpar os filtros."));}});
+    ui.moreFilters.addEventListener("toggle",syncMoreFiltersOpen);
+    ui.moreFiltersContent.addEventListener("change",event=>{if(event.target.matches("select"))closeMoreFilters();});
+    ["pointermove","pointerdown","input","keydown"].forEach(type=>ui.moreFiltersContent.addEventListener(type,scheduleMoreFiltersClose,{passive:type==="pointermove"}));
+    ui.moreFiltersContent.addEventListener("focusin",()=>clearTimeout(moreFiltersTimer));
+    ui.moreFiltersContent.addEventListener("focusout",()=>requestAnimationFrame(scheduleMoreFiltersClose));
     page.querySelectorAll("[data-state-tab]").forEach(button=>button.addEventListener("click",()=>{if(!state.selectedUF)return;state.ticketPage=1;loadState(state.selectedUF,button.dataset.stateTab,1).catch(error=>showError(error.message,"Detalhes indispon\u00edveis"));}));
     ui.panelTicketSearch.addEventListener("input",()=>{clearTimeout(panelSearchTimer);state.ticketSearch=ui.panelTicketSearch.value.trim();state.ticketPage=1;panelSearchTimer=setTimeout(()=>{if(state.selectedUF&&state.ufTab==="tickets")loadState(state.selectedUF,"tickets",1).catch(error=>showError(error.message,"Detalhes indispon\u00edveis"));},240);});
     ui.panelTicketSize.addEventListener("change",()=>{state.ticketPageSize=Number(ui.panelTicketSize.value)||25;state.ticketPage=1;if(state.selectedUF&&state.ufTab==="tickets")loadState(state.selectedUF,"tickets",1).catch(error=>showError(error.message,"Detalhes indispon\u00edveis"));});
@@ -631,7 +668,8 @@
       else if(event.key==="Tab")closeSearch();
     });
     ui.results.addEventListener("click",event=>{const button=event.target.closest("[data-search-code]");if(button)chooseSearchResult(button.dataset.searchCode);});
-    page.addEventListener("pointerdown",event=>{if(!event.target.closest(".geo-search-wrap")&&!ui.results.hidden)closeSearch();});
+    document.addEventListener("pointerdown",event=>{if(ui.moreFilters.open&&!ui.moreFilters.contains(event.target))closeMoreFilters();if(!event.target.closest(".geo-search-wrap")&&!ui.results.hidden)closeSearch();});
+    document.addEventListener("keydown",event=>{if(event.key==="Escape"&&ui.moreFilters.open){event.preventDefault();event.stopPropagation();closeMoreFilters(true);}});
     $("[data-national-collapse]").addEventListener("click",()=>setNationalCollapsed(true));
     $("[data-national-expand]").addEventListener("click",()=>setNationalCollapsed(false));
     page.querySelectorAll("[data-national-tab]").forEach(button=>button.addEventListener("click",()=>setPanelTab(button.dataset.nationalTab)));
@@ -641,12 +679,12 @@
     $("[data-map-retry]").addEventListener("click",initialize);
     window.addEventListener("arion:themechange",event=>{const next=event.detail?.theme||theme();if(map?.getLayer("arion-background"))map.setPaintProperty("arion-background","background-color",next==="light"?"#e5eae6":"#0c0d0d");renderMap();renderLegend();});
     let resizeTimer=0;
-    window.addEventListener("resize",()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(!map)return;updateMapLayout();map.resize();refitCurrentMap(260);},140);},{passive:true});
+    window.addEventListener("resize",()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(ui.moreFilters.open)syncMoreFiltersOpen();if(!map)return;updateMapLayout();map.resize();refitCurrentMap(260);},140);},{passive:true});
   }
   async function initialize(){
     if(!root.dataset.token){showError("Token público do Mapbox não configurado.");return;}
     if(!window.mapboxgl){showError("Não foi possível carregar o componente do mapa. Verifique a conexão.");return;}
-    if(map){popup?.remove();map.remove();map=null;mapLoaded=false;}
+    if(map){closeTooltip();map.remove();map=null;mapLoaded=false;}
     message.hidden=false;errorBox.hidden=true;
     try{
       const response=await fetch(root.dataset.geojsonUrl,{signal:AbortSignal.timeout(20000)});if(!response.ok)throw new Error("Não foi possível carregar as geometrias locais.");geojson=await response.json();
@@ -687,6 +725,27 @@
   function tooltipLine(label,value) {
     if (value === undefined || value === null || value === "") return "";
     return `<div class="tooltip-data-line"><span>${esc(label)}</span><b>${esc(value)}</b></div>`;
+  }
+  function positionTooltip(point){
+    if(!point)return;
+    const bounds=root.getBoundingClientRect(),width=ui.hoverTooltip.offsetWidth,height=ui.hoverTooltip.offsetHeight;
+    const margin=10,gap=16,maxX=Math.max(margin,root.clientWidth-width-margin),maxY=Math.max(margin,root.clientHeight-height-margin);
+    const candidates=[
+      [point.x+gap,point.y+gap],[point.x-width-gap,point.y+gap],
+      [point.x+gap,point.y-height-gap],[point.x-width-gap,point.y-height-gap],
+    ];
+    const blockers=[];
+    if(!national.hidden&&!state.collapsed&&!national.classList.contains("is-collapsed"))blockers.push(national);
+    if(state.selectedUF&&panel.classList.contains("is-open"))blockers.push(panel);
+    const boxes=blockers.map(element=>{const rect=element.getBoundingClientRect();return {left:rect.left-bounds.left,top:rect.top-bounds.top,right:rect.right-bounds.left,bottom:rect.bottom-bounds.top};});
+    let selected=null,bestScore=Infinity;
+    for(const [rawX,rawY] of candidates){
+      const x=Math.min(maxX,Math.max(margin,rawX)),y=Math.min(maxY,Math.max(margin,rawY));
+      const rect={left:x,top:y,right:x+width,bottom:y+height};
+      const score=boxes.reduce((total,box)=>total+Math.max(0,Math.min(rect.right,box.right)-Math.max(rect.left,box.left))*Math.max(0,Math.min(rect.bottom,box.bottom)-Math.max(rect.top,box.top)),0);
+      if(score<bestScore){selected={x,y};bestScore=score;if(score===0)break;}
+    }
+    ui.hoverTooltip.style.left=`${selected.x}px`;ui.hoverTooltip.style.top=`${selected.y}px`;
   }
   function buildTooltip(code,row) {
     const title=stateNames[code]||code, amount=metricValue(row);
@@ -733,7 +792,7 @@
       if (!state.reason&&reason) rows+=tooltipLine("Principal motivo",reason[0]);
     }
     const flag=flags[code]||"";
-    return `<div class="state-tooltip" role="tooltip"><div class="tooltip-heading"><img src="${esc(flag)}" alt="" width="28" height="19" loading="lazy"><div><strong>${esc(title)}</strong><span>${esc(code)} &#183; Brasil</span></div></div><div class="tooltip-primary-metric"><strong>${quantity}</strong><span>${esc(state.mode==="motives"&&state.reason?reasonLabel():metricLabel)}</span></div>${rows?`<div class="tooltip-details">${rows}</div>`:""}</div>`;
+    return `<div class="state-tooltip"><div class="tooltip-heading"><img src="${esc(flag)}" alt="" width="28" height="19" decoding="async"><div><strong>${esc(title)}</strong><span>${esc(code)} &#183; Brasil</span></div></div><div class="tooltip-primary-metric"><strong>${quantity}</strong><span>${esc(state.mode==="motives"&&state.reason?reasonLabel():metricLabel)}</span></div>${rows?`<div class="tooltip-details">${rows}</div>`:""}</div>`;
   }
   function showTooltip(event,codeOverride=""){
     clearTimeout(tooltipCloseTimer);
@@ -741,9 +800,10 @@
     if(code===state.selectedUF){closeTooltip();return;}
     const row=data?.states?.[code]||{};
     const key=[code,state.mode,state.reason,state.project,metricValue(row)].join("|");
-    if(!popup)popup=new window.mapboxgl.Popup({closeButton:false,closeOnClick:false,anchor:"auto",offset:18,className:"geo-popup",maxWidth:"280px"});
-    if(key!==tooltipKey){popup.setDOMContent(document.createRange().createContextualFragment(buildTooltip(code,row)));tooltipKey=key;}
-    popup.setLngLat(event.lngLat).addTo(map);
+    if(key!==tooltipKey){ui.hoverTooltip.innerHTML=buildTooltip(code,row);tooltipKey=key;}
+    ui.hoverTooltip.hidden=false;
+    tooltipPoint=event.point?{x:event.point.x,y:event.point.y}:map.project(event.lngLat);
+    if(!tooltipMoveFrame)tooltipMoveFrame=requestAnimationFrame(()=>{tooltipMoveFrame=0;if(!ui.hoverTooltip.hidden)positionTooltip(tooltipPoint);});
   }
 
   updateModeControls();

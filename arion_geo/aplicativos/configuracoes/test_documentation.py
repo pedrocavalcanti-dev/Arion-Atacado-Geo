@@ -38,10 +38,31 @@ class DocumentationPortalTests(TestCase):
     def test_access_requires_login_and_existing_permission(self):
         url = reverse("configuracoes:documentation")
         self.assertEqual(self.client.get(url).status_code, 302)
+        self.assertEqual(self.client.get(reverse("configuracoes:documentation-releases")).status_code, 302)
         self.client.force_login(self.regular_user)
         self.assertEqual(self.client.get(url).status_code, 403)
         self.assertEqual(self.client.get(reverse("configuracoes:documentation-page", kwargs={"slug": "arquitetura"})).status_code, 403)
         self.assertEqual(self.client.get(reverse("configuracoes:documentation-search"), {"q": "OTRS"}).status_code, 403)
+        releases = self.client.get(reverse("configuracoes:documentation-releases"))
+        self.assertEqual(releases.status_code, 200)
+        self.assertNotContains(releases, reverse("configuracoes:documentation-page", kwargs={"slug": "cmdb"}))
+        self.assertNotContains(releases, 'class="docs-search docs-search--header"')
+
+    def test_releases_page_uses_the_single_catalog_and_appears_in_documentation_navigation(self):
+        self.client.force_login(self.admin)
+        home = self.client.get(reverse("configuracoes:documentation"))
+        response = self.client.get(reverse("configuracoes:documentation-releases"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(home, "Atualizações e versões")
+        self.assertContains(response, "Atualizações e versões")
+        self.assertContains(response, "Release W44")
+        self.assertContains(response, "data-pwa-update-version")
+        self.assertContains(response, "Segurança")
+        self.assertContains(response, 'id="release-v1.1.0"')
+        self.assertContains(response, "Versão carregada nesta página: v1.1.0")
+        self.assertEqual(response.context["version"], "1.1.0")
+        self.assertEqual(response.context["current_release"]["version"], response.context["version"])
 
     def test_portal_receives_the_existing_saved_theme(self):
         UserPreference.objects.create(user=self.admin, theme=UserPreference.Theme.LIGHT)

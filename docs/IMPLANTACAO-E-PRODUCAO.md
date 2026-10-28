@@ -23,7 +23,7 @@ Sessão e CSRF usam cookies `Secure`, `SameSite=Lax`; o cookie de sessão é `Ht
 
 ## Build de frontend
 
-Fontes legíveis ficam em `frontend_src/`, fora dos diretórios coletados pelo Django em production. `npm run build:production` produz bundles minificados, mangled e obfuscados em `arion_geo/static/arion_build/` e um manifest em `var/`. Não é criptografia. Source maps são desligados no build e ignorados pelo Git. Em development, o template tag `{% arion_js %}` resolve as fontes; em production, resolve apenas bundles registrados.
+Fontes legíveis ficam em `frontend_src/`, fora dos diretórios coletados pelo Django em production. `npm run build:production` descobre todos os entrypoints `{% arion_js %}` nos templates e produz bundles minificados e ofuscados com fingerprint em `arion_geo/static/arion_build/`, além do manifest em `var/`. Não é criptografia. Source maps são desligados no build. Em development, o template tag `{% arion_js %}` resolve as fontes; em production, resolve apenas bundles registrados. O Service Worker é transformado e minificado em um asset especial fingerprinted; ele não passa pelo ofuscador para preservar a previsibilidade dos eventos `install`, `activate`, `fetch` e `message`. O manifest estático do Django fingerprinta CSS e demais assets públicos.
 
 Use Node 24, conforme `package.json`, e o lockfile versionado:
 
@@ -48,7 +48,40 @@ deploy\windows\status-arion.ps1
 
 `install-arion.ps1` executa `npm ci`/build quando Node está disponível, coleta estáticos e executa o production-check. Ele não sincroniza fontes remotas nem altera a conta Cloudflare. `-ApplyMigrations` exige confirmação explícita; migrations são executadas somente depois do restore completo e da conferência do banco alvo. As tarefas agendadas iniciam no boot, rodam ocultas, usam a `.venv` e reiniciam processos encerrados. O supervisor grava `var/logs/arion-web.log` e `arion-worker.log` com rotação; `status-arion.ps1` informa Web, Worker e Cloudflared sem mostrar segredos.
 
-O build também inclui os entrypoints de instalação/registro PWA referenciados pelos templates. O manifest público fica em `/manifest.webmanifest` (cache curto de cinco minutos); `/service-worker.js` fica na raiz, recebe `Service-Worker-Allowed: /` e deve permanecer fora de cache intermediário (`no-store`). Mantenha cache bypass para páginas/API e permita cache somente para estáticos públicos. O Service Worker não guarda HTML, JSON nem respostas operacionais; offline fornece uma página neutra sem snapshot. Ao gerar novo build, a resposta do Worker deriva nomes novos para os caches do manifest de bundles e assets offline, detectados com `registration.update()`.
+`/manifest.webmanifest` tem cache curto de cinco minutos; `/service-worker.js` fica na raiz, recebe `Service-Worker-Allowed: /` e permanece fora de cache intermediário (`no-store`). O endpoint `/api/version/` também usa `no-store` e retorna apenas versão, data e título da release. Mantenha cache bypass para páginas/API e permita cache somente para estáticos públicos. O Service Worker não guarda HTML, JSON nem respostas operacionais; offline fornece uma página neutra sem snapshot. O nome dos caches combina a versão canônica com uma revisão do worker/build/assets offline. A ativação remove somente caches antigos com prefixos ARION e chama `clients.claim()`.
+
+### Versionamento e notas de release
+
+`docs/releases/releases.json` é a única fonte da versão atual e do histórico exibido ao usuário. Para uma nova release:
+
+1. Escolha o próximo número Semantic Versioning, sem reduzir `current_version`.
+2. Atualize `current_version` e acrescente o objeto da release no início de `releases`, com data ISO (`YYYY-MM-DD`), resumo e categorias não vazias dentre Novidades, Melhorias, Correções, Segurança e Infraestrutura.
+3. Não replique a lista de notas em templates ou no código JavaScript. Detalhes internos continuam nos documentos técnicos e em `docs/patches/`.
+4. Execute `npm ci`, `npm run build:production`, `collectstatic --noinput` e `check`; confirme a versão em `/api/version/` e na página Documentação → Atualizações e versões.
+
+O navegador compara a versão do HTML carregado com `/api/version/` ao abrir a aplicação, ao voltar ao foco depois de 15 minutos e em intervalo de 20 minutos. `registration.update()` verifica o Service Worker junto a esses momentos. “Depois” dispensa o aviso grande para a versão-alvo durante a sessão; o indicador compacto continua disponível na área superior direita da Visão Geral e permanece até a versão carregada coincidir com a do servidor. “Ver novidades” abre a página de releases, disponível a qualquer usuário autenticado; a documentação técnica e a busca continuam restritas à permissão administrativa existente.
+
+“Atualizar agora” mostra `Atualizando...`, desativa os controles, verifica a atualização do Service Worker e aguarda o worker novo. Se houver worker em espera, envia `SKIP_WAITING` e aguarda `controllerchange` antes de executar um único reload. Se a verificação não encontrar worker em espera, recarrega a página controlada. Rejeições e timeouts mostram erro recuperável e habilitam “Tentar novamente”. Navegações não são servidas do cache offline e os bundles/CSS com fingerprint mudam quando o conteúdo muda.
+
+No Mapa, em viewports desktop e tablet largo, o drawer de estado começa abaixo da altura real do cabeçalho global e se estende até a base da janela, sobre a faixa direita dos filtros, com largura de 480 px (440 px em tablets). Somente o conteúdo interno do drawer rola. Ao abrir, um backdrop escurece o restante da página e mantém o drawer acima dele. Em telas de até 760 px, permanece a folha inferior móvel existente. Para usar o indicador compacto de atualização, abra a Visão Geral.
+
+Se o cache estático ficar inconsistente em uma emergência, use as ferramentas de armazenamento do navegador para remover somente os caches `arion-shell-*` e `arion-static-*` deste domínio e reabra a aplicação. Não apague caches de outros sites. Após o deploy, confirme resposta `no-store` do worker e da versão, versão atual no portal, banner em uma aba mantida aberta durante a publicação, atualização manual e acesso offline apenas ao shell neutro.
+
+### Publicação desta release
+
+No servidor Windows, a partir da raiz confirmada do projeto, o procedimento é:
+
+```powershell
+git pull --ff-only origin main
+npm ci
+npm run build:production
+.\.venv\Scripts\python.exe .\arion_geo\gerenciar.py collectstatic --noinput
+.\.venv\Scripts\python.exe .\arion_geo\gerenciar.py check
+.\deploy\windows\restart-arion.ps1 -Role web
+.\deploy\windows\status-arion.ps1
+```
+
+Esta release não exige migration nem reinício do processo Worker de integração. O serviço Web deve ser reiniciado para carregar o código Django novo; o Service Worker do navegador é atualizado pelo fluxo PWA.
 
 ## Cloudflare Tunnel e proteção perimetral
 

@@ -32,6 +32,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from aplicativos.auditoria.services import AuditService
 from .documentation import DocumentationService
+from config.releases import release_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -417,6 +418,16 @@ def documentation_search(request):
         "categories": DocumentationService.categories(),
         "navigation": DocumentationService.navigation(),
         "active_category": "Funcionalidades",
+    })
+
+
+@login_required
+def documentation_releases(request):
+    catalog = release_catalog()
+    return render(request, "documentacao/releases.html", {
+        **catalog,
+        "release_only": True,
+        "active_section": "releases",
     })
 
 

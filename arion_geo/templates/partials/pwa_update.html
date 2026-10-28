@@ -1,0 +1,15 @@
+<aside class="pwa-update" id="pwa-update-notice" data-pwa-update
+  data-pwa-page-version="{{ arion_version }}"
+  data-pwa-version-endpoint="{% url 'api-version' %}"
+  hidden role="status" aria-live="polite">
+  <div class="pwa-update__copy">
+    <strong>Nova vers&atilde;o do ARION dispon&iacute;vel</strong>
+    <span data-pwa-update-version>Nova vers&atilde;o</span>
+    <span class="pwa-update__status" data-pwa-update-status hidden></span>
+  </div>
+  <div class="pwa-update__actions">
+    <a class="pwa-update__news" data-pwa-update-news href="{% url 'configuracoes:documentation-releases' %}">Ver novidades</a>
+    <button class="pwa-update__accept" type="button" data-pwa-update-accept>Atualizar agora</button>
+    <button class="pwa-update__dismiss" type="button" data-pwa-update-dismiss>Depois</button>
+  </div>
+</aside>

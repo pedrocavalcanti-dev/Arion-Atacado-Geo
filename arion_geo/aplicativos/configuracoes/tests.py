@@ -207,7 +207,9 @@ class AccessControlTests(TestCase):
             with self.subTest(route=name):
                 response = self.client.get(reverse(f"configuracoes:{name}"))
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, "ADMINISTRAÇÃO")
+                # The integrations portal has its own section heading and shell.
+                expected_heading = "FONTES DE DADOS E INFRAESTRUTURA" if name == "integrations" else "ADMINISTRAÇÃO"
+                self.assertContains(response, expected_heading)
 
     def test_scope_administration_is_group_based_and_user_edit_only_shows_inherited_scope(self):
         self.client.force_login(self.admin)

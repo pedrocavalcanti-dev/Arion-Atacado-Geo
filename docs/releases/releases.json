@@ -1,0 +1,54 @@
+{
+  "current_version": "1.1.0",
+  "releases": [
+    {
+      "version": "1.1.0",
+      "released_at": "2026-10-28",
+      "title": "Release W44",
+      "summary": "Uma atualização focada em investigação operacional, acesso móvel e consistência das informações.",
+      "sections": [
+        {
+          "category": "Novidades",
+          "items": [
+            "O Mapa ganhou visão nacional e investigação por estado, com painéis de chamados, projetos, provedores, motivos e recorrência.",
+            "O ARION pode ser instalado como aplicativo em navegadores compatíveis.",
+            "Navegação e consultas receberam uma experiência adaptada para celular."
+          ]
+        },
+        {
+          "category": "Melhorias",
+          "items": [
+            "Os filtros do Mapa ficaram mais claros, e a identificação do estado acompanha o cursor sem abrir o painel de análise.",
+            "A lista de chamados permite buscar e percorrer resultados sem perder o recorte geográfico.",
+            "A janela de detalhes da Base mantém o título e o fechamento visíveis em telas menores.",
+            "Usuários, auditoria e configurações ficaram mais fáceis de consultar no celular."
+          ]
+        },
+        {
+          "category": "Correções",
+          "items": [
+            "A sincronização rápida voltou a reconhecer alterações recentes de chamados com uma janela de segurança adequada ao horário local do OTRS.",
+            "Responsáveis não aparecem duplicados; a busca usa o identificador interno e mostra o nome da pessoa quando disponível.",
+            "Os indicadores distinguem chamados diferentes de links CMDB afetados, inclusive quando há vários chamados no mesmo link.",
+            "A duração operacional considera o momento real da resolução; o status oficial continua vindo do OTRS.",
+            "Chamados cancelados, desconhecidos e improcedentes ficam fora da visão operacional padrão do Mapa. Análises históricas continuam disponíveis.",
+            "Aliases confirmados de projetos são agrupados com nomes consistentes, sem juntar projetos distintos de seguros."
+          ]
+        },
+        {
+          "category": "Segurança",
+          "items": [
+            "Dados operacionais autenticados não são guardados para consulta offline. O modo sem conexão mostra apenas uma página neutra."
+          ]
+        },
+        {
+          "category": "Infraestrutura",
+          "items": [
+            "O ARION avisa quando uma nova versão está disponível e aplica a atualização somente após a solicitação do usuário.",
+            "Os arquivos da aplicação recebem identificadores próprios por versão para evitar que uma atualização use recursos antigos."
+          ]
+        }
+      ]
+    }
+  ]
+}

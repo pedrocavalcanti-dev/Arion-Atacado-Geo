@@ -313,6 +313,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "aplicativos.configuracoes.context_processors.user_theme",
+                "aplicativos.configuracoes.context_processors.arion_version",
             ],
         },
     }

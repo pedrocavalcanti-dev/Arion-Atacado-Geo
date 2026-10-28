@@ -603,7 +603,7 @@ def map_state_detail(request):
     else:
         selected_link_ids = set()
         link_total = state.get("total_links", 0)
-    links = state_links.filter(pk__in=selected_link_ids)[:100] if tab == "tickets" else state_links[:100]
+    links = state_links[:100] if tab != "tickets" or mode == "projects" else state_links.filter(pk__in=selected_link_ids)[:100]
     link_rows = [{
         "id": link.pk, "config_item_id": link.source_config_item_id, "number": link.source_number,
         "name": link.name, "client": link.contracting_client,

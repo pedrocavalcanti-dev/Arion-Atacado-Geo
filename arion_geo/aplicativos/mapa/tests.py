@@ -196,7 +196,7 @@ class MapMirrorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         item = response.json()["tickets"][0]
         self.assertEqual(item["identity"]["client"], "Vivo")
-        self.assertEqual(item["identity"]["project"], "Bradesco")
+        self.assertEqual(item["identity"]["project"], "BRADESCO")
         self.assertEqual(item["identity"]["occurrence"], "Restauração")
         self.assertEqual(item["priority"], "3 normal")
         self.assertEqual(item["cmdb"]["config_item_id"], "map-ci")
@@ -207,21 +207,22 @@ class MapMirrorTests(TestCase):
         script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
         for token in (
             "new URLSearchParams(location.search)", "state.selectedUF=(initialParams.get(\"uf\")||\"\").toUpperCase()",
-            "[\"mode\",\"client\",\"project\",\"period\",\"uf\",\"reason\",\"provider\",\"date_from\",\"date_to\",\"status\",\"priority\"]",
+            'if(state.selectedUF)url.searchParams.set("uf",state.selectedUF)',
             "if (state.selectedUF) await loadState(state.selectedUF)",
-            'const temporal=["calls","repeat","motives"].includes(state.mode);',
+            'const temporal=["projects","calls","repeat","motives"].includes(state.mode);',
             'ui.reasonWrap.hidden=state.mode!=="motives";',
         ):
             self.assertIn(token, script)
         self.assertEqual(script.count("bind();initialize();"), 1)
         self.assertNotIn("DOMContentLoaded", script)
 
-    def test_drawer_sections_are_mode_specific_and_hidden_when_empty(self):
+    def test_drawer_sections_follow_the_selected_tab(self):
         template = (settings.BASE_DIR / "templates" / "mapa" / "_cmdb.html").read_text(encoding="utf-8")
         script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
-        for section in ("clients", "coverage", "projects", "providers", "cities", "reasons", "links", "tickets"):
+        for section in ("overview", "projects", "providers", "reasons", "recurrence", "tickets"):
             self.assertIn(f'data-panel-section="{section}"', template)
-        self.assertIn("section.hidden=!sectionData[section.dataset.panelSection]", script)
+            self.assertIn(f'data-state-tab="{section}"', template)
+        self.assertIn("section.hidden=section.dataset.panelSection!==tab", script)
 
     def test_map_visual_layers_use_local_flags_and_non_reserving_national_panel(self):
         script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
@@ -863,18 +864,27 @@ class MapMirrorTests(TestCase):
     def test_map_hover_search_and_dark_surface_overlays_follow_the_map_contract(self):
         script = _frontend_js("mapa/mapa-real.js").read_text(encoding="utf-8")
         style = (settings.BASE_DIR / "static" / "css" / "mapa" / "mapa.css").read_text(encoding="utf-8")
-        self.assertIn('anchor:"auto",offset:18', script)
+        template = (settings.BASE_DIR / "templates" / "mapa" / "_cmdb.html").read_text(encoding="utf-8")
+        self.assertIn("function positionTooltip(point){", script)
+        self.assertNotIn("new window.mapboxgl.Popup", script)
         self.assertIn('if(code===state.selectedUF){closeTooltip();return;}', script)
-        self.assertIn('function closeTooltip(){popup?.remove();tooltipKey="";}', script)
+        self.assertIn("ui.hoverTooltip.hidden=true;", script)
         self.assertIn('function chooseSearchResult(code){closeSearch(true);closeTooltip();selectState(code);}', script)
+        self.assertIn("setTimeout(()=>{\n      if(ui.moreFilters.open&&!ui.moreFiltersContent.contains(document.activeElement))closeMoreFilters();\n    },12000)", script)
+        self.assertIn('event.key==="Escape"&&ui.moreFilters.open', script)
+        self.assertIn('chips.push(["uf","UF: "+state.selectedUF])', script)
         self.assertIn('page.classList.toggle("is-search-open",found.length>0)', script)
         for variable, value in (("--map-z-stage", "0"), ("--map-z-panel", "20"), ("--map-z-legend", "30"),
                                 ("--map-z-controls", "35"), ("--map-z-tooltip", "50"), ("--map-z-search", "80"),
                                 ("--map-z-drawer", "100"), ("--map-z-modal", "200")):
             self.assertIn(f"{variable}:{value}", style)
         self.assertIn(".geo-page.is-search-open .geo-toolbar.geo-toolbar--map", style)
-        self.assertIn(".geo-map-stage .mapboxgl-popup.geo-popup { z-index:var(--map-z-tooltip); }", style)
+        self.assertIn(".geo-map-stage .state-hover-tooltip {", style)
+        self.assertIn(".geo-map-stage .state-hover-tooltip[hidden] { display:none; }", style)
         self.assertIn(".geo-map-stage .state-panel { z-index:var(--map-z-drawer); }", style)
+        self.assertIn('data-state-hover-tooltip role="tooltip" hidden', template)
+        self.assertIn('data-more-filters-content', template)
+        self.assertIn('grid-template-areas:"heading context analysis" ". filters filters"', style)
         self.assertNotIn(".geo-map-canvas { position: absolute; z-index: 0;", style)
         self.assertIn("background: #0c0d0d", style)
         self.assertIn('"#0c0d0d"', script)

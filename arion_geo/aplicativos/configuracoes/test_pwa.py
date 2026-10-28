@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from django.contrib.staticfiles import finders
@@ -6,6 +7,7 @@ from django.template.loader import get_template
 from django.test import SimpleTestCase
 from django.urls import reverse
 
+from config.releases import release_catalog
 from aplicativos.integracoes.services.project_names import canonical_project_name
 
 
@@ -43,6 +45,109 @@ class PwaDeliveryTests(SimpleTestCase):
         self.assertIn(b"request.mode === \"navigate\"", response.content)
         self.assertIn(b"url.pathname.startsWith(\"/static/\")", response.content)
         self.assertIn(b"Cache-Control", response.content)
+
+    def test_version_api_uses_the_release_catalog_and_is_never_cached(self):
+        response = self.client.get(reverse("api-version"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("no-store", response["Cache-Control"])
+        payload = response.json()
+        catalog = release_catalog()
+        self.assertEqual(payload["version"], catalog["version"])
+        self.assertEqual(payload["released_at"], catalog["current_release"]["released_at"])
+        self.assertEqual(payload["release_title"], catalog["current_release"]["title"])
+        self.assertNotIn("commit", payload)
+        self.assertNotIn("secret", payload)
+
+    def test_worker_injects_canonical_version_into_arion_cache_names(self):
+        response = self.client.get(reverse("pwa-service-worker"))
+        source = Path(finders.find("pwa/service-worker.js")).read_text(encoding="utf-8")
+        version = release_catalog()["version"]
+
+        self.assertIn(f"arion-shell-{version}-", response.content.decode("utf-8"))
+        self.assertIn(f"arion-static-{version}-", response.content.decode("utf-8"))
+        self.assertIn("clients.claim()", source)
+        self.assertIn("SKIP_WAITING", source)
+        self.assertIn("name.startsWith(\"arion-shell-\")", source)
+        self.assertIn("name.startsWith(\"arion-static-\")", source)
+
+    def test_production_build_covers_template_entrypoints_and_minifies_worker(self):
+        templates_root = Path("arion_geo/templates")
+        entrypoints = set()
+        for template in templates_root.rglob("*.html"):
+            content = template.read_text(encoding="utf-8")
+            entrypoints.update(re.findall(r"\{%\s*arion_js\s+['\"](js/[A-Za-z0-9_./-]+\.js)['\"]\s*%\}", content))
+
+        build = Path("frontend_src/build.mjs").read_text(encoding="utf-8")
+        self.assertGreaterEqual(len(entrypoints), 15)
+        for entrypoint in entrypoints:
+            with self.subTest(entrypoint=entrypoint):
+                self.assertTrue((Path("frontend_src") / entrypoint).is_file())
+        self.assertTrue({
+            "js/pwa/pwa.js", "js/pwa/launch.js", "js/configuracoes/settings.js",
+            "js/mapa/mapa-real.js", "js/chamados/chamados.js",
+        }.issubset(entrypoints))
+        self.assertIn("const tagPattern", build)
+        self.assertIn("references.add(match[1])", build)
+        self.assertIn("JavaScriptObfuscator.obfuscate", build)
+        self.assertIn("minify: true", build)
+        self.assertIn("sourcemap: false", build)
+        self.assertIn('manifest.__service_worker__', build)
+        self.assertIn('esbuild.transform(workerSource', build)
+        self.assertIn('path.join(staticRoot, "pwa", "service-worker.js")', build)
+
+    def test_global_update_notice_is_responsive_and_waits_for_user_action(self):
+        partial = Path("arion_geo/templates/partials/pwa_update.html").read_text(encoding="utf-8")
+        script = Path("frontend_src/js/pwa/pwa.js").read_text(encoding="utf-8")
+        styles = Path("arion_geo/static/css/pwa.css").read_text(encoding="utf-8")
+
+        self.assertIn("data-pwa-version-endpoint", partial)
+        self.assertIn("data-pwa-update-news", partial)
+        self.assertIn("data-pwa-update-accept", partial)
+        self.assertIn("data-pwa-update-dismiss", partial)
+        self.assertIn('cache: "no-store"', script)
+        self.assertIn("15 * 60 * 1000", script)
+        self.assertIn("20 * 60 * 1000", script)
+        self.assertIn('type: "SKIP_WAITING"', script)
+        self.assertIn('addEventListener("controllerchange"', script)
+        self.assertIn("reloadStarted", script)
+        self.assertIn("window.location.reload()", script)
+        self.assertIn("env(safe-area-inset-bottom)", styles)
+        self.assertIn("@media (max-width:900px)", styles)
+        self.assertIn(".pwa-update__actions { display:grid;", styles)
+        self.assertIn("repeat(auto-fit,minmax(82px,1fr))", styles)
+
+    def test_update_indicator_persists_after_dismissal_and_update_errors_can_retry(self):
+        script = Path("frontend_src/js/pwa/pwa.js").read_text(encoding="utf-8")
+        base_template = Path("arion_geo/templates/base.html").read_text(encoding="utf-8")
+        mobile_navigation = Path("arion_geo/templates/partials/mobile_navigation.html").read_text(encoding="utf-8")
+        documentation_base = Path("arion_geo/templates/documentacao/base_documentacao.html").read_text(encoding="utf-8")
+        overview = Path("arion_geo/templates/painel/index.html").read_text(encoding="utf-8")
+        overview_styles = Path("arion_geo/static/css/painel/painel.css").read_text(encoding="utf-8")
+        indicator = Path("arion_geo/templates/partials/pwa_update_indicator.html").read_text(encoding="utf-8")
+        map_styles = Path("arion_geo/static/css/mapa/mapa.css").read_text(encoding="utf-8")
+
+        self.assertIn("sessionStorage", script)
+        self.assertIn("arion-update-dismissed:", script)
+        self.assertIn("function syncUpdateState(available, version)", script)
+        self.assertIn("Tentar novamente", script)
+        self.assertIn("waitForWaitingWorker", script)
+        self.assertIn("Atualizando...", script)
+        self.assertIn("if (!await controllerChange) throw new Error", script)
+        self.assertIn('data-pwa-update-menu', indicator)
+        self.assertIn('data-pwa-update-indicator', indicator)
+        self.assertIn('data-pwa-update-popover', indicator)
+        self.assertNotIn('partials/pwa_update_indicator.html', base_template)
+        self.assertNotIn('partials/pwa_update_indicator.html', mobile_navigation)
+        self.assertNotIn('partials/pwa_update_indicator.html', documentation_base)
+        self.assertIn('partials/pwa_update_indicator.html', overview)
+        self.assertIn('placement="overview"', overview)
+        self.assertIn('.overview-hero .pwa-update-menu--overview', overview_styles)
+        self.assertIn('documentation-releases', mobile_navigation)
+        self.assertIn('.geo-map-stage .state-panel { position:fixed; top:var(--arion-global-header-height,60px); right:0; bottom:0;', map_styles)
+        self.assertIn('.geo-map-stage .map-backdrop { position:fixed; inset:0; }', map_styles)
+        self.assertIn('.geo-map-stage.has-selection { z-index:var(--map-z-drawer); }', map_styles)
+        self.assertIn('body.geo-body:has(.geo-map-stage.has-selection) .pwa-update', map_styles)
 
     def test_pwa_icons_are_real_pngs_with_expected_dimensions(self):
         expected = {
@@ -109,7 +214,7 @@ class PwaDeliveryTests(SimpleTestCase):
         script = Path("frontend_src/js/mapa/mapa-real.js").read_text(encoding="utf-8")
         self.assertNotIn("data-provenance-filter", template)
         self.assertNotIn("Procedência", template)
-        self.assertNotIn('chips.push(["uf"', script)
+        self.assertIn('chips.push(["uf","UF: "+state.selectedUF])', script)
         self.assertEqual(canonical_project_name("BDN BRADESCO"), "BRADESCO")
         self.assertEqual(canonical_project_name("PROJETO BB"), "BANCO DO BRASIL")
         self.assertEqual(canonical_project_name("BOTICARIO"), "O BOTICÁRIO")

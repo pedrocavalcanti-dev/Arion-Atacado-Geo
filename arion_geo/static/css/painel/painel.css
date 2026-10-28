@@ -1,7 +1,8 @@
 /* Home: access hub for the current NOC operation. */
 .overview-page { min-height:calc(100vh - 60px); padding:clamp(34px,6vh,66px) clamp(22px,5vw,76px) 72px; }
 .overview-container { width:min(100%,1360px); margin:0 auto; }
-.overview-hero { animation:overview-enter 420ms var(--ease-out) both; }
+.overview-hero { position:relative; animation:overview-enter 420ms var(--ease-out) both; }
+.overview-hero .pwa-update-menu--overview { position:absolute; top:46px; right:0; }
 .overview-kicker { margin:0 0 17px; }
 .overview-hero h1 { margin:0; color:var(--text-primary); font-size:clamp(40px,4.3vw,58px); font-weight:500; letter-spacing:-.055em; line-height:1.08; }
 .overview-lead { margin:12px 0 0; color:var(--text-secondary); font-size:clamp(14px,1.4vw,17px); line-height:1.5; }
@@ -56,6 +57,7 @@
 }
 @media (max-width:640px) {
   .overview-page { min-height:calc(100vh - 56px); padding:30px 20px 48px; }
+  .overview-hero .pwa-update-menu--overview { position:relative; top:auto; right:auto; margin:0 0 20px; }
   .overview-hero h1 { font-size:clamp(38px,10vw,50px); }
   .overview-lead { max-width:390px; font-size:14px; }
   .overview-summary { gap:8px; margin-top:19px; font-size:10px; }

@@ -48,6 +48,7 @@
         <div class="menu-divider" role="presentation"></div>
         <a class="user-menu-link" href="{% url 'configuracoes:account' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20v-1a7 7 0 0 1 14 0v1"/></svg>Minha conta</a>
         <a class="user-menu-link" href="{% url 'configuracoes:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 13v-2l2-1-2-4-2 1-2-1V4h-5v2L8 7 6 6l-2 4 2 1v2l-2 1 2 4 2-1 2 1v2h5v-2l2-1 2 1 2-4z"/></svg>Configurações</a>
+        <a class="user-menu-link" href="{% url 'configuracoes:documentation-releases' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>Atualiza&ccedil;&otilde;es e vers&otilde;es</a>
         <div class="menu-divider" role="presentation"></div>
         <div class="menu-section">
           <span class="menu-label" id="theme-label">APARÊNCIA</span>
@@ -67,7 +68,7 @@
   </main>
   <div class="global-loading" data-global-loading hidden aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>Carregando</span></div>
   <div class="pwa-launch" data-pwa-launch aria-hidden="true"><img src="{% static 'pwa/arion-mark.svg' %}" alt=""><strong>ARION</strong><span>ATACADO GEO</span></div>
-  <aside class="pwa-update" data-pwa-update hidden role="status" aria-live="polite"><span>Uma nova versão do ARION está disponível.</span><button type="button" data-pwa-update-accept>Atualizar</button><button type="button" data-pwa-update-dismiss aria-label="Fechar aviso">×</button></aside>
+  {% include "partials/pwa_update.html" %}
   <dialog class="pwa-install-help" data-pwa-install-help aria-labelledby="pwa-install-title">
     <button class="pwa-install-help__close" type="button" aria-label="Fechar" data-pwa-install-close>×</button>
     <img src="{% static 'pwa/arion-apple-touch-icon.png' %}" alt="" width="64" height="64">

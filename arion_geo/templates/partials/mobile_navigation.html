@@ -25,6 +25,7 @@
   <nav class="mobile-navigation__secondary" aria-label="Conta">
     <a href="{% url 'configuracoes:account' %}"{% if request.resolver_match.url_name == 'account' %} aria-current="page"{% endif %}>Minha conta</a>
     <a href="{% url 'configuracoes:index' %}"{% if request.resolver_match.url_name == 'index' and request.resolver_match.app_name == 'configuracoes' %} aria-current="page"{% endif %}>Configurações</a>
+    <a href="{% url 'configuracoes:documentation-releases' %}">Atualiza&ccedil;&otilde;es e vers&otilde;es</a>
   </nav>
   <div class="mobile-navigation__preferences">
     <span>Aparência</span>

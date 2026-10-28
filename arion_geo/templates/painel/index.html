@@ -16,6 +16,7 @@
         <i aria-hidden="true">&middot;</i>
         <span><strong>{{ provider_count|default:0|intcomma }}</strong> Provedores</span>
       </div>
+      {% include "partials/pwa_update_indicator.html" with placement="overview" %}
     </header>
 
     {% if can_view_operation %}

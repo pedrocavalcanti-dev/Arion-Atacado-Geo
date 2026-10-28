@@ -74,6 +74,8 @@ class MirrorAnalyticsTests(TestCase):
     def test_home_shows_only_permitted_accesses_and_preserves_route_guards(self):
         response = self.client.get(reverse("painel:index"))
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="pwa-update-menu pwa-update-menu--overview"')
+        self.assertNotContains(response, 'pwa-update-menu--desktop')
         self.assertContains(response, "ACESSO OPERACIONAL")
         self.assertContains(response, 'class="overview-module-card" href="/chamados/"')
         self.assertContains(response, 'class="overview-module-card" href="/ari/"')
@@ -110,7 +112,8 @@ class MirrorAnalyticsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'href="/chamados/"')
         self.assertNotContains(response, 'href="/ari/"')
-        self.assertNotContains(response, reverse("configuracoes:documentation"))
+        self.assertNotContains(response, f'href="{reverse("configuracoes:documentation")}"')
+        self.assertContains(response, reverse("configuracoes:documentation-releases"))
         self.assertNotContains(response, "ACESSO RESTRITO")
         self.assertContains(response, "Minha conta")
         self.assertEqual(self.client.get(reverse("ari:index")).status_code, 403)

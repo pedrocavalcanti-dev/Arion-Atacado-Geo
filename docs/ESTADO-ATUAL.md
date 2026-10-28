@@ -18,11 +18,11 @@ Revisão do workspace em 28/10/2026. A matriz descreve capacidades encontradas n
 | Worker | Ativo no código | `integration_worker` | Atualiza mirrors/estado | Requer processo ativo para freshness. |
 | RBAC/Data Scope | Ativo | Django Groups/Permissions e `GroupDataScope` | Administração protegida | Superuser técnico é global. |
 | Auditoria | Ativo | `AuditEvent` via `AuditService` | Histórico local | Metadata sanitizada; não é debug log. |
-| Central documental | Ativo | Markdown versionado em `docs/` | Leitura | Acesso protegido por `configuracoes.manage_groups`. |
+| Central documental | Ativo | Markdown versionado em `docs/` e catálogo de releases em `docs/releases/releases.json` | Leitura | Inclui Atualizações e versões; acesso protegido por `configuracoes.manage_groups`. |
 
 ## Banco e fontes
 
-A seleção suporta SQLite e MySQL. O processo consultado neste workspace estava usando MySQL; isso varia conforme ambiente e configuração de startup. Não publicar nome de schema, host, usuário, senha nem connection string. Consulte [Banco de Dados](BANCO-DE-DADOS.md) para precedência e fallback.
+A seleção suporta SQLite e MySQL. A validação desta consolidação W44 foi executada com SQLite; produção continua usando MySQL conforme configuração do ambiente de destino. Não publicar nome de schema, host, usuário, senha nem connection string. Consulte [Banco de Dados](BANCO-DE-DADOS.md) para precedência e fallback.
 
 A preparação de produção V1 inclui modo Django explícito, Waitress localhost, supervisor Windows para Web/Worker, build de assets production, `collectstatic`, production-check, preparação do serviço Cloudflare Tunnel e backup MySQL. Isso descreve código/script disponível; domínio, host novo, MySQL restaurado, conta Cloudflare/Tunnel e credenciais de serviço ainda precisam ser configurados e verificados no ambiente de destino. Consulte [Implantação e Produção](IMPLANTACAO-E-PRODUCAO.md).
 
@@ -30,7 +30,7 @@ OTRS/CMDB são fontes oficiais. `CMDBLinkMirror`, `CMDBOperatorMirror`, `OTRSTic
 
 ## Frontend mobile e PWA
 
-O frontend Django usa navegação dedicada em tablet/mobile e adaptações por módulo; a Fila apresenta Tickets como cartões em telas estreitas. O PWA possui manifest, ícones derivados do favicon, instalação Chromium/iOS, modo standalone e aviso de atualização sob ação do usuário. O Service Worker não armazena conteúdo operacional autenticado: páginas e APIs seguem para rede e o modo offline mostra apenas indisponibilidade. Build de produção/`collectstatic` e validação em dispositivos no servidor continuam necessários antes de publicar.
+O frontend Django usa navegação dedicada em tablet/mobile e adaptações por módulo; a Fila apresenta Tickets como cartões em telas estreitas. O PWA possui manifest, ícones derivados do favicon, instalação Chromium/iOS, modo standalone e aviso de atualização sob ação do usuário. A versão e as notas amigáveis vivem em `docs/releases/releases.json`; a página Atualizações e versões integra a Documentação e `/api/version/` serve apenas a versão/data sem cache. Todos os entrypoints próprios referenciados por templates passam pelo build de produção com fingerprint, minificação e ofuscação; o Service Worker é minificado em saída especial e permanece sem ofuscação. O Service Worker não armazena conteúdo operacional autenticado: páginas e APIs seguem para rede e o modo offline mostra apenas indisponibilidade. Build de produção/`collectstatic` e validação em dispositivos no servidor continuam necessários antes de publicar.
 
 ## Não anunciar como implementado
 

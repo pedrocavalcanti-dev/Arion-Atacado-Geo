@@ -1,0 +1,44 @@
+{% extends "documentacao/base_documentacao.html" %}
+{% block title %}Atualizações e versões · ARION ATACADO GEO{% endblock %}
+{% block docs_content %}
+<div class="docs-releases">
+  <nav class="docs-breadcrumb" aria-label="Caminho"><span>ARION ATACADO GEO</span><span aria-hidden="true">/</span><span>Atualiza&ccedil;&otilde;es e vers&otilde;es</span></nav>
+  <header class="docs-release-hero">
+    <div>
+      <p class="docs-eyebrow">ATUALIZAÇÕES</p>
+      <h1>Atualizações e versões</h1>
+      <p class="docs-lead">Novidades, melhorias e correções do ARION ATACADO GEO.</p>
+    </div>
+    <div class="docs-release-current" aria-live="polite">
+      <span>VERSÃO DISPONÍVEL NO SERVIDOR</span>
+      <strong data-release-current-version>v{{ version }}</strong>
+      <small data-release-version-status>Seu ARION está atualizado.</small>
+      <small>Versão carregada nesta página: v{{ arion_version }}</small>
+    </div>
+  </header>
+
+  <section class="docs-release-history" aria-label="Histórico de versões">
+    {% for release in releases %}
+    <article class="docs-release" id="release-v{{ release.version }}" aria-labelledby="release-title-{{ forloop.counter }}">
+      <div class="docs-release__rail">
+        <span class="docs-release__marker" aria-hidden="true"></span>
+        <strong>v{{ release.version }}</strong>
+        <time datetime="{{ release.released_at }}">{{ release.released_on|date:"j \d\e F \d\e Y" }}</time>
+      </div>
+      <div class="docs-release__content">
+        <p class="docs-eyebrow">{{ release.title }}</p>
+        <h2 id="release-title-{{ forloop.counter }}">{{ release.summary }}</h2>
+        {% for section in release.sections %}{% if section.items %}
+        <section class="docs-release__section" aria-labelledby="release-section-{{ forloop.parentloop.counter }}-{{ forloop.counter }}">
+          <h3 id="release-section-{{ forloop.parentloop.counter }}-{{ forloop.counter }}">{{ section.category }}</h3>
+          <ul>{% for item in section.items %}<li>{{ item }}</li>{% endfor %}</ul>
+        </section>
+        {% endif %}{% endfor %}
+      </div>
+    </article>
+    {% empty %}
+    <p class="docs-release-empty">Ainda não há versões publicadas.</p>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

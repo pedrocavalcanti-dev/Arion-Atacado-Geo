@@ -1,5 +1,5 @@
-const APP_CACHE = "arion-shell-__ARION_CACHE_REVISION__";
-const STATIC_CACHE = "arion-static-__ARION_CACHE_REVISION__";
+const APP_CACHE = "arion-shell-__ARION_APP_VERSION__-__ARION_CACHE_REVISION__";
+const STATIC_CACHE = "arion-static-__ARION_APP_VERSION__-__ARION_CACHE_REVISION__";
 const OFFLINE_URL = "/static/pwa/offline.html";
 const SHELL_ASSETS = [
   OFFLINE_URL,

@@ -7,6 +7,7 @@ app_name = "configuracoes"
 urlpatterns = [
     path("documentacao/", views.documentation_home, name="documentation"),
     path("documentacao/busca/", views.documentation_search, name="documentation-search"),
+    path("documentacao/atualizacoes/", views.documentation_releases, name="documentation-releases"),
     path("documentacao/<slug:slug>/", views.documentation_page, name="documentation-page"),
     path("", views.index, name="index"),
     path("conta/", views.account, name="account"),
