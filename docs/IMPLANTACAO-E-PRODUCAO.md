@@ -86,6 +86,8 @@ npm run build:production
 
 Esta estabilização adiciona a migration `0011_alter_penaltycompetence_options_and_more`, aplicada somente ao SQLite local de desenvolvimento. Ela adiciona os campos de arquivamento lógico; não foi aplicada em produção nesta tarefa. Antes de publicar este código, confira o plano de migrations e aplique a migration apenas após backup do banco alvo e autorização operacional. O Worker de integração não precisa ser reiniciado; o serviço Web deve ser reiniciado para carregar o código Django novo, e o Service Worker do navegador é atualizado pelo fluxo PWA.
 
+**Estado local em 29/10/2026:** a evolução seguinte inclui a migration `0013_penaltytreatmentpause_evidence_and_more` e alterações no sincronizador OTRS/`integration_worker` para a cobertura de quatro filas do Cockpit. Nada disso foi aplicado em produção nesta rodada. Antes de uma futura publicação desta revisão, inspecione o plano de migrations e o banco alvo, faça backup e siga a autorização operacional existente; reinicie Web e Worker para carregar os respectivos códigos. A nota anterior de que o Worker não precisa reiniciar aplica-se somente à revisão associada à migration `0011`.
+
 ## Cloudflare Tunnel e proteção perimetral
 
 `deploy/windows/cloudflare/config.example.yml` é apenas um modelo. O serviço Windows usa config e credentials-file em `C:\Windows\System32\config\systemprofile\.cloudflared`; o script de instalação copia o JSON local para essa pasta e restringe ACL para SYSTEM/Administrators. Não coloque token, `cert.pem`, JSON de credenciais ou config preenchida no repositório. A instalação do serviço exige Tunnel UUID, hostname, `cloudflared.exe` e JSON previamente obtidos pela equipe responsável; o script não cria Tunnel, DNS ou hostname.

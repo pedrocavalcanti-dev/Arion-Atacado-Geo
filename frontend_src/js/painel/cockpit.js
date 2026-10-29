@@ -3,14 +3,14 @@
   if (!page) return;
 
   const form = page.querySelector("[data-filters]");
-  const FILTER_KEYS = ["provider", "uf", "status", "source_state", "service", "sla", "priority", "termination_reason"];
-  const ADVANCED_KEYS = ["source_state", "uf", "sla", "priority", "service"];
+  const FILTER_KEYS = ["provider", "uf", "status", "source_state", "service", "sla", "priority", "termination_reason", "stage", "origin", "project"];
+  const ADVANCED_KEYS = ["source_state", "uf", "sla", "priority", "service", "stage", "origin", "project"];
   const DEFAULT_START = page.dataset.defaultStart;
   const DEFAULT_END = page.dataset.defaultEnd;
-  const DEFAULTS = { metric: "tickets", start: DEFAULT_START, end: DEFAULT_END, compare_to: "", selected_month: "", group_by: "provider", detail_page: 1, ticket_page: 1, ticket_page_size: 25, ticket_search: "", filters: Object.fromEntries(FILTER_KEYS.map(key => [key, "all"])) };
+  const DEFAULTS = { scope: "support", metric: "tickets", start: DEFAULT_START, end: DEFAULT_END, compare_to: "", selected_month: "", group_by: "provider", chart_view: "all", chart_origin: "consolidated", detail_page: 1, ticket_page: 1, ticket_page_size: 25, ticket_search: "", filters: Object.fromEntries(FILTER_KEYS.map(key => [key, "all"])) };
   const METRICS = { tickets: "Tickets criados", open_tickets: "Em atendimento no per\u00edodo", pending_tickets: "Pendentes no per\u00edodo", scheduled_tickets: "Agendados no per\u00edodo", resolved_tickets: "Resolvidos no per\u00edodo", closed_tickets: "Encerrados no per\u00edodo", resolved_closed_tickets: "Resolvidos + Encerrados", canceled_tickets: "Cancelados no per\u00edodo", links_affected: "Links afetados", recurrences: "Links reincidentes", backlog: "Backlog atual" };
-  const DIMENSIONS = { provider: "Provedor", uf: "UF", status: "Status", source_state: "Situa\u00e7\u00e3o OTRS", sla: "SLA", priority: "Prioridade", termination_reason: "Motivo de encerramento", month: "Per\u00edodo" };
-  const FILTER_LABELS = { ...DIMENSIONS, service: "Servi\u00e7o" };
+  const DIMENSIONS = { provider: "Provedor", uf: "UF", status: "Status", source_state: "Situa\u00e7\u00e3o OTRS", sla: "SLA", priority: "Prioridade", termination_reason: "Motivo de encerramento", cancellation_stage: "Etapa do cancelamento", operational_origin: "Origem", project: "Projeto / cliente", month: "Per\u00edodo" };
+  const FILTER_LABELS = { ...DIMENSIONS, service: "Servi\u00e7o", stage: "Etapa", origin: "Origem" };
   const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
   const STATE_CODES = new Set(["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"]);
   const STATE_NAMES = { AC: "acre", AL: "alagoas", AP: "amapa", AM: "amazonas", BA: "bahia", CE: "ceara", DF: "distrito federal", ES: "espirito santo", GO: "goias", MA: "maranhao", MT: "mato grosso", MS: "mato grosso do sul", MG: "minas gerais", PA: "para", PB: "paraiba", PR: "parana", PE: "pernambuco", PI: "piaui", RJ: "rio de janeiro", RN: "rio grande do norte", RS: "rio grande do sul", RO: "rondonia", RR: "roraima", SC: "santa catarina", SP: "sao paulo", SE: "sergipe", TO: "tocantins" };
@@ -32,10 +32,11 @@
   let controller = null;
   let temporaryTicketDay = "";
   let selectedDayForDialog = null;
-  const DETAIL_COLLAPSE_DEFAULTS = { dimensions: false, distribution: true, tickets: false };
+  const DETAIL_COLLAPSE_DEFAULTS = { aging: false, dimensions: false, distribution: true, tickets: false };
   const DETAIL_COLLAPSE_STORAGE_KEY = "arion.cockpit.detail-collapse.v1";
   let detailCollapseState = readDetailCollapseState();
   let sourceStateLabels = new Map();
+  let latestAnalytics = null;
 
   function readDetailCollapseState() {
     try {
@@ -89,6 +90,7 @@
   }
   function readURLState() {
     const params = new URLSearchParams(location.search), state = cloneDefaults();
+    if (["support", "cancellation", "general"].includes(params.get("scope"))) state.scope = params.get("scope");
     const legacyGroups = { operator: "provider", project: "provider", service: "provider", sla_status: "sla", contract_operator: null, isp: null };
     if (METRICS[params.get("metric")]) state.metric = params.get("metric");
     if (validDate(params.get("start"))) state.start = params.get("start");
@@ -100,8 +102,12 @@
     }
     if (validMonth(params.get("compare_to"))) state.compare_to = params.get("compare_to");
     if (validMonth(params.get("selected_month"))) state.selected_month = params.get("selected_month");
-    const group = legacyGroups[params.get("group_by")] ?? params.get("group_by");
+    if (["all", "created", "closed", "backlog"].includes(params.get("chart_view"))) state.chart_view = params.get("chart_view");
+    if (params.get("chart_origin") === "origin") state.chart_origin = "origin";
+    const requestedGroup = params.get("group_by");
+    const group = requestedGroup === "project" && state.scope !== "support" ? "project" : legacyGroups[requestedGroup] ?? requestedGroup;
     if (DIMENSIONS[group]) state.group_by = group;
+    else if (!requestedGroup) state.group_by = { support: "provider", cancellation: "cancellation_stage", general: "operational_origin" }[state.scope];
     FILTER_KEYS.forEach(key => { if (params.has(key)) state.filters[key] = params.get(key) || "all"; });
     if (params.has("closing_reason") && !params.has("termination_reason")) state.filters.termination_reason = params.get("closing_reason") || "all";
     if (!params.has("provider") && params.has("operator")) state.filters.provider = params.get("operator") || "all";
@@ -116,15 +122,18 @@
   }
   function normalizeState(state) {
     const legacyGroups = { operator: "provider", project: "provider", service: "provider", sla_status: "sla", contract_operator: null, isp: null };
+    state.scope = ["support", "cancellation", "general"].includes(state.scope) ? state.scope : "support";
     state.metric = state.metric === "links" || !METRICS[state.metric] ? "tickets" : state.metric;
-    state.group_by = legacyGroups[state.group_by] ?? state.group_by;
-    if (!DIMENSIONS[state.group_by]) state.group_by = "provider";
+    state.group_by = state.group_by === "project" && state.scope !== "support" ? "project" : legacyGroups[state.group_by] ?? state.group_by;
+    if (!DIMENSIONS[state.group_by]) state.group_by = { support: "provider", cancellation: "cancellation_stage", general: "operational_origin" }[state.scope];
     if (!validDate(state.start) && validMonth(state.period_from)) state.start = `${state.period_from}-01`;
     if (!validDate(state.end) && validMonth(state.period_to)) state.end = monthRange(state.period_to)[1];
     state.start = validDate(state.start) ? state.start : DEFAULT_START;
     state.end = validDate(state.end) ? state.end : DEFAULT_END;
     if (state.start > state.end) state.start = state.end;
     state.selected_month = validMonth(state.selected_month) ? state.selected_month : "";
+    state.chart_view = ["all", "created", "closed", "backlog"].includes(state.chart_view) ? state.chart_view : "all";
+    state.chart_origin = state.chart_origin === "origin" ? "origin" : "consolidated";
     const oldFilters = state.filters || {};
     state.filters = Object.fromEntries(FILTER_KEYS.map(key => [key, oldFilters[key] ?? "all"]));
     if (state.filters.provider === "all" && oldFilters.operator) state.filters.provider = oldFilters.operator;
@@ -136,14 +145,17 @@
     return state;
   }
   function queryPayload() {
-    return { metric: queryState.metric, start: queryState.start, end: queryState.end, compare_to: queryState.compare_to || null, selected_month: monthExplicitlySelected ? queryState.selected_month || null : null, group_by: queryState.group_by, detail_page: queryState.detail_page, ticket_page: queryState.ticket_page, ticket_page_size: queryState.ticket_page_size, ticket_search: queryState.ticket_search, filters: { ...queryState.filters } };
+    return { scope: queryState.scope, metric: queryState.metric, start: queryState.start, end: queryState.end, compare_to: queryState.compare_to || null, selected_month: monthExplicitlySelected ? queryState.selected_month || null : null, group_by: queryState.group_by, detail_page: queryState.detail_page, ticket_page: queryState.ticket_page, ticket_page_size: queryState.ticket_page_size, ticket_search: queryState.ticket_search, filters: { ...queryState.filters } };
   }
   function writeURL() {
     const params = new URLSearchParams();
+    params.set("scope", queryState.scope);
     if (queryState.metric !== DEFAULTS.metric) params.set("metric", queryState.metric);
     if (queryState.start !== DEFAULTS.start) params.set("start", queryState.start);
     if (queryState.end !== DEFAULTS.end) params.set("end", queryState.end);
     if (queryState.compare_to) params.set("compare_to", queryState.compare_to);
+    if (queryState.chart_view !== "all") params.set("chart_view", queryState.chart_view);
+    if (queryState.scope === "general" && queryState.chart_origin === "origin") params.set("chart_origin", "origin");
     if (monthExplicitlySelected && queryState.selected_month) params.set("selected_month", queryState.selected_month);
     if (queryState.group_by !== DEFAULTS.group_by) params.set("group_by", queryState.group_by);
     if (queryState.detail_page > 1) params.set("detail_page", queryState.detail_page);
@@ -169,6 +181,27 @@
     form.elements.start.disabled = snapshot;
     form.elements.end.disabled = snapshot;
     updateMoreFilters();
+    updateContextControls();
+  }
+  function updateContextControls() {
+    page.querySelectorAll("[data-scope]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.scope === queryState.scope)));
+    page.querySelectorAll("[data-scope-filter]").forEach(label => {
+      const key = label.dataset.scopeFilter;
+      label.hidden = (key === "stage" && queryState.scope !== "cancellation") || (key === "origin" && queryState.scope !== "general");
+    });
+    const reasonLabel = form.elements.termination_reason.closest("label");
+    if (reasonLabel) {
+      reasonLabel.hidden = queryState.scope === "cancellation";
+      reasonLabel.firstChild.textContent = queryState.scope === "general" ? "Motivo de encerramento (OTRS)" : "Motivo";
+    }
+    page.querySelector("[data-scope-description]").textContent = {
+      support: "Suporte operacional da fila NOC - ATACADO.",
+      cancellation: "Processo de cancelamento identificado nos dados locais do OTRS.",
+      general: "Carga de suporte e cancelamentos, identificada por origem."
+    }[queryState.scope];
+    const originControl = page.querySelector("[data-chart-origin-control]");
+    if (originControl) originControl.hidden = queryState.scope !== "general";
+    page.dataset.scope = queryState.scope;
   }
   function updateMoreFilters() {
     const count = ADVANCED_KEYS.filter(key => queryState.filters[key] !== "all").length + Number(Boolean(queryState.compare_to));
@@ -215,25 +248,258 @@
       return `<article class="kpi-card dash-card" title="${escapeHTML(help[item.key] || "Resumo calculado conforme a consulta ativa.")}"><span class="kpi-label">${escapeHTML(item.label)}</span><strong class="kpi-value">${value}</strong><small class="kpi-note">${escapeHTML(note)}</small>${trend ? `<span class="cockpit-kpi-trend ${trendClass}" aria-label="Variação ${escapeHTML(trendValue)}">${trend.direction === "up" ? "↑" : trend.direction === "down" ? "↓" : "·"} ${escapeHTML(trendValue)}</span>` : ""}</article>`;
     }).join("");
   }
+  function renderOperationalKpis(items) {
+    const sourcePending = latestAnalytics?.scope === "cancellation"
+      && latestAnalytics?.source_sync?.available === false;
+    page.querySelector("[data-kpis]").innerHTML = (items || []).map(item => {
+      const value = sourcePending && item.stage ? "—"
+        : typeof item.value === "number" ? number.format(item.value) : escapeHTML(item.value);
+      const finalBacklog = /^backlog (atual|final|ao fim do período)$/i.test(item.label || "");
+      const label = finalBacklog ? "Backlog final" : item.label;
+      const note = sourcePending && item.stage ? "Dados ainda não sincronizados" : (item.unit || "tickets");
+      const action = item.stage ? `data-kpi-stage="${escapeHTML(item.stage)}" role="button" tabindex="0" aria-label="Filtrar tickets na etapa ${escapeHTML(item.label)}"` : "";
+      const title = finalBacklog ? "Estoque no final do período selecionado." : item.title || "Indicador calculado no espelho local do OTRS.";
+      return `<article class="kpi-card dash-card cockpit-operational-kpi${item.stage ? " is-drillable" : ""}" ${action} title="${escapeHTML(title)}"><span class="kpi-label">${escapeHTML(label)}</span><strong class="kpi-value">${value}</strong><small class="kpi-note">${escapeHTML(note)}</small></article>`;
+    }).join("");
+  }
+  function renderSourceSync(sourceSync) {
+    const badge = page.querySelector("[data-source-badge]");
+    const label = badge?.querySelector("[data-source-badge-label]");
+    if (!badge || !label || !sourceSync) return;
+    const available = sourceSync.available === true;
+    badge.classList.toggle("is-unavailable", !available);
+    if (available && sourceSync.last_sync_at) {
+      const at = new Date(sourceSync.last_sync_at);
+      const timestamp = new Intl.DateTimeFormat("pt-BR", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
+      }).format(at);
+      label.textContent = `Última sincronização OTRS · ${timestamp}`;
+      badge.title = "Dados locais do OTRS sincronizados para as filas do Cockpit.";
+    } else {
+      label.textContent = "Dados OTRS ainda não sincronizados";
+      badge.title = "Os números das etapas de Cancelamentos só serão exibidos após a primeira sincronização completa.";
+    }
+  }
+  function renderSecondaryKpis(items) {
+    const container = page.querySelector("[data-secondary-kpis]");
+    container.hidden = !items?.length;
+    container.innerHTML = (items || []).map(item => {
+      const isNet = item.label === "Variação líquida" && typeof item.value === "number";
+      const isBacklogVariation = item.label === "Variação %";
+      const isAverage = item.label === "Tempo médio de resolução";
+      const isOlderThanDay = item.label === "Tickets acima de 24h";
+      const label = isBacklogVariation ? "Variação do backlog" : isOlderThanDay ? "Acima de 24h" : item.label;
+      let value = item.value == null ? "—" : typeof item.value === "number" ? number.format(item.value) : escapeHTML(item.value);
+      let note = item.unit || "tickets";
+      let title = item.help_text || "";
+      if (isNet) {
+        const amount = number.format(Math.abs(item.value));
+        value = item.value > 0 ? `↑ +${amount}` : item.value < 0 ? `↓ ${amount}` : "0";
+        note = item.value > 0 ? `${amount} tickets a mais no estoque` : item.value < 0 ? `${amount} tickets a menos no estoque` : "Novos e encerrados em equilíbrio";
+      } else if (isBacklogVariation) {
+        value = item.value == null ? "—" : `${percentage.format(item.value)}%`;
+        note = "vs início do período";
+      } else if (isAverage) {
+        note = "resolução";
+        if (typeof item.value === "number") {
+          title = `${number.format(item.value)} horas`;
+          if (item.value > 48) {
+            const minutes = Math.round(item.value * 60);
+            let days = Math.floor(minutes / 1440), hours = Math.round((minutes - days * 1440) / 60);
+            if (hours === 24) { days += 1; hours = 0; }
+            value = `${days}d${hours ? ` ${hours}h` : ""}`;
+          }
+        }
+      } else if (isOlderThanDay) note = "tickets ativos";
+      const info = item.help_text ? `<button type="button" class="cockpit-kpi-info" title="${escapeHTML(item.help_text)}" aria-label="${escapeHTML(item.help_text)}">i</button>` : "";
+      return `<div class="cockpit-secondary-kpi"${title ? ` title="${escapeHTML(title)}"` : ""}><span>${escapeHTML(label)}${info}</span><strong>${value}</strong><small>${escapeHTML(note)}</small></div>`;
+    }).join("");
+  }
+  function renderOperationalChart(data) {
+    const operational = data.operational || {}, rows = operational.series || [];
+    const mode = queryState.chart_view || "all", general = data.scope === "general";
+    const originMode = general && queryState.chart_origin === "origin";
+    const history = operational.backlog || {}, backlogAvailable = history.available === true;
+    const originControl = page.querySelector("[data-chart-origin-control]");
+    if (originControl) {
+      originControl.hidden = !general;
+      originControl.querySelectorAll("[data-chart-origin]").forEach(button => {
+        button.setAttribute("aria-pressed", String(button.dataset.chartOrigin === (originMode ? "origin" : "consolidated")));
+      });
+    }
+    const subtitle = {
+      all: "Novos e encerrados por intervalo; backlog acumulado na linha.",
+      created: general && originMode ? "Entradas por intervalo, divididas por origem." : "Tickets novos em cada intervalo do per\u00edodo.",
+      closed: general && originMode ? "Encerramentos por intervalo, divididos por origem." : "Tickets encerrados em cada intervalo do per\u00edodo.",
+      backlog: "Estoque de tickets ativos ao fim de cada intervalo.",
+    }[mode];
+    page.querySelector("[data-operational-subtitle]").textContent = subtitle;
+    page.querySelectorAll("[data-chart-view]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.chartView === mode));
+    });
+    const chartNote = message => message ? `<p class="cockpit-history-note" role="status">${escapeHTML(message)}</p>` : "";
+    if (!rows.length) {
+      return `<article class="cockpit-ops-chart" data-mode="${mode}">${chartNote("Nenhum ticket encontrado neste per\u00edodo.")}</article>`;
+    }
+    if (mode === "backlog" && !backlogAvailable) {
+      return `<article class="cockpit-ops-chart" data-mode="backlog">${chartNote(history.message || "Backlog hist\u00f3rico indispon\u00edvel para este intervalo.")}</article>`;
+    }
+
+    let definitions;
+    if (general) {
+      const entryOriginDefs = [
+        ["support_entries", "Novos · Suporte", "support-entry"],
+        ["cancellation_entries", "Novos · Cancelamentos", "cancellation-entry"],
+      ];
+      const closedOriginDefs = [
+        ["support_closed", "Encerrados · Suporte", "support-closed"],
+        ["cancellation_closed", "Encerrados · Cancelamentos", "cancellation-closed"],
+      ];
+      const entryDefs = originMode ? entryOriginDefs : [["entries", "Novos", "entries"]];
+      const closedDefs = originMode ? closedOriginDefs : [["closed", "Encerrados", "closed"]];
+      definitions = mode === "created" ? entryDefs
+        : mode === "closed" ? closedDefs
+          : mode === "backlog" ? [] : [...entryDefs, ...closedDefs];
+    } else {
+      const entriesKey = data.scope === "cancellation" ? "cancellation_entries" : "entries";
+      const closedKey = data.scope === "cancellation" ? "cancellation_closed" : "closed";
+      definitions = mode === "created" ? [[entriesKey, "Novos", "entries"]]
+        : mode === "closed" ? [[closedKey, "Encerrados", "closed"]]
+          : mode === "backlog" ? []
+            : [[entriesKey, "Novos", "entries"], [closedKey, "Encerrados", "closed"]];
+    }
+    const flowMax = Math.max(0, ...rows.flatMap(row => definitions.map(([key]) => Number(row[key] || 0))));
+    const flowScaleMax = flowMax ? flowMax / .84 : 0;
+    const hasFlow = flowMax > 0;
+    const backlogValues = rows.map(row => row.backlog).filter(value => value !== null && value !== undefined).map(Number);
+    const minBacklog = Math.min(0, ...backlogValues), maxBacklog = Math.max(1, ...backlogValues);
+    const backlogSpan = Math.max(1, maxBacklog - minBacklog);
+    const backlogLow = Math.max(0, minBacklog - Math.ceil(backlogSpan * .12));
+    const backlogHigh = maxBacklog + Math.max(1, Math.ceil(backlogSpan * .12));
+    const plotTop = 12, plotBottom = 188, plotHeight = plotBottom - plotTop;
+    const toY = value => plotBottom - ((Number(value) - backlogLow) / (backlogHigh - backlogLow)) * plotHeight;
+    const points = rows.map((row, index) => row.backlog === null || row.backlog === undefined ? null : {
+      x: ((index + .5) / rows.length) * 1000,
+      y: toY(row.backlog),
+    });
+    const segments = [];
+    let segment = [];
+    points.forEach(point => {
+      if (point) segment.push(point);
+      else if (segment.length) { segments.push(segment); segment = []; }
+    });
+    if (segment.length) segments.push(segment);
+    const linePath = segments.map(part => part.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ")).join(" ");
+    const fillPath = segments.map(part => `${part.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ")} L${part[part.length - 1].x.toFixed(2)},${plotBottom} L${part[0].x.toFixed(2)},${plotBottom} Z`).join(" ");
+    const grain = operational.granularity || operational.grain || "day";
+    const lineVisible = backlogAvailable && (mode === "all" || mode === "backlog");
+    const lastBacklogIndex = points.reduce((last, point, index) => point ? index : last, -1);
+    const backlogLabelIndexes = new Set(
+      grain === "hour" && mode === "all" && lastBacklogIndex >= 0 ? [lastBacklogIndex]
+        : mode === "backlog" && points.filter(Boolean).length <= 8
+        ? points.map((point, index) => point ? index : -1).filter(index => index >= 0)
+        : mode === "backlog" && lastBacklogIndex >= 0 ? [lastBacklogIndex] : [],
+    );
+    const lineLabels = lineVisible ? points.map((point, index) => {
+      if (!point || !backlogLabelIndexes.has(index)) return "";
+      const lastLabel = index === lastBacklogIndex;
+      const x = lastLabel ? Math.max(18, point.x - 6) : point.x;
+      const anchor = mode === "all" || lastLabel ? "end" : "middle";
+      return `<text class="cockpit-ops-line-label" x="${x.toFixed(2)}" y="${Math.max(13, point.y - 8).toFixed(2)}" text-anchor="${anchor}">${number.format(rows[index].backlog)}</text>`;
+    }).join("") : "";
+    const svg = lineVisible ? `<svg class="cockpit-ops-line" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true">${mode === "backlog" ? `<path class="cockpit-ops-area" d="${fillPath}"></path>` : ""}<path class="cockpit-ops-line-path" d="${linePath}"></path>${points.map((point, index) => point && (grain !== "hour" || index % 3 === 0 || index === lastBacklogIndex) ? `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="${grain === "hour" ? "2.2" : "3.2"}"></circle>` : "").join("")}${lineLabels}</svg>` : "";
+    const visualHeight = grain === "hour" ? 260 : 268;
+    const axisSpanPercent = ((visualHeight - 28) / (visualHeight - 14)) * 100;
+    const makeAxis = values => values.map((value, index) => `<span class="cockpit-ops-axis-label" style="--axis-position:${values.length > 1 ? index / (values.length - 1) * axisSpanPercent : 0}%">${number.format(value)}</span>`).join("");
+    const flowTicks = definitions.length && hasFlow ? [...new Set([Math.ceil(flowScaleMax), Math.ceil(flowScaleMax / 2), 0])] : [];
+    const backlogTicks = lineVisible ? [...new Set([backlogHigh, Math.round((backlogHigh + backlogLow) / 2), backlogLow])] : [];
+    const labelStep = rows.length > 18 ? (window.innerWidth < 760 ? 3 : 2) : rows.length > 10 && window.innerWidth < 760 ? 2 : 1;
+    const shortLabel = value => {
+      if (grain !== "week") return value;
+      const match = String(value).match(/^(\d{2})\s+(.+?)(?:\/\d{2})?[\u2013-](\d{2})\s+(.+?)(?:\/\d{2})?$/);
+      if (!match) return value;
+      const [, firstDay, firstMonth, lastDay, lastMonth] = match;
+      return firstMonth === lastMonth ? `${firstDay}\u2013${lastDay} ${lastMonth}` : `${firstDay} ${firstMonth}\u2013${lastDay} ${lastMonth}`;
+    };
+    const pointsHTML = rows.map((row, index) => {
+      const bars = definitions.map(([key, label, cls], barIndex) => {
+        const value = Number(row[key] || 0);
+        const height = value > 0 ? value / flowScaleMax * 100 : 0;
+        const valueLift = grain === "hour" ? 2 + (barIndex % 2) * 8 : 2;
+        const groupStart = general && originMode && mode === "all" && grain !== "hour" && barIndex === 2 ? " is-group-start" : "";
+        return `<span class="cockpit-ops-bar-item${groupStart}" style="--bar-height:${height}%;--value-lift:${valueLift}px" aria-hidden="true">${value > 0 ? `<span class="cockpit-ops-bar-value">${number.format(value)}</span>` : ""}<i class="cockpit-ops-bar ${cls}"></i></span>`;
+      }).join("");
+      const net = Number(row.balance || 0), netLabel = `${net > 0 ? "+" : ""}${number.format(net)}`;
+      const rowBacklog = row.backlog !== null && row.backlog !== undefined ? number.format(row.backlog) : "\u2014";
+      const rowBacklogStart = row.backlog_start !== null && row.backlog_start !== undefined ? number.format(row.backlog_start) : "\u2014";
+      const entryOriginDetail = general ? `<small class="cockpit-tooltip-detail">Suporte: ${number.format(row.support_entries)}</small><small class="cockpit-tooltip-detail">Cancelamentos: ${number.format(row.cancellation_entries)}</small>` : "";
+      const closedOriginDetail = general ? `<small class="cockpit-tooltip-detail">Suporte: ${number.format(row.support_closed)}</small><small class="cockpit-tooltip-detail">Cancelamentos: ${number.format(row.cancellation_closed)}</small>` : "";
+      const tooltipLines = mode === "all"
+        ? `<small>Novos: ${number.format(row.entries)}</small>${entryOriginDetail}<small>Encerrados: ${number.format(row.closed)}</small>${closedOriginDetail}<small>Varia\u00e7\u00e3o l\u00edquida: ${escapeHTML(netLabel)}</small>${backlogAvailable ? `<small>Backlog inicial: ${rowBacklogStart}</small><small>Backlog: ${rowBacklog}</small>` : `<small>${escapeHTML(history.message || "Backlog hist\u00f3rico indispon\u00edvel para este intervalo.")}</small>`}`
+        : mode === "created" ? `<small>Novos: ${number.format(row.entries)}</small>${entryOriginDetail}`
+          : mode === "closed" ? `<small>Encerrados: ${number.format(row.closed)}</small>${closedOriginDetail}`
+            : `<small>Backlog: ${rowBacklog}</small>`;
+      const originAccessible = general
+        ? mode === "all" ? ` Suporte: ${number.format(row.support_entries)} novos, ${number.format(row.support_closed)} encerrados. Cancelamentos: ${number.format(row.cancellation_entries)} novos, ${number.format(row.cancellation_closed)} encerrados.`
+          : mode === "created" ? ` Suporte: ${number.format(row.support_entries)} novos. Cancelamentos: ${number.format(row.cancellation_entries)} novos.`
+            : mode === "closed" ? ` Suporte: ${number.format(row.support_closed)} encerrados. Cancelamentos: ${number.format(row.cancellation_closed)} encerrados.` : ""
+        : "";
+      const accessible = mode === "all"
+        ? `${row.label}. Novos: ${number.format(row.entries)}. Encerrados: ${number.format(row.closed)}. Varia\u00e7\u00e3o l\u00edquida: ${netLabel}. Backlog: ${rowBacklog}.${originAccessible}`
+        : mode === "created" ? `${row.label}. Novos: ${number.format(row.entries)}.${originAccessible}`
+          : mode === "closed" ? `${row.label}. Encerrados: ${number.format(row.closed)}.${originAccessible}`
+            : `${row.label}. Backlog: ${rowBacklog}.`;
+      const label = index % labelStep === 0 || (grain !== "hour" && index === rows.length - 1) ? row.label : "";
+      return `<button type="button" class="cockpit-ops-point" data-chart-point aria-label="${escapeHTML(accessible)}"><span class="cockpit-ops-bars">${bars}</span><span class="cockpit-ops-x-label">${escapeHTML(label ? shortLabel(label) : "")}</span><span class="cockpit-point-tooltip" role="tooltip"><strong>${escapeHTML(row.label)}</strong>${tooltipLines}</span></button>`;
+    }).join("");
+    const legendItems = definitions.map(([, label, cls]) => `<span><i class="${cls}"></i>${escapeHTML(label)}</span>`);
+    if (lineVisible) legendItems.push('<span><i class="backlog-line-key"></i>Backlog</span>');
+    const note = mode !== "backlog" && !backlogAvailable && history.message
+      ? `${history.message} O fluxo de novos e encerrados continua vis\u00edvel.`
+      : !hasFlow && mode !== "backlog" ? `Nenhum movimento de ${mode === "created" ? "entrada" : mode === "closed" ? "encerramento" : "novos ou encerrados"} neste per\u00edodo.` : "";
+    return `<article class="cockpit-ops-chart" data-mode="${mode}" data-grain="${escapeHTML(grain)}" style="--ops-plot-height:${visualHeight}px"><div class="cockpit-ops-legend" aria-label="S\u00e9ries do gr\u00e1fico">${legendItems.join("")}</div>${chartNote(note)}<div class="cockpit-ops-chart-frame"><div class="cockpit-ops-axis cockpit-ops-axis-left" aria-hidden="true">${makeAxis(flowTicks)}</div><div class="cockpit-ops-plot-area"><div class="cockpit-ops-grid-lines" aria-hidden="true"></div>${svg}<div class="cockpit-ops-point-grid" style="--series-count:${rows.length}" role="group" aria-label="Pontos do per\u00edodo">${pointsHTML}</div></div><div class="cockpit-ops-axis cockpit-ops-axis-right" aria-hidden="true">${makeAxis(backlogTicks)}</div></div></article>`;
+  }
+
+  function renderAgingChart(data) {
+    const operational = data.operational || {}, rows = operational.aging || [], general = data.scope === "general";
+    if (!rows.length) return '<p class="cockpit-empty">Sem tickets ativos para calcular aging.</p>';
+    if (rows.every(row => !Number(row.total))) return '<p class="cockpit-empty">Nenhum ticket ativo no contexto selecionado.</p>';
+    const max = Math.max(1, ...rows.map(row => Number(row.total || 0)));
+    const items = rows.map(row => {
+      const supportWidth = Math.min(100, Number(row.support || 0) / max * 100);
+      const cancellationWidth = Math.min(100 - supportWidth, Number(row.cancellation || 0) / max * 100);
+      const valueText = general ? `Suporte ${number.format(row.support)} · Cancelamentos ${number.format(row.cancellation)}` : number.format(row.total);
+      return `<li aria-label="${escapeHTML(row.label)}: ${escapeHTML(valueText)}"><strong>${escapeHTML(row.label)}</strong><span class="cockpit-aging-track" title="${escapeHTML(valueText)}"><i class="support" style="--bar-width:${supportWidth}%"></i><i class="cancellation" style="--bar-width:${cancellationWidth}%"></i></span><span>${number.format(row.total)}</span></li>`;
+    }).join("");
+    const legend = general ? '<div class="cockpit-ops-legend cockpit-aging-legend"><span><i class="support-entry"></i>Suporte</span><span><i class="cancellation-entry"></i>Cancelamentos</span></div>' : "";
+    return `<div class="cockpit-aging-chart">${legend}<ul>${items}</ul></div>`;
+  }
   function renderSeries(data) {
     const specs = data.chart_specs || [];
     const overview = specs.find(spec => spec.type === "temporal_overview");
     const dimensions = specs.filter(spec => spec.type !== "temporal_overview" && spec.type !== "monthly_calendar");
     const overviewGrid = page.querySelector("[data-overview-grid]");
     const dimensionGrid = page.querySelector("[data-dimension-grid]");
-    overviewGrid.innerHTML = overview ? renderOverview(overview, data.time_grain) : '<p class="cockpit-empty">A consulta não apresenta variação temporal suficiente.</p>';
+    overviewGrid.innerHTML = renderOperationalChart(data);
+    page.querySelector("[data-aging-chart]").innerHTML = renderAgingChart(data);
     dimensionGrid.innerHTML = dimensions.length ? dimensions.map(renderDimension).join("") : '<p class="cockpit-empty">Não há dimensões complementares relevantes para esta consulta.</p>';
     renderCalendar(data.temporal);
-    const baseLabels = { tickets: "data de criação", open_tickets: "data de criação", pending_tickets: "data de criação", scheduled_tickets: "data de criação", resolved_tickets: "data de resolu\u00e7\u00e3o", closed_tickets: "data de resolu\u00e7\u00e3o", resolved_closed_tickets: "data de resolu\u00e7\u00e3o", canceled_tickets: "data de cancelamento", backlog: "snapshot atual" };
     const base = page.querySelector("[data-period-semantics]");
-    base.textContent = `Base: ${baseLabels[data.metric] || "data de criação"}`;
-    base.title = data.metric === "canceled_tickets" ? "Métrica específica de cancelamentos." : data.metric === "backlog" ? "Backlog considera tickets atuais em atendimento, pendentes ou agendados." : "Considera estados operacionais válidos; tickets cancelados e estados não classificados são excluídos.";
-    const reason = queryState.filters.termination_reason;
-    const title = reason && data.metric_label ? `${data.metric_label} por ${reason}` : data.description?.title || "Análise do Cockpit";
+    const baseDescription = data.metric === "canceled_tickets" ? "Período baseado no cancelamento dos tickets." : data.metric === "backlog" ? "Snapshot atual do estoque de tickets ativos." : ["resolved_tickets", "closed_tickets", "resolved_closed_tickets"].includes(data.metric) ? "Período baseado na resolução dos tickets." : "Período baseado na criação dos tickets.";
+    base.title = baseDescription;
+    base.setAttribute("aria-label", baseDescription);
+    const metricTitles = { tickets: "Tickets criados", open_tickets: "Tickets em atendimento", pending_tickets: "Tickets pendentes", scheduled_tickets: "Tickets agendados", resolved_tickets: "Tickets resolvidos", closed_tickets: "Tickets encerrados", resolved_closed_tickets: "Tickets resolvidos e encerrados", canceled_tickets: "Tickets cancelados", links_affected: "Links afetados", recurrences: "Links reincidentes", backlog: "Backlog" };
+    const facets = [
+      ["provider", "provedor"], ["termination_reason", "motivo"], ["stage", "etapa"], ["origin", "origem"], ["uf", "UF"],
+    ];
+    const activeFacet = facets.find(([key]) => queryState.filters[key] && queryState.filters[key] !== "all");
+    const facetLabel = activeFacet ? form.elements.namedItem(activeFacet[0]).selectedOptions[0]?.textContent : "";
+    const title = `${metricTitles[data.metric] || "Análise operacional"}${activeFacet && facetLabel ? ` · ${facetLabel}` : ""}`;
     page.querySelector("[data-analysis-title]").textContent = title;
     const snapshot = data.metric === "backlog";
-    page.querySelector("[data-current-period]").textContent = snapshot ? "Snapshot atual" : `${dateLabel(data.start_date || queryState.start)} → ${dateLabel(data.end_date || queryState.end)}`;
-    page.querySelector("[data-current-analysis]").title = data.description?.subtitle || title;
+    page.querySelector("[data-current-period]").textContent = snapshot ? dateLabel(data.end_date || queryState.end) : `${dateLabel(data.start_date || queryState.start)} → ${dateLabel(data.end_date || queryState.end)}`;
+    page.querySelector("[data-current-analysis]").title = `${title}. ${baseDescription}`;
     const comparison = data.comparison, node = page.querySelector("[data-comparison]");
     if (!comparison) { node.replaceChildren(); node.removeAttribute("title"); }
     else {
@@ -293,7 +559,7 @@
     const selected = (temporal.available_months || []).find(item => item.key === temporal.selected_month);
     const summary = temporal.month_summary || {}, monthTitle = temporal.selected_month_label || selected?.label || monthLabel(temporal.selected_month);
     page.querySelector("[data-calendar-title]").textContent = `Detalhe de ${monthTitle}`;
-    page.querySelector("[data-calendar-subtitle]").textContent = `Distribuição diária de ${temporal.unit || "tickets"} da consulta.`;
+    page.querySelector("[data-calendar-subtitle]").textContent = queryState.scope === "cancellation" ? "Tickets do processo de cancelamento criados em cada dia." : queryState.scope === "general" ? "Entradas do suporte e do processo de cancelamento por dia." : `Distribui\u00e7\u00e3o di\u00e1ria de ${temporal.unit || "tickets"} da consulta.`;
     select.replaceChildren(...(temporal.available_months || []).map(item => new Option(item.label, item.key)));
     select.value = temporal.selected_month;
     const peak = summary.peak_day ? `${dateLabel(summary.peak_day)} · ${number.format(summary.peak_value)} ${temporal.unit || "tickets"}` : "Sem ocorrências";
@@ -366,7 +632,7 @@
     if (!row || !dialog) return;
     dialog.querySelector("[data-drawer-title]").textContent = `Ticket ${row.ticket}`;
     dialog.querySelector("[data-drawer-status]").textContent = `${row.status} · ${sourceStateLabels.get(String(row.source_state)) || row.source_state}`;
-    const details = [["Criado em", row.created_at], ["Alterado em", row.changed_at], ["Base da análise", row.base_date], ["Resolvido em", row.resolved_at], ["Terminal StateUpdate OTRS em", row.terminal_at], ["Cancelado em", row.canceled_at], ["Motivo de encerramento", row.reason], ["Prioridade", row.priority], ["SLA", row.sla]];
+    const details = [["Criado em", row.created_at], ["Alterado em", row.changed_at], ["Base da an\u00e1lise", row.base_date], ["Fila OTRS", row.queue], ["Origem", row.origin], ["Etapa do cancelamento", row.operational_stage_label], ["Resolvido em", row.resolved_at], ["Terminal StateUpdate OTRS em", row.terminal_at], ["Cancelado em", row.canceled_at], ["Motivo de encerramento", row.reason], ["Prioridade", row.priority], ["SLA", row.sla]];
     dialog.querySelector("[data-drawer-fields]").innerHTML = details.map(([label,value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value || "—")}</dd></div>`).join("");
     dialog.querySelector("[data-drawer-links]").innerHTML = row.links?.length ? row.links.map(link => `<article><strong>ConfigItem ${escapeHTML(link.config_item_id)}</strong><dl><div><dt>Number</dt><dd>${escapeHTML(link.number || "—")}</dd></div><div><dt>Designação</dt><dd>${escapeHTML(link.designation || "—")}</dd></div><div><dt>Circuito</dt><dd>${escapeHTML(link.circuit || "—")}</dd></div><div><dt>Provedor</dt><dd>${escapeHTML(link.provider || "Não identificado")}</dd></div><div><dt>UF</dt><dd>${escapeHTML(link.uf || "—")}</dd></div></dl></article>`).join("") : "<p>Sem vínculo CMDB disponível.</p>";
     dialog.querySelector("[data-drawer-evidence]").innerHTML = (row.evidence || []).map(item => `<li>${escapeHTML(item)}</li>`).join("");
@@ -379,7 +645,8 @@
     const activeFilters = page.querySelector("[data-active-filters]");
     if (activeFilters) activeFilters.textContent = chips.join(" \u00b7 ") + preset;
     const summary = page.querySelector("[data-query-summary]");
-    summary.innerHTML = chips.map(chip => `<span class="cockpit-summary-chip">${escapeHTML(chip)}</span>`).join("") + (preset ? `<span class="cockpit-summary-chip">${escapeHTML(preset.trim().replace(/^\u00b7\s*/, ""))}</span>` : "");
+    const summaryContent = chips.map(chip => `<span class="cockpit-summary-chip">${escapeHTML(chip)}</span>`).join("") + (preset ? `<span class="cockpit-summary-chip">${escapeHTML(preset.trim().replace(/^\u00b7\s*/, ""))}</span>` : "");
+    summary.innerHTML = summaryContent || '<span class="cockpit-summary-empty">Nenhum filtro adicional</span>';
     summary.title = chips.join(" \u00b7 ") + preset;
     page.querySelectorAll("[data-quick]").forEach(button => {
       const active = activePreset?.key === button.dataset.quick;
@@ -417,7 +684,12 @@
       if (normalizedReason && queryState.filters.termination_reason !== "all") {
         queryState.filters.termination_reason = normalizedReason;
       }
-      renderOptions(result.options); renderKpis(result.kpis || []); renderSeries(result); renderBreakdown(result); renderTickets(result);
+      renderOptions(result.options);
+      latestAnalytics = result;
+      renderSourceSync(result.source_sync);
+      renderOperationalKpis(result.operational?.primary_kpis || result.kpis || []);
+      renderSecondaryKpis(result.operational?.secondary_kpis || []);
+      renderSeries(result); renderBreakdown(result); renderTickets(result);
       writeURL();
       queryState.detail_page = result.detail_page || 1;
       page.dataset.metric = result.metric; page.dataset.dimension = queryState.group_by; page.dataset.initialLoading = "false"; page.dataset.resultsReady = "true"; renderActive();
@@ -428,10 +700,10 @@
   const PRESETS = {
     finance: { metric: "closed_tickets", group_by: "provider", label: "Pend\u00eancia Financeira", filters: { termination_reason: "Pend\u00eancia Financeira" } },
     reason: { metric: "closed_tickets", group_by: "termination_reason", label: "Tickets por Motivo" },
-    recurrence: { metric: "recurrences", group_by: "provider", label: "Reincidencia" },
+    recurrence: { metric: "recurrences", group_by: "provider", label: "Reincid\u00eancia" },
     backlog: { metric: "backlog", group_by: "provider", label: "Backlog por Provedor" },
     status: { metric: "tickets", group_by: "status", label: "Tickets por Status" },
-    "high-critical": { metric: "tickets", group_by: "priority", label: "Alto / Critico", filters: { priority: "high-critical" } },
+    "high-critical": { metric: "tickets", group_by: "priority", label: "Alto / Cr\u00edtico", filters: { priority: "high-critical" } },
   };
   function presetState(key) {
     const preset = PRESETS[key]; if (!preset) return;
@@ -501,12 +773,41 @@
     } catch (_) { failed = true; showStatusError("N\u00e3o foi poss\u00edvel exportar esta an\u00e1lise."); }
     finally { button.disabled = false; if (!failed) page.querySelector("[data-status]").textContent = ""; }
   }
+  function setScope(scope) {
+    if (!["support", "cancellation", "general"].includes(scope) || scope === queryState.scope) return;
+    temporaryTicketDay = "";
+    queryState.scope = scope;
+    queryState.chart_origin = "consolidated";
+    queryState.group_by = { support: "provider", cancellation: "cancellation_stage", general: "operational_origin" }[scope];
+    queryState.filters.stage = "all";
+    queryState.filters.origin = "all";
+    if (scope === "cancellation") queryState.filters.termination_reason = "all";
+    queryState.detail_page = 1; queryState.ticket_page = 1; queryState.ticket_search = "";
+    activePreset = null; syncForm(); refresh();
+  }
+  function setChartView(view) {
+    if (!["all", "created", "closed", "backlog"].includes(view) || view === queryState.chart_view) return;
+    queryState.chart_view = view;
+    writeURL();
+    if (latestAnalytics) {
+      page.querySelector("[data-overview-grid]").innerHTML = renderOperationalChart(latestAnalytics);
+    }
+  }
+  function setChartOrigin(origin) {
+    if (!["consolidated", "origin"].includes(origin) || origin === queryState.chart_origin) return;
+    queryState.chart_origin = origin;
+    writeURL();
+    if (latestAnalytics) page.querySelector("[data-overview-grid]").innerHTML = renderOperationalChart(latestAnalytics);
+  }
   function clearFilters() { controller?.abort(); temporaryTicketDay = ""; monthExplicitlySelected = false; queryState = cloneDefaults(); activePreset = null; page.querySelector("[data-more-filters]").open = false; syncForm(); refresh(); }
 
   form.addEventListener("change", () => { readForm(); queryState.detail_page = 1; queryState.ticket_page = 1; syncForm(); updatePresetStatus(); renderActive(); });
   form.addEventListener("submit", event => { event.preventDefault(); temporaryTicketDay = ""; readForm(); queryState.detail_page = 1; queryState.ticket_page = 1; syncForm(); updatePresetStatus(); refresh(); });
   page.querySelector("[data-clear]").addEventListener("click", clearFilters);
   page.querySelector("[data-retry]").addEventListener("click", refresh);
+  page.querySelectorAll("[data-scope]").forEach(button => button.addEventListener("click", () => setScope(button.dataset.scope)));
+  page.querySelectorAll("[data-chart-view]").forEach(button => button.addEventListener("click", () => setChartView(button.dataset.chartView)));
+  page.querySelectorAll("[data-chart-origin]").forEach(button => button.addEventListener("click", () => setChartOrigin(button.dataset.chartOrigin)));
   page.querySelector("[data-breakdown]").addEventListener("change", event => { temporaryTicketDay = ""; queryState.group_by = event.target.value; queryState.detail_page = 1; queryState.ticket_page = 1; updatePresetStatus(); refresh(); });
   page.querySelector("[data-month-select]").addEventListener("change", event => { queryState.selected_month = event.target.value; monthExplicitlySelected = true; refresh(); });
   page.querySelectorAll("[data-quick]").forEach(button => button.addEventListener("click", () => { temporaryTicketDay = ""; presetState(button.dataset.quick); }));
@@ -530,6 +831,13 @@
     temporaryTicketDay = ""; queryState.ticket_page = 1; queryState.ticket_search = ""; refresh();
   });
   page.addEventListener("click", event => {
+    const stageKpi = event.target.closest("[data-kpi-stage]");
+    if (stageKpi) {
+      temporaryTicketDay = ""; queryState.metric = "backlog";
+      queryState.filters.stage = stageKpi.dataset.kpiStage;
+      queryState.detail_page = 1; queryState.ticket_page = 1; queryState.ticket_search = "";
+      syncForm(); refresh(); return;
+    }
     const monthPoint = event.target.closest("[data-chart-month]"), calendarDay = event.target.closest("[data-calendar-day]");
     if (monthPoint) { queryState.selected_month = monthPoint.dataset.chartMonth; monthExplicitlySelected = true; refresh(); return; }
     if (calendarDay) {
@@ -548,9 +856,14 @@
     if (drill) {
       temporaryTicketDay = "";
       const key = queryState.group_by;
-      if (FILTER_KEYS.includes(key)) queryState.filters[key] = drill.dataset.drill;
+      const filterKey = key === "cancellation_stage" ? "stage" : key === "operational_origin" ? "origin" : key;
+      if (FILTER_KEYS.includes(filterKey)) queryState.filters[filterKey] = drill.dataset.drill;
       queryState.detail_page = 1; queryState.ticket_page = 1; syncForm(); updatePresetStatus(); refresh();
     }
+  });
+  page.addEventListener("keydown", event => {
+    const stageKpi = event.target.closest("[data-kpi-stage]");
+    if (stageKpi && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); stageKpi.click(); }
   });
   let ticketSearchTimer;
   page.querySelector("[data-ticket-search]").addEventListener("input", event => {
@@ -572,6 +885,14 @@
   const exportOptions = page.querySelector("[data-export-options]"), exportToggle = page.querySelector("[data-export-toggle]");
   exportToggle.addEventListener("click", () => { exportOptions.hidden = !exportOptions.hidden; exportToggle.setAttribute("aria-expanded", String(!exportOptions.hidden)); });
   exportOptions.addEventListener("click", event => { const button = event.target.closest("[data-export]"); if (button) { exportOptions.hidden = true; exportToggle.setAttribute("aria-expanded", "false"); exportCurrent(button.dataset.export); } });
+  let chartResizeFrame = 0;
+  window.addEventListener("resize", () => {
+    if (!latestAnalytics || chartResizeFrame) return;
+    chartResizeFrame = window.requestAnimationFrame(() => {
+      chartResizeFrame = 0;
+      page.querySelector("[data-overview-grid]").innerHTML = renderOperationalChart(latestAnalytics);
+    });
+  });
   window.addEventListener("popstate", () => { queryState = readURLState(); monthExplicitlySelected = Boolean(queryState.selected_month); activePreset = null; syncForm(); refresh(); });
 
   syncForm(); initDetailCollapses(); initSavedViews(); refresh();

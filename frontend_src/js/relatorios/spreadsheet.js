@@ -136,10 +136,10 @@
     const table = surface.querySelector(".treatment-grid");
     if (!table) return;
     const formulas = {
-      tmp: "TMP l\u00edquido = FETEC ARION \u2212 Abertura ARION \u2212 pausas",
-      ev: "EV = TMP l\u00edquido \u00f7 30, conforme a regra da compet\u00eancia",
+      tmp: "TMP bruto: FETEC OTRS \u2212 Abertura OTRS. TMP efetivo: datas ARION efetivas \u2212 pausas",
+      ev: "EV calculado sobre o TMP bruto; EV efetivo usa o TMP efetivo conforme a regra da compet\u00eancia",
       inter: "Inter ARION = (3 \u00d7 Valor mensal Claro \u00d7 EV efetivo) \u00f7 1440",
-      unavailability: "Indisp ARION = Valor mensal Claro \u00d7 faixa SLA aplicada ao TMP l\u00edquido",
+      unavailability: "Indisp calculada: faixa SLA aplicada ao TMP bruto. Indisp efetiva: faixa SLA aplicada ao TMP efetivo.",
       total: "Total ARION = Inter efetivo + Indisp efetivo + Penal efetiva + valor n\u00e3o cobrado",
     };
     let popover = null;
@@ -469,7 +469,10 @@
       ticketSection.append(identity);
       const evidenceGrid = document.createElement("dl");
       evidenceGrid.className = "drawer-data-grid";
-      [["ISP", data.arion?.isp], ["Origem do ISP", data.origins?.isp], ["Procedência", data.arion?.procedence], ["Origem da procedência", data.origins?.procedence]].forEach(([name, value]) => {
+      [["Abertura OTRS · automática", data.arion?.opening_auto], ["FETEC OTRS · automática", data.arion?.fetec_auto],
+        ["ISP", data.arion?.isp], ["Nome completo", data.arion?.isp_full_name], ["Origem do ISP", data.origins?.isp],
+        ["ConfigItemID da operadora", data.arion?.isp_config_item_id || data.arion?.isp_internal_id], ["Number da operadora", data.arion?.isp_provider_number],
+        ["Procedência", data.arion?.procedence], ["Origem da procedência", data.origins?.procedence]].forEach(([name, value]) => {
         const pair = document.createElement("div"); const term = document.createElement("dt"); const description = document.createElement("dd");
         term.textContent = name; description.textContent = safeText(value); pair.append(term, description); evidenceGrid.append(pair);
       });
@@ -539,7 +542,7 @@
         item.append(meta);
         if (ticket.config_items?.length) {
           const configItems = document.createElement("small");
-          configItems.textContent = `Itens de configuração: ${ticket.config_items.map((item) => `${item.name}${item.isp ? ` (${item.isp})` : ""}`).join(", ")}`;
+          configItems.textContent = `Itens de configuração: ${ticket.config_items.map((item) => `${item.name}${item.isp ? ` · ISP ${item.isp}` : ""}${item.isp_internal_id ? ` · ConfigItemID operadora ${item.isp_internal_id}` : ""}${item.isp_provider_number ? ` · Number operadora ${item.isp_provider_number}` : ""}`).join(", ")}`;
           item.append(configItems);
         }
         allTickets.append(item);
@@ -569,11 +572,41 @@
 
     const totals = data.totals || {};
     content.append(section("Tempo ARION", [
-      ["TMP bruto", totals.tmp_gross === null ? "—" : `${totals.tmp_gross} min`],
+      ["TMP calculado / bruto", totals.tmp_gross === null ? "—" : `${totals.tmp_gross} min`],
       ["Pausas", `${totals.pause_minutes || 0} min`],
-      ["TMP ARION", totals.tmp_net === null ? "—" : `${totals.tmp_net} min`],
+      ["TMP efetivo ARION", totals.tmp_effective === null ? "—" : `${totals.tmp_effective} min`],
       ["EV", `${formatValue(data.calculations?.ev?.calculated, "ev")} calculado · ${formatValue(data.calculations?.ev?.effective, "ev")} efetivo`],
     ]));
+    const pauseSection = data.permissions?.can_edit ? document.createElement("section") : null;
+    if (pauseSection) {
+      pauseSection.className = "drawer-section drawer-pause-section";
+      const pauseHeading = document.createElement("h3"); pauseHeading.textContent = "Pausas"; pauseSection.append(pauseHeading);
+      const pauseTotal = document.createElement("p"); pauseTotal.className = "drawer-pause-total"; pauseTotal.textContent = `Total: ${totals.pause_minutes || 0} min`; pauseSection.append(pauseTotal);
+      const pauseList = document.createElement("ul"); pauseList.className = "drawer-list";
+      (data.pauses || []).forEach((pause) => {
+        const item = document.createElement("li");
+        item.textContent = `${pause.duration} min · ${pause.kind} · ${pause.reason} · Evidência: ${pause.evidence || "—"} · ${pause.created_at} · ${pause.user}`;
+        pauseList.append(item);
+      });
+      if (data.pauses?.length) pauseSection.append(pauseList);
+      const pauseForm = document.createElement("form"); pauseForm.className = "drawer-pause-form"; pauseForm.action = data.form?.pause_url; pauseForm.dataset.drawerPauseForm = "";
+      const pauseVersion = document.createElement("input"); pauseVersion.type = "hidden"; pauseVersion.name = "version"; pauseVersion.value = String(data.version); pauseForm.append(pauseVersion);
+      const kind = label(pauseForm, "Tipo", "kind", "MINUTES", "select", [["MINUTES", "Minutos"], ["INTERVAL", "Intervalo"]]);
+      const minutes = label(pauseForm, "Minutos", "minutes", "", "number"); minutes.min = "1"; minutes.required = true;
+      const interval = document.createElement("div"); interval.className = "drawer-form-grid";
+      label(interval, "Início", "started_at", "", "datetime-local"); label(interval, "Fim", "ended_at", "", "datetime-local");
+      pauseForm.append(details("Mais opções de intervalo", interval));
+      label(pauseForm, "Motivo", "reason", "").required = true;
+      label(pauseForm, "Evidência / observação", "evidence", "").required = true;
+      const pauseSubmit = document.createElement("button"); pauseSubmit.type = "submit"; pauseSubmit.className = "reports-button"; pauseSubmit.textContent = "+ Adicionar pausa";
+      const pauseFeedback = document.createElement("span"); pauseFeedback.className = "drawer-form-feedback"; pauseFeedback.setAttribute("role", "status");
+      pauseForm.append(pauseSubmit, pauseFeedback); pauseSection.append(pauseForm);
+      kind.addEventListener("change", () => {
+        minutes.disabled = kind.value !== "MINUTES";
+        minutes.required = kind.value === "MINUTES";
+      });
+      content.append(pauseSection);
+    }
     const comparison = document.createElement("section");
     comparison.className = "drawer-section drawer-comparison";
     const comparisonHeading = document.createElement("h3"); comparisonHeading.textContent = "Comparação Claro · ARION";
@@ -600,9 +633,10 @@
       treatmentForm.dataset.drawerTreatmentForm = "";
       const version = document.createElement("input"); version.type = "hidden"; version.name = "version"; version.value = String(data.version); treatmentForm.append(version);
       const fieldGrid = document.createElement("div"); fieldGrid.className = "drawer-form-grid";
-      label(fieldGrid, "Abertura ARION", "arion_opening_at", data.arion?.opening_input, "datetime-local");
-      label(fieldGrid, "FETEC ARION", "arion_fetec_at", data.arion?.fetec_input, "datetime-local");
-      label(fieldGrid, "ISP", "isp", data.arion?.isp === "—" ? "" : data.arion?.isp);
+      label(fieldGrid, `Abertura efetiva · origem ${data.origins?.opening || "—"} · OTRS ${data.arion?.opening_auto || "—"}`, "arion_opening_at", data.arion?.opening_input, "datetime-local");
+      label(fieldGrid, `FETEC efetiva · origem ${data.origins?.fetec || "—"} · OTRS ${data.arion?.fetec_auto || "—"}`, "arion_fetec_at", data.arion?.fetec_input, "datetime-local");
+      const ispInput = label(fieldGrid, "ISP", "isp", data.arion?.isp === "ISP não identificado" || data.arion?.isp === "—" ? "" : data.arion?.isp);
+      if (data.arion?.isp_internal_id && data.arion?.isp === "ISP não identificado") ispInput.placeholder = `ID interno CMDB ${data.arion.isp_internal_id} · informe um nome`;
       label(fieldGrid, "Procedência", "procedence", data.arion?.procedence_code, "select", [["UNSPECIFIED", "Não informada"], ["PROCEDENT", "Procedente"], ["IMPROCEDENT", "Improcedente"]]);
       label(fieldGrid, "Causa raiz", "root_cause", data.arion?.root_cause === "—" ? "" : data.arion?.root_cause);
       label(fieldGrid, "Status", "status", data.arion?.status_code, "select", [["PENDING", "Pendente"], ["IN_ANALYSIS", "Em análise"], ["TREATED", "Tratado"], ["REVIEW", "Em revisão"], ["APPROVED", "Aprovado"]]);
@@ -667,27 +701,6 @@
     }
     content.append(details("Cálculos e opções avançadas", calculations));
     if (result) content.append(result);
-
-    if (data.permissions?.can_edit) {
-      const pauseSection = document.createElement("section"); pauseSection.className = "drawer-section drawer-pause-section";
-      const pauseHeading = document.createElement("h3"); pauseHeading.textContent = "Pausas"; pauseSection.append(pauseHeading);
-      const pauseTotal = document.createElement("p"); pauseTotal.className = "drawer-pause-total"; pauseTotal.textContent = `Total: ${totals.pause_minutes || 0} min`; pauseSection.append(pauseTotal);
-      const pauseList = document.createElement("ul"); pauseList.className = "drawer-list";
-      (data.pauses || []).forEach((pause) => { const item = document.createElement("li"); item.textContent = `${pause.duration} min · ${pause.kind} · ${pause.created_at} · ${pause.user}`; pauseList.append(item); });
-      if (data.pauses?.length) pauseSection.append(pauseList);
-      const pauseForm = document.createElement("form"); pauseForm.className = "drawer-pause-form"; pauseForm.action = data.form?.pause_url; pauseForm.dataset.drawerPauseForm = "";
-      const pauseVersion = document.createElement("input"); pauseVersion.type = "hidden"; pauseVersion.name = "version"; pauseVersion.value = String(data.version); pauseForm.append(pauseVersion);
-      const kind = label(pauseForm, "Tipo", "kind", "MINUTES", "select", [["MINUTES", "Minutos"], ["INTERVAL", "Intervalo"]]);
-      label(pauseForm, "Minutos", "minutes", "", "number").min = "1";
-      const interval = document.createElement("div"); interval.className = "drawer-form-grid";
-      label(interval, "Início", "started_at", "", "datetime-local"); label(interval, "Fim", "ended_at", "", "datetime-local");
-      pauseForm.append(details("Mais opções de intervalo", interval));
-      label(pauseForm, "Motivo", "reason", "");
-      const pauseSubmit = document.createElement("button"); pauseSubmit.type = "submit"; pauseSubmit.className = "reports-button"; pauseSubmit.textContent = "+ Adicionar pausa";
-      const pauseFeedback = document.createElement("span"); pauseFeedback.className = "drawer-form-feedback"; pauseFeedback.setAttribute("role", "status");
-      pauseForm.append(pauseSubmit, pauseFeedback); pauseSection.append(pauseForm); content.append(pauseSection);
-      kind.addEventListener("change", () => { pauseForm.querySelector('[name="minutes"]').disabled = kind.value !== "MINUTES"; });
-    }
 
     const advanced = document.createElement("div"); advanced.className = "drawer-advanced-stack";
     if (tickets.length && data.permissions?.can_edit) {
@@ -773,6 +786,14 @@
           const badge = cell.querySelector(".decision-badge");
           if (badge) badge.className = `decision-badge decision-badge--${data.grid.decision_code.toLowerCase()}`;
         }
+      });
+      const titleValues = {
+        isp: data.grid.isp_title, tmp: data.grid.tmp_title, ev: data.grid.ev_title,
+        inter: data.grid.inter_title, indisp: data.grid.indisp_title,
+      };
+      Object.entries(titleValues).forEach(([key, value]) => {
+        const cell = row.querySelector(`[data-column-key="${CSS.escape(key)}"]`);
+        if (cell && value) cell.title = value;
       });
       const editableValues = { isp: data.arion?.isp === "—" ? "" : data.arion?.isp, "arion-opening": data.arion?.opening_input, "arion-fetec": data.arion?.fetec_input, cause: data.arion?.root_cause === "—" ? "" : data.arion?.root_cause, observation: data.arion?.observation === "—" ? "" : data.arion?.observation, procedence: data.arion?.procedence_code, decision: data.arion?.decision_code };
       Object.entries(editableValues).forEach(([key, value]) => { const cell = row.querySelector(`[data-column-key="${CSS.escape(key)}"]`); if (cell && value !== undefined) cell.dataset.value = value; });

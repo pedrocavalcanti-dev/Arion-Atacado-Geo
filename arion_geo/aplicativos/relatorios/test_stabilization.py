@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from aplicativos.auditoria.models import AuditEvent
 from aplicativos.configuracoes.access_control import GROUP_ANALYST, GROUP_MANAGER, GROUP_SYSTEM_ADMIN
-from aplicativos.integracoes.models import CMDBLinkMirror, OTRSTicket, OTRSTicketConfigItem
+from aplicativos.integracoes.models import CMDBLinkMirror, CMDBOperatorMirror, OTRSTicket, OTRSTicketConfigItem
 
 from .models import PenaltyCompetence, PenaltySourceRow, PenaltyTreatmentRow, PenaltyTreatmentTicket
 from .services.competencies import CompetenceAlreadyExists, create_draft_competence
@@ -334,6 +334,43 @@ class TreatmentDrawerAndTicketRelationTests(TestCase):
         client.force_login(analyst)
         self.assertEqual(client.get(url).status_code, 403)
         self.assertEqual(self.client.get(reverse("relatorios:treatment-detail-data", args=(999999,))).status_code, 404)
+
+    def test_drawer_exposes_operator_config_item_id_and_number_separately(self):
+        from .services.treatment import cmdb_isp_identity
+
+        operator = CMDBOperatorMirror.objects.create(
+            source_config_item_id="10013", source_number="36132000705",
+            name="Infonet Provedor (Infotreini Provedores e Informática Ltda)",
+        )
+        link = CMDBLinkMirror.objects.create(
+            source_config_item_id="CI-DRAWER-ISP", isp_raw="10013", operator=operator,
+        )
+        ticket = self.make_ticket("2026100136000301", 99011)
+        OTRSTicketConfigItem.objects.create(
+            ticket=ticket, config_item_id=link.source_config_item_id, cmdb_link=link,
+            relation_type="DependsOn", relation_state="Valid",
+        )
+        identity = cmdb_isp_identity(link)
+        self.treatment.ticket = ticket
+        self.treatment.isp = identity["name"]
+        self.treatment.field_origins = {"isp": PenaltyTreatmentRow.Origin.CMDB}
+        self.treatment.arion_values = {"cmdb_isp_sources": [identity]}
+        self.treatment.save(update_fields=("ticket", "isp", "field_origins", "arion_values"))
+        PenaltyTreatmentTicket.objects.create(
+            treatment=self.treatment, otrs_ticket=ticket,
+            source=PenaltyTreatmentTicket.Source.AUTOMATIC, is_primary=True,
+        )
+
+        response = self.client.get(reverse("relatorios:treatment-detail-data", args=(self.treatment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["arion"]["isp"], "Infonet Provedor")
+        self.assertEqual(payload["arion"]["isp_config_item_id"], "10013")
+        self.assertEqual(payload["arion"]["isp_provider_number"], "36132000705")
+        self.assertEqual(payload["arion"]["isp_full_name"], "Infonet Provedor (Infotreini Provedores e Informática Ltda)")
+        config_item = payload["evidence"]["tickets"][0]["config_items"][0]
+        self.assertEqual(config_item["isp_internal_id"], "10013")
+        self.assertEqual(config_item["isp_provider_number"], "36132000705")
 
     def test_exact_pu_finds_closed_historical_ticket_and_promotes_it_to_primary(self):
         from .services.treatment import enrich_competence

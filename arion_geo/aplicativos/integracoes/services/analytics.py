@@ -6,6 +6,7 @@ from django.db.models.functions import Coalesce
 
 from aplicativos.configuracoes.data_scope import DataScopeService
 from aplicativos.integracoes.models import CMDBLinkMirror, OTRSTicket, OTRSTicketConfigItem
+from aplicativos.integracoes.otrs_queues import CANCELLATION_QUEUE_NAMES, NOC_QUEUE_NAME
 
 
 OPERATIONAL_RESOLUTION_FIELD = "operational_resolution_at"
@@ -30,7 +31,8 @@ class LinkQueryService:
 
 
 class TicketQueryService:
-    QUEUE_NAME = "NOC - ATACADO"
+    QUEUE_NAME = NOC_QUEUE_NAME
+    CANCELLATION_QUEUE_NAMES = CANCELLATION_QUEUE_NAMES
 
     @classmethod
     def noc_tickets(cls):
@@ -38,8 +40,12 @@ class TicketQueryService:
         return OTRSTicket.objects.filter(queue_name=cls.QUEUE_NAME, is_present_in_queue=True)
 
     @staticmethod
-    def base(user=None, *, links=None):
-        tickets = TicketQueryService.noc_tickets()
+    def base(user=None, *, links=None, all_queues=False):
+        # Keep the established NOC universe as the default for existing callers.
+        # Cockpit contexts that explicitly combine operational processes can ask
+        # for all mirrored queues while retaining the same Data Scope boundary.
+        tickets = (OTRSTicket.objects.filter(is_present_in_queue=True)
+                   if all_queues else TicketQueryService.noc_tickets())
         if user is None or DataScopeService.is_global(user):
             return tickets
         allowed = links if links is not None else LinkQueryService.base(user)

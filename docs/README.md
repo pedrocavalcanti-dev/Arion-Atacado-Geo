@@ -17,6 +17,7 @@ Esta pasta é a fonte Markdown da Central web em `/configuracoes/documentacao/`.
 - [Cockpit](funcionalidades/cockpit.md)
 - [Mapa Operacional](funcionalidades/mapa.md)
 - [Ranking de Provedores](funcionalidades/rankings.md)
+- [Central de Relatórios](funcionalidades/relatorios.md)
 - [Base de Links](funcionalidades/base.md)
 - [ARI](funcionalidades/ari.md)
 
@@ -49,6 +50,8 @@ Esta pasta é a fonte Markdown da Central web em `/configuracoes/documentacao/`.
 ## Estudos e tarefas
 
 `estudos/` contém snapshots e pesquisas datadas; não substituem contratos da referência normativa. `tarefas/ATUAL.md` é uma nota histórica de tarefa concluída, não estado de capacidade atual.
+
+O planejamento de evolução está em [Roadmap](ROADMAP.md). Ele registra a próxima release sem substituir a documentação funcional vigente.
 
 ## Ordem sugerida
 

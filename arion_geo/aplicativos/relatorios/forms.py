@@ -152,11 +152,16 @@ class TreatmentEditForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
             self.fields["version"].initial = self.instance.version
+            if self.instance.isp and self.instance.isp.isdecimal():
+                self.initial["isp"] = ""
+                self.fields["isp"].help_text = f"ID interno CMDB {self.instance.isp}; o nome não foi resolvido. Informe um nome para substituir."
         self.fields["amount_not_charged"].required = False
         self.fields["root_cause"].widget.attrs["list"] = "reports-root-causes"
 
     def clean(self):
         data = super().clean()
+        if self.instance.pk and self.instance.isp and self.instance.isp.isdecimal() and not data.get("isp", "").strip():
+            data["isp"] = self.instance.isp
         amount = data.get("amount_not_charged")
         if amount is None:
             data["amount_not_charged"] = amount = 0
@@ -170,7 +175,11 @@ class TreatmentEditForm(forms.ModelForm):
             PenaltyTreatmentRow.Decision.INVALID,
         ) and not data.get("decision_reason", "").strip():
             self.add_error("decision_reason", "Registre a justificativa da decisão financeira.")
-        if (data.get("arion_opening_at") or data.get("arion_fetec_at")) and not data.get("treatment_justification", "").strip():
+        date_fields_changed = self.instance.pk and any(
+            data.get(field) != getattr(self.instance, field)
+            for field in ("arion_opening_at", "arion_fetec_at")
+        )
+        if (date_fields_changed or (not self.instance.pk and (data.get("arion_opening_at") or data.get("arion_fetec_at")))) and not data.get("treatment_justification", "").strip():
             self.add_error("treatment_justification", "Informe a justificativa da tratativa.")
         if self.instance.pk and data.get("status") != self.instance.status and not data.get("treatment_justification", "").strip():
             self.add_error("treatment_justification", "Informe o motivo da alteração de status.")
@@ -188,6 +197,7 @@ class TreatmentPauseForm(forms.Form):
     started_at = forms.DateTimeField(label="Início", required=False, input_formats=("%Y-%m-%dT%H:%M",), widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "reports-input"}, format="%Y-%m-%dT%H:%M"))
     ended_at = forms.DateTimeField(label="Fim", required=False, input_formats=("%Y-%m-%dT%H:%M",), widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "reports-input"}, format="%Y-%m-%dT%H:%M"))
     reason = forms.CharField(label="Motivo", max_length=300, widget=forms.TextInput(attrs={"class": "reports-input"}))
+    evidence = forms.CharField(label="Evidência / observação", max_length=500, widget=forms.TextInput(attrs={"class": "reports-input"}))
 
     def clean(self):
         data = super().clean()

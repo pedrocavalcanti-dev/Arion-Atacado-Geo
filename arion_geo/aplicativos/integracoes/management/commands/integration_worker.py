@@ -12,6 +12,7 @@ from aplicativos.integracoes.models import (
     CMDBLinkMirror, CMDBOperatorMirror, IntegrationRun, IntegrationSyncState,
     OTRSTicket, OTRSTicketConfigItem,
 )
+from aplicativos.integracoes.otrs_queues import COCKPIT_QUEUE_NAMES, queue_signature
 from aplicativos.integracoes.services.sync_lock import LEASE_SECONDS, Lease
 
 
@@ -71,6 +72,12 @@ class Command(BaseCommand):
         ).order_by("-started_at", "-pk").first()
         full_success = otrs_state.last_full_success_at
         full_due = self._run_due(full_run, full_success, self.FULL_CADENCE, now)
+        expected_coverage = f"queues={queue_signature(COCKPIT_QUEUE_NAMES)}"
+        if not full_run or (
+            full_run.status == IntegrationRun.Status.SUCCESS
+            and expected_coverage not in full_run.message
+        ):
+            full_due = True
         if full_due:
             self._due("otrs_full", now, self._otrs_full)
             return  # FULL owns the OTRS lease for this pass; FAST never overlaps it.

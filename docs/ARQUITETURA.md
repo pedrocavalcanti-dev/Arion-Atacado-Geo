@@ -40,9 +40,10 @@ O banco local é ao mesmo tempo estado próprio do produto, cache dos mirrors e 
 | `painel` | Analytics | Dashboard, Cockpit e consultas analíticas | `SavedAnalyticsView` | `services/analytics.py`, views/APIs |
 | `mapa` | Analytics | Agregações por UF e modos geográficos | Sem model de domínio próprio | `services/analytics.py`, views |
 | `rankings` | Analytics | Rankings e exportações | Sem model de domínio próprio | `services.py`, `performance.py`, `exports.py` |
+| `relatorios` | Operacional e analítico | Importação privada e tratativa de Claro Multas | `PenaltyCompetence`, `PenaltySourceRow`, `PenaltyTreatmentRow` e modelos de auditoria financeira | services de importação, cálculo, tratamento e enriquecimento |
 | `ari` | Produto | Conversas e artefatos Preview | `AriConversation`, `AriMessage`, `AriAttachment`, `AriArtifact` | services de conversa, simulação e arquivos |
 
-As pastas `projetos`, `relatorios` e `importacoes` existem no repositório, mas não estão em `INSTALLED_APPS` na configuração atual.
+`projetos` e `importacoes` existem no repositório, mas não estão em `INSTALLED_APPS` na configuração atual. O app `relatorios` está instalado e suas rotas ficam sob `/relatorios/`.
 
 ## Fluxos protegidos
 
@@ -107,6 +108,7 @@ Ranking usa a dimensão Provider/ISP do CMDB mirror. Data Scope é aplicado ante
 | Base | Link/Provider CMDB e relações/tickets OTRS em detalhes de histórico | Não; ações administrativas próprias de importação são legado | Não |
 | Chamados | Tickets/relações OTRS, Links/Providers CMDB, acompanhamento e histórico ARION | Tracking, notas, eventos e filas pessoais | Não |
 | Administração e acesso | User, Group, Permission, escopos, preferências, integrações e auditoria | Formulários administrativos e services correspondentes | Não |
+| Central de Relatórios | Linhas importadas e dados locais de OTRS/CMDB sob enriquecimento explícito | Tratativas, pausas, overrides, decisões e auditoria locais | Somente na ação administrativa de enriquecimento OTRS; nunca em request de leitura |
 | ARI | Conversas, mensagens, anexos e artefatos locais | Services ARI e storage associado | Não |
 
 Os conjuntos variam por tela e indicador; a tabela registra as famílias centrais, não um contrato de que cada view leia todas as tabelas citadas. Veja também [Dashboard](funcionalidades/dashboard.md), [Cockpit](funcionalidades/cockpit.md), [Mapa](funcionalidades/mapa.md), [Rankings](funcionalidades/rankings.md), [Base](funcionalidades/base.md) e [Chamados](funcionalidades/chamados.md).

@@ -90,7 +90,8 @@ As relações, os tipos de coluna e as constraints completas estão em [Banco de
 ## Glossário operacional de contagens
 
 - **Tickets**: quantidade de IDs de chamados distintos no universo, estados, período e filtros definidos pela métrica em questão.
-- **Tickets ativos agora / backlog**: tickets atuais da fila `NOC - ATACADO` presentes no snapshot e com `business_status` em `OPEN`, `PENDING` ou `SCHEDULED`.
+- **Tickets ativos agora / backlog**: tickets presentes no snapshot e com `business_status` em `OPEN`, `PENDING` ou `SCHEDULED`, dentro da fila e do contexto da análise. Dashboard, Chamados e Ranking usam a operação `NOC - ATACADO`; Cockpit também permite Cancelamentos e Geral. Em Cancelamentos/Geral, tickets ativos sem etapa reconhecida são mostrados separadamente como `UNKNOWN`.
+- **Backlog histórico no Cockpit**: série reconstruída por `backlog anterior + novos - encerrados`, disponível apenas quando os timestamps do mirror permitem reconstrução e reconciliação; não substitui o snapshot atual nem representa ciclos completos de reabertura.
 - **Links afetados**: quantidade distinta de Links CMDB locais presentes que têm ao menos uma relação Ticket–ConfigItem válida no conjunto de Tickets contado. Ticket sem CI ou CI sem Link local continua podendo contar como Ticket, mas não produz Link afetado.
 - **Links reincidentes**: quantidade distinta de Links que satisfazem a regra de reincidência do recorte, normalmente pelo menos dois Tickets distintos; não é sinônimo de Links afetados.
 

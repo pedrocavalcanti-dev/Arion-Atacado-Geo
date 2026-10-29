@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from aplicativos.integracoes.models import CMDBLinkMirror, OTRSTicket, OTRSTicketConfigItem
+from aplicativos.integracoes.models import CMDBLinkMirror, CMDBOperatorMirror, OTRSTicket, OTRSTicketConfigItem
 from aplicativos.auditoria.models import AuditEvent
 from .models import PenaltyCompetence, PenaltyFinancialChange, PenaltySourceRow, PenaltyTreatmentOverride, PenaltyTreatmentRow
 from .services.calculations import calculate_treatment, row_has_penalty, source_total_claro
@@ -126,7 +126,8 @@ class ReconciliationTests(TestCase):
             source_created_at=timezone.now() - timedelta(hours=2), resolved_at=timezone.now(),
             responsible_user_id=77,
         )
-        link = CMDBLinkMirror.objects.create(source_config_item_id="ci-123", isp_raw="ATIVANET")
+        operator = CMDBOperatorMirror.objects.create(source_config_item_id="10013", name="FIERCE TELECOM")
+        link = CMDBLinkMirror.objects.create(source_config_item_id="ci-123", isp_raw="10013", operator=operator)
         OTRSTicketConfigItem.objects.create(
             ticket=ticket, config_item_id="ci-123", cmdb_link=link,
             relation_type="DependsOn", relation_state="Valid",
@@ -136,8 +137,10 @@ class ReconciliationTests(TestCase):
         self.assertEqual(result["found"], 1)
         self.assertEqual(row.ticket, ticket)
         self.assertEqual(row.evidence_status, PenaltyTreatmentRow.EvidenceStatus.FOUND)
-        self.assertEqual(row.isp, "ATIVANET")
+        self.assertEqual(row.isp, "FIERCE TELECOM")
         self.assertEqual(row.field_origins["isp"], PenaltyTreatmentRow.Origin.CMDB)
+        self.assertEqual(row.arion_values["cmdb_isp_sources"][0]["id"], "10013")
+        self.assertEqual(row.arion_values["cmdb_isp_sources"][0]["confidence"], "HIGH")
         self.assertEqual(row.arion_opening_origin, PenaltyTreatmentRow.Origin.OTRS)
         self.assertEqual(row.arion_values["otrs_responsible_user_id"], 77)
         self.assertEqual(row.root_cause, "")
@@ -145,6 +148,154 @@ class ReconciliationTests(TestCase):
         self.assertIsNone(financial_change.previous_total)
         self.assertEqual(financial_change.new_total, row.total_arion)
         self.assertEqual(financial_change.source, "ENRICHMENT")
+
+    def test_cmdb_isp_identity_prefers_explicit_attribute_and_structured_operator_name(self):
+        from .services.treatment import cmdb_isp_identity
+
+        explicit_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="CI-ISP-ATTR", isp_raw="Infonet Provedor",
+        )
+        self.assertEqual(cmdb_isp_identity(explicit_link)["name"], "Infonet Provedor")
+        self.assertEqual(cmdb_isp_identity(explicit_link)["confidence"], "HIGH")
+
+        operator = CMDBOperatorMirror.objects.create(
+            source_config_item_id="10013", source_number="36132000705",
+            name="Infonet Provedor (Infotreini Provedores e Informática Ltda)",
+        )
+        explicit_and_related_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="CI-ISP-ATTR-REL", isp_raw="Infonet Provedor", operator=operator,
+        )
+        corroborated = cmdb_isp_identity(explicit_and_related_link)
+        self.assertEqual(corroborated["name"], "Infonet Provedor")
+        self.assertEqual(corroborated["full_name"], "Infonet Provedor (Infotreini Provedores e Informática Ltda)")
+        self.assertEqual(corroborated["confidence"], "HIGH")
+
+        associated_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="CI-ISP-REL", isp_raw="10013", operator=operator,
+        )
+        identity = cmdb_isp_identity(associated_link)
+        self.assertEqual(identity["name"], "Infonet Provedor")
+        self.assertEqual(identity["full_name"], "Infonet Provedor (Infotreini Provedores e Informática Ltda)")
+        self.assertEqual(identity["id"], "10013")
+        self.assertEqual(identity["number"], "36132000705")
+        self.assertEqual(identity["confidence"], "HIGH")
+
+    def test_explicit_isp_attribute_separates_a_trailing_technical_number(self):
+        from .services.treatment import cmdb_isp_identity
+
+        link = CMDBLinkMirror.objects.create(
+            source_config_item_id="CI-ISP-ATTR-ID",
+            isp_raw="Infonet Provedor (Infotreini Provedores e Informática Ltda) (36132000705)",
+        )
+        identity = cmdb_isp_identity(link)
+        self.assertEqual(identity["name"], "Infonet Provedor")
+        self.assertEqual(identity["full_name"], "Infonet Provedor (Infotreini Provedores e Informática Ltda)")
+        self.assertEqual(identity["id"], "36132000705")
+        self.assertEqual(identity["raw_id"], "36132000705")
+        self.assertEqual(identity["confidence"], "HIGH")
+
+    def test_numeric_isp_identifier_without_resolved_provider_is_never_a_name(self):
+        from .services.treatment import cmdb_isp_identity
+
+        link = CMDBLinkMirror.objects.create(source_config_item_id="CI-ISP-UNKNOWN", isp_raw="36132000705")
+        identity = cmdb_isp_identity(link)
+        self.assertEqual(identity["name"], "")
+        self.assertEqual(identity["id"], "36132000705")
+        self.assertEqual(identity["confidence"], "NONE")
+
+    def test_enrichment_preserves_manual_isp_and_refreshes_legacy_numeric_isp(self):
+        row = self.make_row(31, inter="10", indisp="10", provider_unit_price="20260003100")
+        row.isp = "ISP MANUAL"
+        row.field_origins = {"isp": PenaltyTreatmentRow.Origin.MANUAL}
+        row.save(update_fields=("isp", "field_origins"))
+        ticket = OTRSTicket.objects.create(
+            external_id=3100, ticket_number="20260003100", title="ISP refresh test",
+            queue_external_id=1, queue_name="NOC", external_state_id=2,
+            external_state_name="Fechado", business_status="CLOSED",
+        )
+        operator = CMDBOperatorMirror.objects.create(
+            source_config_item_id="10013", name="Infonet Provedor (Infotreini Provedores e Informática Ltda)",
+        )
+        link = CMDBLinkMirror.objects.create(source_config_item_id="CI-3100", isp_raw="10013", operator=operator)
+        OTRSTicketConfigItem.objects.create(
+            ticket=ticket, config_item_id="CI-3100", cmdb_link=link,
+            relation_type="DependsOn", relation_state="Valid",
+        )
+        enrich_competence(self.competence.pk)
+        row.refresh_from_db()
+        self.assertEqual(row.isp, "ISP MANUAL")
+
+        row.isp = "10013"
+        row.field_origins = {"isp": PenaltyTreatmentRow.Origin.CMDB}
+        row.save(update_fields=("isp", "field_origins"))
+        enrich_competence(self.competence.pk)
+        row.refresh_from_db()
+        self.assertEqual(row.isp, "Infonet Provedor")
+        self.assertEqual(row.field_origins["isp"], PenaltyTreatmentRow.Origin.CMDB)
+        self.assertEqual(list(treatment_queryset(self.competence, {"isp": "infonet"})), [row])
+        self.assertEqual(list(treatment_queryset(self.competence, {"isp": "10013"})), [])
+        exported = list(treatment_export_dataset(self.competence))
+        self.assertEqual(exported[0]["ISP"], "Infonet Provedor")
+        self.assertEqual(exported[0]["ISP ID interno CMDB"], "10013")
+
+    def test_enrichment_marks_attribute_operator_divergence_for_review(self):
+        row = self.make_row(34, inter="10", provider_unit_price="20260003400")
+        ticket = OTRSTicket.objects.create(
+            external_id=3400, ticket_number="20260003400", title="ISP divergence test",
+            queue_external_id=1, queue_name="NOC", external_state_id=2,
+            external_state_name="Fechado", business_status="CLOSED",
+        )
+        operator = CMDBOperatorMirror.objects.create(source_config_item_id="10014", name="Provider B")
+        link = CMDBLinkMirror.objects.create(
+            source_config_item_id="CI-3400", isp_raw="10013", operator=operator,
+        )
+        OTRSTicketConfigItem.objects.create(
+            ticket=ticket, config_item_id="CI-3400", cmdb_link=link,
+            relation_type="DependsOn", relation_state="Valid",
+        )
+        enrich_competence(self.competence.pk)
+        row.refresh_from_db()
+        self.assertEqual(row.isp, "")
+        self.assertNotIn("10013", row.arion_values["cmdb_isp_candidates"])
+        self.assertIn("Provider B", row.arion_values["cmdb_isp_candidates"])
+        self.assertEqual(row.arion_values["cmdb_isp_sources"][0]["confidence"], "AMBIGUOUS")
+
+    def test_enrichment_keeps_multiple_providers_ambiguous_and_empty_provider_unidentified(self):
+        row = self.make_row(32, inter="10", provider_unit_price="20260003200")
+        ticket = OTRSTicket.objects.create(
+            external_id=3200, ticket_number="20260003200", title="Multiple ISP test",
+            queue_external_id=1, queue_name="NOC", external_state_id=2,
+            external_state_name="Fechado", business_status="CLOSED",
+        )
+        for index, provider_name in enumerate(("ISP A", "ISP B"), start=1):
+            link = CMDBLinkMirror.objects.create(
+                source_config_item_id=f"CI-320{index}", isp_raw=provider_name,
+            )
+            OTRSTicketConfigItem.objects.create(
+                ticket=ticket, config_item_id=link.source_config_item_id, cmdb_link=link,
+                relation_type="DependsOn", relation_state="Valid",
+            )
+        result = enrich_competence(self.competence.pk)
+        row.refresh_from_db()
+        self.assertGreaterEqual(result["ambiguous"], 1)
+        self.assertEqual(row.isp, "")
+        self.assertEqual(set(row.arion_values["cmdb_isp_candidates"]), {"ISP A", "ISP B"})
+
+        empty_row = self.make_row(33, inter="10", provider_unit_price="20260003300")
+        empty_ticket = OTRSTicket.objects.create(
+            external_id=3300, ticket_number="20260003300", title="Missing ISP test",
+            queue_external_id=1, queue_name="NOC", external_state_id=2,
+            external_state_name="Fechado", business_status="CLOSED",
+        )
+        empty_link = CMDBLinkMirror.objects.create(source_config_item_id="CI-3300", isp_raw="")
+        OTRSTicketConfigItem.objects.create(
+            ticket=empty_ticket, config_item_id="CI-3300", cmdb_link=empty_link,
+            relation_type="DependsOn", relation_state="Valid",
+        )
+        enrich_competence(self.competence.pk)
+        empty_row.refresh_from_db()
+        self.assertEqual(empty_row.isp, "")
+        self.assertNotIn("cmdb_isp_candidates", empty_row.arion_values)
 
     def test_enrichment_does_not_overwrite_manual_values_and_marks_missing_ticket(self):
         row = self.make_row(2, inter="10", provider_unit_price="20260009999")

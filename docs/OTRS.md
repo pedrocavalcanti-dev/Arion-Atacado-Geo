@@ -8,7 +8,34 @@ A integração conecta ao MySQL do OTRS com uma conta dedicada de leitura. O cli
 
 ## Fila e sincronização
 
-O worker sincroniza a fila exata `NOC - ATACADO`. OTRS FAST busca alterações recentes a cada 2 minutos; OTRS FULL reconcilia a fila a cada 30 minutos. `IntegrationLease` evita execução concorrente. Falha ou timeout preserva o último snapshot local e não deve ser interpretado como fila vazia.
+O worker sincroniza o conjunto configurado para o Cockpit: `NOC - ATACADO`, `NOC - CANCELAMENTOS NGO`, `NOC - RETIRA EQUIPAMENTO` e `NOC – PENDENTE PAGAMENTO` (travessão no nome real). FAST busca alterações recentes a cada 2 minutos; FULL reconcilia todas as filas a cada 30 minutos e quando a cobertura muda. `IntegrationLease` evita execução concorrente. Falha ou timeout preserva o último snapshot local e não deve ser interpretado como fila vazia. O comando `sincronizar_otrs --apply` aplica a leitura no mirror local; a conta e o client remotos continuam somente leitura.
+
+`OTRS_NOC_ATACADO_QUEUE_URL` é um deep link para `AgentKPISearch;Profile=251_2`, usado para abrir a fila na interface web. Ele não filtra a sincronização: `OTRSSyncService` resolve os nomes canônicos de fila e consulta `ticket.queue_id`. A cobertura dos quatro conjuntos é persistida no registro FULL e exigida antes do FAST.
+
+O pipeline analítico do Cockpit é:
+
+```text
+OTRS (somente leitura)
+→ sincronizador FAST/FULL
+→ mirror local
+→ normalização de estados e campos
+→ classificação operacional por fila/estado
+→ analytics local com Data Scope
+→ Cockpit
+```
+
+O Cockpit não abre conexão OTRS ao carregar a tela. FAST mantém o mirror incremental; FULL reconcilia a cobertura configurada e serve como carga/reconstrução quando necessário. Falhas preservam o último snapshot válido.
+
+## Perfis operacionais de cancelamento
+
+Os perfis de referência são definições da tabela `kpi`, coluna JSON `search`; não são `search_profile` e não são usados como identidade de ticket no runtime:
+
+- `681_58` / KPI 681: fila `NOC - CANCELAMENTOS NGO`, estado `em atendimento`.
+- `725_58` / KPI 725: a mesma fila, estados `agendado`, `pendente aprovação`, `pendente cliente endereço não localizado`, `pendente cliente local fechado`, `Pendente`, `pendente operadora` e `pendente outros`.
+- `680_58` / KPI 680: fila `NOC - RETIRA EQUIPAMENTO`, os estados operacionais `agendado`, `merged`, `aguardando aprovação do gestor`, `aguardando aprovação do solicitante`, `em atendimento`, `new`, `pendente aprovação`, `pendente cliente endereço não localizado`, `pendente cliente local fechado`, `Pendente`, `pendente operadora`, `pendente outros` e `Projeto Especial`.
+- `697_58` / KPI 697: fila `NOC – PENDENTE PAGAMENTO`, com os mesmos 13 estados operacionais.
+
+As definições foram localizadas em `kpi.search`, não em `search_profile`. Os quatro perfis não têm filtros ativos de serviço, tipo, responsável ou Dynamic Field. Na consulta somente leitura de 29/10/2026 encontraram 28, 2, 4 e 0 tickets, sem duplicidade entre resultados. O filtro de Pagamento executou com sucesso; no mesmo snapshot, essa fila tinha 221 `closed successful` e 1 `cancelado`, sem ticket nos estados ativos do perfil. Essas contagens são a fotografia datada da inspeção, não valores permanentes. O nome oficial da fila de pagamento usa travessão (`NOC – PENDENTE PAGAMENTO`); o código conserva a grafia antiga com hífen apenas como alias para registros já espelhados, e novas resoluções usam o nome exato da origem.
 
 Os tickets locais preservam a identidade externa do OTRS. `ticket.id` é a chave técnica externa e `ticket.tn` é o número apresentado ao usuário; o ARION não os trata como a mesma coluna. Relações Ticket–ConfigItem são espelhadas separadamente para que um ticket associado a vários itens continue navegável. Saída da fila não significa, por si só, que o ticket foi fechado.
 
@@ -26,6 +53,12 @@ Configure host, schema, usuário read-only e segredo na Central de Integrações
 
 O procedimento de operação e recuperação está em [Worker e Sincronização](WORKER-E-SINCRONIZACAO.md). Os campos e regras de identidade estão em [Dicionário de Dados](DICIONARIO-DE-DADOS.md), e a relação entre OTRS e os demais mirrors está em [Fontes de Dados](FONTES-DE-DADOS.md).
 
+Zero em uma métrica significa que a sincronização FULL requerida foi aplicada com sucesso e nenhum ticket corresponde ao recorte. Sem FULL válido com a cobertura esperada, a origem é “não sincronizada”; o Cockpit informa essa condição e não apresenta a ausência de dados como zero operacional.
+
+
+## Histórico de filas e etapas
+
+O OTRS mantém eventos `Move` e `StateUpdate` em `ticket_history`. Eles mostram mudanças reais de fila e estado, mas ainda não são persistidos no mirror como uma sequência por ticket. Por isso, o Cockpit não calcula duração histórica por etapa e não substitui a data de criação por uma data de entrada em fila que não esteja materializada no espelho. A lista atual usa o estado e a fila do snapshot; `CLOSED` fica fora do estoque.
 
 ## Estado oficial e término operacional
 

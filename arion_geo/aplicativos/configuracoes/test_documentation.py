@@ -130,7 +130,7 @@ class DocumentationPortalTests(TestCase):
         project = DocumentationService.get("projeto")
         self.assertEqual(project["title"], "Projeto — ARION ATACADO GEO")
         self.assertNotIn("<h1", project["body"])
-        self.assertEqual(len(DOCUMENTS), 26)
+        self.assertEqual(len(DOCUMENTS), 28)
 
     def test_search_terms_find_current_operational_documents(self):
         cases = {

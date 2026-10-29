@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from aplicativos.auditoria.services import AuditService
 from aplicativos.integracoes.models import Integration, IntegrationRun, IntegrationSyncState, OTRSTicket, OTRSTicketConfigItem, OTRSStateMapping
+from aplicativos.integracoes.otrs_queues import COCKPIT_QUEUE_NAMES, queue_signature
 from aplicativos.integracoes.services.errors import IntegrationError
 from aplicativos.integracoes.services.otrs_sync import OTRSSyncService
 from aplicativos.integracoes.views import _otrs_client
@@ -11,17 +12,17 @@ from aplicativos.integracoes.services.sync_lock import Lease
 
 
 class Command(BaseCommand):
-    help = "Sincroniza o espelho local da fila OTRS solicitada, em leitura somente no OTRS."
+    help = "Sincroniza o espelho local das filas OTRS selecionadas, em leitura somente no OTRS."
 
     def add_arguments(self, parser):
-        parser.add_argument("--queue", default="NOC - ATACADO", help="Nome exato da fila OTRS.")
+        parser.add_argument("--queue", action="append", dest="queues", help="Nome exato da fila OTRS. Pode ser repetido; por padrão usa as filas do Cockpit.")
         mode = parser.add_mutually_exclusive_group()
         mode.add_argument("--fast", action="store_true", help="Sincroniza somente tickets alterados desde o cursor, com janela de 2 minutos.")
-        mode.add_argument("--full", action="store_true", help="Reconcilia a fila completa (padrão).")
+        mode.add_argument("--full", action="store_true", help="Reconcilia as filas selecionadas por completo (padrão).")
         group = parser.add_mutually_exclusive_group()
         group.add_argument("--dry-run", action="store_true", dest="dry_run", help="Calcula as alterações sem gravar no espelho.")
         parser.add_argument("--scheduler-lease", action="store_true", help="Lease held by integration_worker.")
-        group.add_argument("--apply", action="store_true", help="Aplica o snapshot local depois de uma leitura completa.")
+        group.add_argument("--apply", action="store_true", help="Aplica o resultado da leitura no espelho local.")
 
     def handle(self, *args, **options):
         key = "otrs"
@@ -41,10 +42,23 @@ class Command(BaseCommand):
     def _execute(self, *args, **options):
         apply = bool(options.get("apply"))
         fast = bool(options.get("fast"))
-        queue_name = options["queue"]
+        queue_names = tuple(dict.fromkeys(options.get("queues") or COCKPIT_QUEUE_NAMES))
+        if set(queue_names) == set(COCKPIT_QUEUE_NAMES):
+            queue_names = COCKPIT_QUEUE_NAMES
+        queue_label = "|".join(queue_names)
+        if fast and queue_names != COCKPIT_QUEUE_NAMES:
+            raise CommandError("FAST usa o cursor compartilhado do Cockpit; sincronize o conjunto completo de filas configurado.")
         state, _ = IntegrationSyncState.objects.get_or_create(key="otrs")
         if fast and state.change_cursor is None:
             raise CommandError("Cursor OTRS inexistente; execute primeiro uma reconciliação completa.")
+        if fast:
+            full_coverage = IntegrationRun.objects.filter(
+                operation=IntegrationRun.Operation.OTRS_FULL_SYNC,
+                status=IntegrationRun.Status.SUCCESS,
+            ).order_by("-started_at", "-pk").first()
+            expected_coverage = f"queues={queue_signature(COCKPIT_QUEUE_NAMES)}"
+            if not full_coverage or expected_coverage not in full_coverage.message:
+                raise CommandError("O conjunto de filas do Cockpit mudou; execute uma sincronização FULL antes do FAST.")
         try:
             integration = Integration.objects.get(key=Integration.Key.OTRS)
             client = _otrs_client(integration)
@@ -61,14 +75,14 @@ class Command(BaseCommand):
                 raise CommandError(f"Não foi possível descobrir o database OTRS ({type(exc).__name__}).") from None
 
         operation = IntegrationRun.Operation.OTRS_FAST_SYNC if fast else IntegrationRun.Operation.OTRS_FULL_SYNC
-        run = IntegrationRun.objects.create(integration=integration, operation=operation, status=IntegrationRun.Status.RUNNING, message=("Fast " if fast else "Full ") + ("Apply " if apply else "Dry-run ") + queue_name[:210])
+        run = IntegrationRun.objects.create(integration=integration, operation=operation, status=IntegrationRun.Status.RUNNING, message=("Fast " if fast else "Full ") + ("Apply " if apply else "Dry-run ") + f"queues={queue_signature(queue_names)}"[:210])
         state.last_started_at = run.started_at
         state.save(update_fields=("last_started_at", "updated_at"))
-        AuditService.record(category="INTEGRATION", action="SYNC_STARTED", description="Sincronização OTRS iniciada", obj=run, module="Integrações", metadata={"source": "OTRS", "run_id": run.pk, "queue": queue_name, "mode": "apply" if apply else "dry-run"})
+        AuditService.record(category="INTEGRATION", action="SYNC_STARTED", description="Sincronização OTRS iniciada", obj=run, module="Integrações", metadata={"source": "OTRS", "run_id": run.pk, "queues": list(queue_names), "mode": "apply" if apply else "dry-run"})
         service = OTRSSyncService(client, progress=self.stdout.write)
         try:
             with client.read_only_session():
-                result = service.run(queue_name, apply=apply, changed_since=state.change_cursor if fast else None)
+                result = service.run(queue_names=queue_names, apply=apply, changed_since=state.change_cursor if fast else None)
             run.status = IntegrationRun.Status.SUCCESS
             run.records_found = result["tickets"]["found"] + result["relations"]["found"]
             run.records_processed = result["tickets"]["processed"] + result["relations"]["processed"]
@@ -91,7 +105,7 @@ class Command(BaseCommand):
                 if not fast:
                     state.last_full_success_at = run.finished_at
                 state.save()
-            AuditService.record(category="INTEGRATION", action="SYNC_COMPLETED", description="Sincronização OTRS concluída", obj=run, module="Integrações", metadata={"source": "OTRS", "run_id": run.pk, "queue": queue_name, "counts": {"tickets": result["tickets"]["found"], "relations": result["relations"]["found"], "created": run.records_created, "updated": run.records_updated, "stale": run.records_stale}, "duration_ms": run.duration_ms})
+            AuditService.record(category="INTEGRATION", action="SYNC_COMPLETED", description="Sincronização OTRS concluída", obj=run, module="Integrações", metadata={"source": "OTRS", "run_id": run.pk, "queues": list(queue_names), "counts": {"tickets": result["tickets"]["found"], "relations": result["relations"]["found"], "created": run.records_created, "updated": run.records_updated, "stale": run.records_stale}, "duration_ms": run.duration_ms})
         except Exception as exc:
             run.status = IntegrationRun.Status.FAILED
             run.records_failed = 1
@@ -105,8 +119,11 @@ class Command(BaseCommand):
             AuditService.record(category="INTEGRATION", action="SYNC_FAILED", description="Sincronização OTRS falhou", result="FAILURE", obj=run, module="Integrações", metadata={"source": "OTRS", "run_id": run.pk, "error_type": type(exc).__name__})
             raise CommandError(f"Sincronização OTRS cancelada ({type(exc).__name__}); snapshot local anterior preservado.") from None
 
-        self.stdout.write(self.style.SUCCESS(f"OTRS {'APLICADO' if apply else 'DRY-RUN'} concluído: fila={result['queue']['name']} id={result['queue']['id']}."))
+        self.stdout.write(self.style.SUCCESS(f"OTRS {'APLICADO' if apply else 'DRY-RUN'} concluído: filas={queue_label}."))
         self.stdout.write(f"Tickets: encontrados={result['tickets']['found']}; criados={result['tickets']['created']}; atualizados={result['tickets']['updated']}; inalterados={result['tickets']['unchanged']}; ausentes da fila={result['tickets']['stale']}.")
+        self.stdout.write("Tickets por fila: " + "; ".join(
+            f"{item['name']}={item['tickets']}" for item in result.get("tickets_by_queue", ())
+        ))
         self.stdout.write(f"Ticket-CI: {result['relations']['found']}; criadas={result['relations']['created']}; atualizadas={result['relations']['updated']}; ausentes={result['relations']['stale']}; ConfigItem sem Link local={result['relations']['unresolved_link']}.")
         terminal = result["ticket_terminal_fields"]
         self.stdout.write(f"Campos de fechamento sincronizados: CodigoFechamento={terminal['closing_code_filled']}; ticketResolvido={terminal['resolved_at_filled']}; data terminal StateUpdate={terminal['terminal_at_filled']}.")
@@ -123,7 +140,8 @@ class Command(BaseCommand):
 
     @staticmethod
     def _summary(result, apply):
-        return ("Apply" if apply else "Dry-run") + f"; queue={result['queue']['name']} id={result['queue']['id']}; tickets={result['tickets']['found']}; relations={result['relations']['found']}; open={result['business_open']}; warnings={len(result['warnings'])}"
+        queues = queue_signature(tuple(item["name"] for item in result["queues"]))
+        return ("Apply" if apply else "Dry-run") + f"; queues={queues}; tickets={result['tickets']['found']}; relations={result['relations']['found']}; open={result['business_open']}; warnings={len(result['warnings'])}"
 
     def _print_local_proof(self):
         current = OTRSTicket.objects.filter(is_present_in_queue=True)

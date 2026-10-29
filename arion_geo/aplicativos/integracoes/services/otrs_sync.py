@@ -17,8 +17,18 @@ from .sync_common import clean, integer_or_none, normalized_name, source_datetim
 logger = logging.getLogger(__name__)
 IDENTIFIER = re.compile(r"^[A-Za-z0-9_$]+$")
 BUSINESS_STATES = {
+    "new": OTRSStateMapping.BusinessStatus.OPEN,
+    "merged": OTRSStateMapping.BusinessStatus.CLOSED,
     "em atendimento": OTRSStateMapping.BusinessStatus.OPEN,
     "pendente": OTRSStateMapping.BusinessStatus.PENDING,
+    "pendente aprovacao": OTRSStateMapping.BusinessStatus.PENDING,
+    "pendente cliente endereco nao localizado": OTRSStateMapping.BusinessStatus.PENDING,
+    "pendente cliente local fechado": OTRSStateMapping.BusinessStatus.PENDING,
+    "pendente operadora": OTRSStateMapping.BusinessStatus.PENDING,
+    "pendente outros": OTRSStateMapping.BusinessStatus.PENDING,
+    "aguardando aprovacao do gestor": OTRSStateMapping.BusinessStatus.PENDING,
+    "aguardando aprovacao do solicitante": OTRSStateMapping.BusinessStatus.PENDING,
+    "projeto especial": OTRSStateMapping.BusinessStatus.OPEN,
     "agendado": OTRSStateMapping.BusinessStatus.SCHEDULED,
     "resolvido": OTRSStateMapping.BusinessStatus.RESOLVED,
     "closed successful": OTRSStateMapping.BusinessStatus.CLOSED,
@@ -128,7 +138,10 @@ class OTRSSyncService:
             raise ValueError(f"A fila exata '{queue_name}' não foi encontrada de forma única.")
         return _number(_val(exact[0], "id")), clean(_val(exact[0], "name"))
 
-    def _tickets(self, queue_id, *, changed_since=None, known_ids=()):
+    def _tickets(self, queue_ids, *, changed_since=None, known_ids=()):
+        queue_ids = tuple(dict.fromkeys(_number(value) for value in queue_ids if _number(value) is not None))
+        if not queue_ids:
+            return []
         fields = (
             ("id", "id", True), ("tn", "tn", True), ("title", "title", False),
             ("queue_id", "queue_id", True), ("state_id", "ticket_state_id", True),
@@ -146,15 +159,17 @@ class OTRSSyncService:
             if quoted:
                 selected.append(f"{quoted} AS `{alias}`")
         queue_column = self._column("ticket", "queue_id", required=True)
-        where = f"{queue_column} = %s"
-        params = [queue_id]
+        queue_marks = ",".join(["%s"] * len(queue_ids))
+        queue_filter = f"{queue_column} IN ({queue_marks})"
+        where = queue_filter
+        params = list(queue_ids)
         if changed_since is not None:
             change_column = self._column("ticket", "change_time", required=True)
             id_column = self._column("ticket", "id", required=True)
             known_ids = tuple(known_ids)
             marks = ",".join(["%s"] * len(known_ids)) or "NULL"
-            where = f"(({queue_column} = %s) OR ({id_column} IN ({marks}))) AND {change_column} >= %s"
-            params = [queue_id, *known_ids, changed_since]
+            where = f"(({queue_filter}) OR ({id_column} IN ({marks}))) AND {change_column} >= %s"
+            params = [*queue_ids, *known_ids, changed_since]
         sql = f"SELECT {', '.join(selected)} FROM {self._table('ticket')} WHERE {where}"
         rows = self.client.execute_select(sql, tuple(params))
         if any(_number(_val(row, "id")) is None or not clean(_val(row, "tn")) for row in rows):
@@ -225,7 +240,7 @@ class OTRSSyncService:
     def _state_status(name):
         return BUSINESS_STATES.get(normalized_name(name), OTRSStateMapping.BusinessStatus.UNKNOWN)
 
-    def _normalize_tickets(self, ticket_rows, queue_id, queue_name, dimensions, state_type_map, now):
+    def _normalize_tickets(self, ticket_rows, queue_names_by_id, selected_queue_ids, dimensions, state_type_map, now):
         statuses = Counter()
         mappings = {}
         warnings = []
@@ -239,7 +254,12 @@ class OTRSSyncService:
             mappings[state_id] = {"external_state_id": state_id, "external_name": name, "external_type": state_type, "business_status": status, "is_configured": status != OTRSStateMapping.BusinessStatus.UNKNOWN, "source_last_seen_at": now}
         normalized = []
         dimension_maps = {key: self._dimension_map(dimensions[key]) for key in ("priorities", "types", "services", "slas")}
+        selected_queue_ids = set(selected_queue_ids)
         for row in ticket_rows:
+            current_queue_id = _number(_val(row, "queue_id"))
+            queue_name = queue_names_by_id.get(current_queue_id, "")
+            if not queue_name:
+                raise ValueError(f"Fila OTRS atual sem nome resolvido para ticket {_number(_val(row, 'id'))}.")
             state_id = _number(_val(row, "state_id"))
             state_map = mappings.get(state_id)
             state_name = state_map["external_name"] if state_map else ""
@@ -257,7 +277,7 @@ class OTRSSyncService:
             sla_id, sla_name = dim_value("sla_id", "slas")
             normalized.append({
                 "external_id": _number(_val(row, "id")), "ticket_number": clean(_val(row, "tn"), 80),
-                "title": clean(_val(row, "title"), 500), "queue_external_id": _number(_val(row, "queue_id")) or queue_id, "queue_name": queue_name,
+                "title": clean(_val(row, "title"), 500), "queue_external_id": current_queue_id or 0, "queue_name": queue_name,
                 "external_state_id": state_id or 0, "external_state_name": state_name, "external_state_type": state_type,
                 "business_status": status, "is_business_open": status in OPEN_STATUSES,
                 "external_priority_id": priority_id, "priority_name": priority_name,
@@ -273,7 +293,7 @@ class OTRSSyncService:
                 "escalation_solution_time": _number(_val(row, "escalation_solution_time")),
                 "source_created_at": source_datetime(_val(row, "create_time")),
                 "source_changed_at": source_datetime(_val(row, "change_time")),
-                "is_present_in_queue": (_number(_val(row, "queue_id")) == queue_id),
+                "is_present_in_queue": current_queue_id in selected_queue_ids,
             })
         # Log only state names and counts; never titles or customer details.
         for warning in sorted(set(warnings)):
@@ -411,9 +431,15 @@ class OTRSSyncService:
         return {"found": len(rows), "processed": len(rows), "created": created, "updated": updated, "unchanged": unchanged, "failed": 0}
 
     @staticmethod
-    def _upsert_tickets(rows, *, now, apply, reconcile=True):
+    def _upsert_tickets(rows, *, now, apply, reconcile=True, reconcile_queue_ids=None):
         source_ids = {row["external_id"] for row in rows}
-        existing_qs = OTRSTicket.objects.all() if reconcile else OTRSTicket.objects.filter(external_id__in=source_ids)
+        if reconcile and reconcile_queue_ids is not None:
+            existing_qs = (
+                OTRSTicket.objects.filter(queue_external_id__in=reconcile_queue_ids)
+                | OTRSTicket.objects.filter(external_id__in=source_ids)
+            )
+        else:
+            existing_qs = OTRSTicket.objects.all() if reconcile else OTRSTicket.objects.filter(external_id__in=source_ids)
         existing = {obj.external_id: obj for obj in existing_qs}
         fields = tuple(rows[0].keys()) if rows else ()
         create, update, created, updated, unchanged = [], [], 0, 0, 0
@@ -432,7 +458,12 @@ class OTRSSyncService:
             for key, value in values.items():
                 setattr(current, key, value)
             update.append(current)
-        stale_ids = [obj.pk for obj in existing.values() if reconcile and obj.is_present_in_queue and obj.external_id not in source_ids]
+        reconcile_queue_ids = None if reconcile_queue_ids is None else set(reconcile_queue_ids)
+        stale_ids = [
+            obj.pk for obj in existing.values()
+            if reconcile and obj.is_present_in_queue and obj.external_id not in source_ids
+            and (reconcile_queue_ids is None or obj.queue_external_id in reconcile_queue_ids)
+        ]
         if apply:
             OTRSTicket.objects.bulk_create(create, batch_size=500)
             OTRSTicket.objects.bulk_update(update, fields=[*fields, "source_last_seen_at", "source_synced_at", "is_present_in_queue"], batch_size=500)
@@ -519,14 +550,29 @@ class OTRSSyncService:
                 OTRSTicketConfigItem.objects.filter(pk__in=stale_ids).update(is_present_in_source=False)
         return {"found": found_count, "processed": len(relations), "created": created, "updated": updated, "unchanged": unchanged, "stale": len(stale_ids), "failed": 0, "unresolved_link": sum(1 for row in relations if normalized_name(row["config_item_id"]) not in links_by_ci)}
 
-    def run(self, queue_name="NOC - ATACADO", *, apply=False, changed_since=None, safety_window=120):
+    def run(self, queue_name="NOC - ATACADO", *, queue_names=None, apply=False, changed_since=None, safety_window=120):
         started = time.perf_counter()
         queries_before = getattr(self.client, "select_queries_count", 0)
         self._discover()
-        queue_id, resolved_queue = self._queue(queue_name)
-        if queue_id != 107:
-            self.progress(f"[OTRS] Aviso: fila resolvida por nome com id={queue_id}; estudo anterior observou 107.")
-        self.progress(f"[OTRS] Fila {resolved_queue} encontrada: id={queue_id}.")
+        if queue_names is not None:
+            requested_queue_names = tuple(queue_names)
+        elif isinstance(queue_name, str):
+            requested_queue_names = (queue_name,)
+        else:
+            requested_queue_names = tuple(queue_name or ())
+        requested_queue_names = tuple(dict.fromkeys(clean(name) for name in requested_queue_names if clean(name)))
+        if not requested_queue_names:
+            raise ValueError("Informe ao menos uma fila OTRS para sincronizar.")
+
+        queues = [self._queue(name) for name in requested_queue_names]
+        queue_ids = tuple(queue_id for queue_id, _name in queues)
+        if len(set(queue_ids)) != len(queue_ids):
+            raise ValueError("Filas OTRS diferentes resolveram para o mesmo identificador.")
+        queue_names_by_id = {queue_id: name for queue_id, name in queues}
+        for queue_id, resolved_queue in queues:
+            if resolved_queue == "NOC - ATACADO" and queue_id != 107:
+                self.progress(f"[OTRS] Aviso: fila resolvida por nome com id={queue_id}; estudo anterior observou 107.")
+            self.progress(f"[OTRS] Fila {resolved_queue} encontrada: id={queue_id}.")
 
         dimensions = {
             "states": self._dimension("ticket_state", with_type=True),
@@ -539,7 +585,10 @@ class OTRSSyncService:
         state_type_map = self._dimension_map(type_rows)
         now = timezone.now()
         is_incremental = changed_since is not None
-        known_ids = tuple(OTRSTicket.objects.values_list("external_id", flat=True)) if is_incremental else ()
+        known_ids = tuple(
+            OTRSTicket.objects.filter(is_present_in_queue=True, queue_external_id__in=queue_ids)
+            .values_list("external_id", flat=True)
+        ) if is_incremental else ()
         query_changed_since = changed_since
         if is_incremental:
             from datetime import timedelta
@@ -550,9 +599,36 @@ class OTRSSyncService:
                 changed_since.isoformat(), query_changed_since.isoformat(),
                 safety_window, timezone.get_default_timezone_name(),
             )
-        ticket_source_rows = self._tickets(queue_id, changed_since=query_changed_since, known_ids=known_ids)
+        ticket_source_rows = self._tickets(queue_ids, changed_since=query_changed_since, known_ids=known_ids)
         self.progress(f"[OTRS] Tickets atuais encontrados: {len(ticket_source_rows)}.")
-        tickets, state_mappings, status_counts, warnings = self._normalize_tickets(ticket_source_rows, queue_id, resolved_queue, dimensions, state_type_map, now)
+        source_queue_ids = {_number(_val(row, "queue_id")) for row in ticket_source_rows}
+        unmapped_queue_ids = source_queue_ids - set(queue_names_by_id)
+        if unmapped_queue_ids:
+            queue_id_column = self._column("queue", "id", required=True)
+            marks = ",".join(["%s"] * len(unmapped_queue_ids))
+            queue_rows = self._select(
+                "queue", (("id", "id"), ("name", "name")),
+                where=f"{queue_id_column} IN ({marks})", params=tuple(sorted(unmapped_queue_ids)),
+            )
+            queue_names_by_id.update({
+                _number(_val(row, "id")): clean(_val(row, "name"))
+                for row in queue_rows if _number(_val(row, "id")) is not None and clean(_val(row, "name"))
+            })
+        if source_queue_ids - set(queue_names_by_id):
+            raise ValueError("A fila atual de um ticket não pôde ser resolvida pelo nome.")
+        queue_ticket_counts = Counter(
+            queue_names_by_id[_number(_val(row, "queue_id"))]
+            for row in ticket_source_rows
+        )
+        queue_ticket_summary = [
+            {"name": name, "id": queue_id, "tickets": queue_ticket_counts.get(name, 0)}
+            for queue_id, name in queues
+        ]
+        for item in queue_ticket_summary:
+            self.progress(f"[OTRS] Fila {item['name']}: {item['tickets']} tickets retornados.")
+        tickets, state_mappings, status_counts, warnings = self._normalize_tickets(
+            ticket_source_rows, queue_names_by_id, queue_ids, dimensions, state_type_map, now,
+        )
         ticket_terminal_fields, terminal_field_counts = self._ticket_terminal_fields(ticket_source_rows, dimensions)
         for ticket in tickets:
             ticket.update(ticket_terminal_fields.get(ticket["external_id"], {}))
@@ -585,9 +661,18 @@ class OTRSSyncService:
         number_owners = {ticket.ticket_number: ticket.external_id for ticket in OTRSTicket.objects.filter(ticket_number__in=[row["ticket_number"] for row in tickets])}
         if any(number_owners.get(row["ticket_number"], row["external_id"]) != row["external_id"] for row in tickets):
             raise ValueError("TN já pertence a outro ID externo local; reconciliação cancelada.")
+        affected_ticket_ids = {item["external_id"] for item in tickets}
+        if not is_incremental:
+            affected_ticket_ids.update(
+                OTRSTicket.objects.filter(is_present_in_queue=True, queue_external_id__in=queue_ids)
+                .values_list("external_id", flat=True)
+            )
         with transaction.atomic() if apply else _NullContext():
             mapping_counts = self._upsert_dimension(OTRSStateMapping, state_mappings, apply=apply)
-            ticket_counts_summary = self._upsert_tickets(tickets, now=now, apply=apply, reconcile=not is_incremental)
+            ticket_counts_summary = self._upsert_tickets(
+                tickets, now=now, apply=apply, reconcile=not is_incremental,
+                reconcile_queue_ids=queue_ids if not is_incremental else None,
+            )
             if apply:
                 ticket_map = {row.external_id: row for row in OTRSTicket.objects.filter(external_id__in=[row["external_id"] for row in tickets])}
             else:
@@ -598,12 +683,15 @@ class OTRSSyncService:
                 }
             relation_counts_summary = self._upsert_relations(
                 relation_rows, ticket_map=ticket_map, now=now, apply=apply,
-                affected_ticket_ids=[item["external_id"] for item in tickets] if is_incremental else None,
+                affected_ticket_ids=sorted(affected_ticket_ids),
             )
 
         status_counts = {key: status_counts.get(key, 0) for key in OTRSStateMapping.BusinessStatus.values}
         result = {
-            "status": "APPLIED" if apply else "DRY_RUN", "queue": {"name": resolved_queue, "id": queue_id},
+            "status": "APPLIED" if apply else "DRY_RUN",
+            "queue": {"name": queues[0][1], "id": queues[0][0]},
+            "queues": [{"name": name, "id": queue_id} for queue_id, name in queues],
+            "tickets_by_queue": queue_ticket_summary,
             "tickets": ticket_counts_summary, "relations": relation_counts_summary, "state_mappings": mapping_counts,
             "ticket_terminal_fields": terminal_field_counts,
             "relation_stats": relation_stats,

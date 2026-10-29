@@ -284,8 +284,11 @@ def _pdf_report(generated, generated_by, result, filter_rows):
     if filter_rows:
         story.append(table([[para("Filtro"), para("Valor")]] + [[para(key), para(value)] for key, value in filter_rows],
                            [48 * mm, content_width - 48 * mm]))
-    story.append(para("A m\u00e9trica exclui tickets cancelados e estados n\u00e3o classificados.", "ArionSmall")
-                 if result["metric"] != "canceled_tickets" else para("Consulta espec\u00edfica de tickets cancelados.", "ArionSmall"))
+    if result.get("scope") != "support":
+        story.append(para(result.get("metric_semantics", "Consulta operacional do escopo selecionado."), "ArionSmall"))
+    else:
+        story.append(para("A m\u00e9trica exclui tickets cancelados e estados n\u00e3o classificados.", "ArionSmall")
+                     if result["metric"] != "canceled_tickets" else para("Consulta espec\u00edfica de tickets cancelados.", "ArionSmall"))
     if result.get("comparison"):
         comparison = result["comparison"]
         story.append(para(f"Per\u00edodo anterior ({comparison['previous_start']} a {comparison['previous_end']}): {fmt(comparison['previous_value'])}; varia\u00e7\u00e3o {fmt(comparison['absolute_change'])} ({fmt(comparison['percentage_change'])}%).", "ArionSmall"))
@@ -374,11 +377,13 @@ def analytics_export(request):
         filter_labels = {
             "status": "Status", "source_state": "Situa\u00e7\u00e3o OTRS", "provider": "Provedor", "uf": "UF",
             "sla": "SLA", "priority": "Prioridade", "service": "Servi\u00e7o", "termination_reason": "Motivo",
+            "stage": "Etapa", "origin": "Origem", "project": "Projeto / cliente",
         }
         raw_filters = result["normalized_query"]["filters"]
         options = result["options"]
         period_text = result["description"]["period"]
-        filter_rows = [("Per\u00edodo", period_text), ("Base temporal", result["period_date_label"]),
+        scope_label = {"support": "Suporte", "cancellation": "Cancelamentos", "general": "Geral"}.get(result["scope"], result["scope"])
+        filter_rows = [("Contexto", scope_label), ("Per\u00edodo", period_text), ("Base temporal", result["period_date_label"]),
                        ("M\u00e9trica", result["metric_label"])]
         for key, label in filter_labels.items():
             selected = raw_filters.get(key)
@@ -395,8 +400,11 @@ def analytics_export(request):
         if result.get("comparison"):
             comp = result["comparison"]
             filter_rows.append(("Per\u00edodo comparado", f"{comp['previous_start']} a {comp['previous_end']}"))
-        if result["metric"] != "canceled_tickets" and raw_filters.get("status") not in {"CANCELED", "UNKNOWN"}:
-            filter_rows.append(("Regra operacional", "A m\u00e9trica exclui tickets cancelados e estados n\u00e3o classificados"))
+        if result.get("scope") == "support":
+            if result["metric"] != "canceled_tickets" and raw_filters.get("status") not in {"CANCELED", "UNKNOWN"}:
+                filter_rows.append(("Regra operacional", "A m\u00e9trica exclui tickets cancelados e estados n\u00e3o classificados"))
+        else:
+            filter_rows.append(("Regra operacional", result.get("metric_semantics", "Escopo operacional do Cockpit")))
         group_slug = slugify(result["group_by"]) or "resultado"
         ticket_headers = ["ticket", "data_base", "created_at", "status", "otrs_state", "closing_reason", "closing_reason_raw", "provider", "uf",
                           "priority", "sla", "source", "config_item", "number", "designation", "circuit"]

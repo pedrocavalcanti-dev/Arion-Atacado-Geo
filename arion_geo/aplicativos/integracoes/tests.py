@@ -113,7 +113,7 @@ class IntegrationConfigurationTests(TestCase):
             password.assert_called_once()
             test_connection.assert_called_once()
 
-    @patch("aplicativos.integracoes.views.get_secret_protector")
+    @patch("aplicativos.integracoes.clients.factory.get_secret_protector")
     def test_otrs_client_receives_decrypted_plaintext_and_normalized_connection_options(self, get_protector):
         get_protector.return_value = self.protector
         integration = Integration.objects.create(
@@ -232,9 +232,9 @@ class IntegrationConfigurationTests(TestCase):
     def test_home_and_detail_pages_render_without_exposing_database_path(self):
         home = self.client.get(reverse("configuracoes:integrations"))
         self.assertEqual(home.status_code, 200)
-        self.assertContains(home, "NOC ATACADO")
-        self.assertContains(home, "INTEGRAÇÕES")
-        self.assertContains(home, "Voltar para Configurações")
+        self.assertContains(home, "NOC - ATACADO")
+        self.assertContains(home, "Central de Integrações")
+        self.assertContains(home, "Voltar para Configura&ccedil;&otilde;es")
         self.assertContains(home, "Pesquisar integração")
         self.assertNotContains(home, 'class="settings-sidebar"')
         self.assertContains(home, "CMDB ServiceUp")

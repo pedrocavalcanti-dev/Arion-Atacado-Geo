@@ -1,7 +1,8 @@
-from datetime import date, datetime, timezone as datetime_timezone
+from datetime import date, datetime, timedelta, timezone as datetime_timezone
 from io import BytesIO
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
@@ -13,10 +14,20 @@ from django.urls import reverse
 from unittest.mock import patch
 from aplicativos.configuracoes.models import GroupDataScope
 from aplicativos.base_links.models import Operadora, Projeto
-from aplicativos.integracoes.models import CMDBLinkMirror, CMDBOperatorMirror, OTRSTicket, OTRSTicketConfigItem
+from aplicativos.integracoes.models import (
+    CMDBLinkMirror, CMDBOperatorMirror, Integration, IntegrationRun,
+    IntegrationSyncState, OTRSTicket, OTRSTicketConfigItem,
+)
+from aplicativos.integracoes.otrs_queues import (
+    COCKPIT_QUEUE_NAMES, PAYMENT_PENDING_QUEUE_NAME, queue_signature,
+)
+from aplicativos.integracoes.services.cancellation import classify_cancellation_stage
 from aplicativos.integracoes.services.analytics import TicketQueryService
 from aplicativos.integracoes.services.semantics import LinkSemantics
-from .services.analytics import AnalyticsQueryService, DashboardAnalyticsService
+from .services.analytics import (
+    AnalyticsQueryService, DashboardAnalyticsService, _operational_buckets,
+    resolve_time_granularity,
+)
 
 
 class MirrorAnalyticsTests(TestCase):
@@ -468,6 +479,336 @@ class MirrorAnalyticsTests(TestCase):
         self.assertEqual(result["options"]["status"], [{"value": "OPEN", "label": "Em atendimento"}])
         self.assertEqual(result["breakdown"][0], {"key": "em atendimento", "dimension": "Em atendimento", "value": 1, "share": 100.0})
         self.assertEqual(result["value"], 1)
+
+    def test_cockpit_cancellation_scope_classifies_stages_and_filters_the_stage(self):
+        stages = (
+            ("REQUEST", "NOC - CANCELAMENTOS NGO", "em atendimento", "OPEN"),
+            ("TREATMENT", "NOC - CANCELAMENTOS NGO", "pendente operadora", "PENDING"),
+            ("EQUIPMENT_REMOVAL", "NOC - RETIRA EQUIPAMENTO", "pendente operadora", "PENDING"),
+            ("PAYMENT_PENDING", PAYMENT_PENDING_QUEUE_NAME, "em atendimento", "OPEN"),
+        )
+        for index, (_stage, queue, state_name, status) in enumerate(stages, start=1801):
+            ticket = self._ticket(index, status, True, 5)
+            ticket.queue_name = queue
+            ticket.external_state_name = state_name
+            ticket.external_state_type = "pending reminder" if status == "PENDING" else "open"
+            ticket.title = "Chamado operacional"
+            ticket.save(update_fields=("queue_name", "external_state_name", "external_state_type", "title"))
+
+        payload = {"scope": "cancellation", "metric": "tickets", "group_by": "cancellation_stage",
+                   "start": "2026-10-01", "end": "2026-10-31", "filters": {}}
+        result = AnalyticsQueryService().query(payload, user=self.user)
+        self.assertEqual(result["ticket_result_total"], 4)
+        self.assertEqual([item["value"] for item in result["operational"]["primary_kpis"]], [1, 1, 1, 1])
+        self.assertEqual(result["normalized_query"]["scope"], "cancellation")
+        filtered = AnalyticsQueryService().query({**payload, "metric": "backlog",
+                                                  "filters": {"stage": "EQUIPMENT_REMOVAL"}}, user=self.user)
+        self.assertEqual(filtered["ticket_result_total"], 1)
+        self.assertEqual(filtered["tickets"][0]["queue"], "NOC - RETIRA EQUIPAMENTO")
+        self.assertEqual(filtered["tickets"][0]["operational_stage_label"], "Retirada de equipamento")
+        self.assertEqual(result["operational"]["unknown_active"], 0)
+        self.assertTrue(result["operational"]["stage_reconciliation"])
+        self.assertFalse(result["source_sync"]["available"])
+
+    def test_cancellation_classifier_matches_saved_profile_rules_and_keeps_unknown_visible(self):
+        cases = (
+            ("NOC - CANCELAMENTOS NGO", "Em Atendimento", "OPEN", "open", "REQUEST"),
+            ("NOC - CANCELAMENTOS NGO", "pendente operadora", "PENDING", "pending reminder", "TREATMENT"),
+            ("NOC - CANCELAMENTOS NGO", "pendente aprova\u00e7\u00e3o", "PENDING", "pending reminder", "TREATMENT"),
+            ("NOC - RETIRA EQUIPAMENTO", "pendente operadora", "PENDING", "pending reminder", "EQUIPMENT_REMOVAL"),
+            (PAYMENT_PENDING_QUEUE_NAME, "em atendimento", "OPEN", "open", "PAYMENT_PENDING"),
+            ("NOC - PENDENTE PAGAMENTO", "em atendimento", "OPEN", "open", "PAYMENT_PENDING"),
+            ("NOC - CANCELAMENTOS NGO", "closed successful", "CLOSED", "closed", "CLOSED"),
+            ("NOC - CANCELAMENTOS NGO", "new", "OPEN", "open", "UNKNOWN"),
+            ("NOC - ATACADO", "em atendimento", "OPEN", "open", ""),
+        )
+        for queue, state, status, state_type, expected in cases:
+            with self.subTest(queue=queue, state=state):
+                ticket = SimpleNamespace(
+                    queue_name=queue, external_state_name=state,
+                    business_status=status, external_state_type=state_type,
+                    title="Cancelamento em andamento",
+                )
+                self.assertEqual(classify_cancellation_stage(ticket), expected)
+
+    def test_cancellation_unknown_active_ticket_is_in_backlog_aging_and_drilldown(self):
+        ticket = self._ticket(1808, "UNKNOWN", False, 5)
+        ticket.queue_name = "NOC - CANCELAMENTOS NGO"
+        ticket.external_state_name = "estado novo pendente de mapeamento"
+        ticket.external_state_type = "pending reminder"
+        ticket.title = "Ticket para conciliação de estado"
+        ticket.save(update_fields=("queue_name", "external_state_name", "external_state_type", "title"))
+        payload = {
+            "scope": "cancellation", "metric": "backlog", "group_by": "cancellation_stage",
+            "start": "2026-10-01", "end": "2026-10-31", "filters": {},
+        }
+
+        result = AnalyticsQueryService().query(payload, user=self.user)
+
+        self.assertEqual(result["value"], 1)
+        self.assertEqual(result["ticket_result_total"], 1)
+        self.assertEqual(result["tickets"][0]["ticket"], ticket.ticket_number)
+        self.assertEqual(result["tickets"][0]["operational_stage"], "UNKNOWN")
+        self.assertEqual(result["operational"]["unknown_active"], 1)
+        self.assertEqual(result["operational"]["current"]["cancellation"], 1)
+        self.assertTrue(result["operational"]["stage_reconciliation"])
+        self.assertEqual(result["operational"]["primary_kpis"][-1]["stage"], "UNKNOWN")
+        self.assertEqual(result["operational"]["primary_kpis"][-1]["value"], 1)
+        self.assertEqual(sum(item["total"] for item in result["operational"]["aging"]), 1)
+
+        drilled = AnalyticsQueryService().query({
+            **payload, "filters": {"stage": "UNKNOWN"},
+        }, user=self.user)
+        self.assertEqual(drilled["ticket_result_total"], 1)
+        self.assertEqual(drilled["tickets"][0]["ticket"], ticket.ticket_number)
+
+    def test_cockpit_source_status_requires_an_applied_full_run_with_current_queue_coverage(self):
+        integration, _ = Integration.objects.get_or_create(key=Integration.Key.OTRS)
+        now = datetime(2026, 10, 29, 12, tzinfo=datetime_timezone.utc)
+        state = IntegrationSyncState.objects.create(
+            key="otrs", last_success_at=now, last_full_success_at=now,
+        )
+        IntegrationRun.objects.create(
+            integration=integration,
+            operation=IntegrationRun.Operation.OTRS_FULL_SYNC,
+            status=IntegrationRun.Status.SUCCESS,
+            message="Apply; queues=NOC - ATACADO",
+        )
+        self.assertFalse(AnalyticsQueryService._source_sync_status()["available"])
+
+        IntegrationRun.objects.create(
+            integration=integration,
+            operation=IntegrationRun.Operation.OTRS_FULL_SYNC,
+            status=IntegrationRun.Status.SUCCESS,
+            message=f"Apply; queues={queue_signature(COCKPIT_QUEUE_NAMES)}",
+        )
+        source_status = AnalyticsQueryService._source_sync_status()
+        self.assertTrue(source_status["available"])
+        self.assertEqual(source_status["last_sync_at"], now.isoformat())
+
+    def test_cockpit_general_scope_deduplicates_support_and_cancellations_with_origin(self):
+        support = self._ticket(1811, "OPEN", True, 5)
+        support.title = "Falha de conectividade"
+        support.save(update_fields=("title",))
+        overlap = self._ticket(1812, "OPEN", True, 5)
+        overlap.title = "Cancelamento em tratativa"
+        overlap.save(update_fields=("title",))
+        request = self._ticket(1813, "OPEN", True, 5)
+        request.queue_name = "NOC - CANCELAMENTOS NGO"
+        request.external_state_name = "em atendimento"
+        request.external_state_type = "open"
+        request.title = "Solicitação"
+        request.save(update_fields=("queue_name", "external_state_name", "external_state_type", "title"))
+
+        result = AnalyticsQueryService().query({
+            "scope": "general", "metric": "backlog", "group_by": "operational_origin",
+            "start": "2026-10-01", "end": "2026-10-31", "filters": {},
+        }, user=self.user)
+        self.assertEqual(result["ticket_result_total"], 3)
+        self.assertEqual(result["operational"]["current"], {
+            "total": 3, "support": 2, "cancellation": 1, "open": 3, "pending": 0,
+        })
+        self.assertEqual({row["dimension"]: row["value"] for row in result["detail"]}, {
+            "Suporte": 2, "Cancelamentos": 1,
+        })
+        self.assertEqual(len({row["ticket"] for row in result["tickets"]}), 3)
+
+    def test_cockpit_cancellation_export_keeps_scope_kpis_and_mirror_rows(self):
+        request = self._ticket(1814, "OPEN", True, 5)
+        request.queue_name = "NOC - CANCELAMENTOS NGO"
+        request.external_state_name = "em atendimento"
+        request.external_state_type = "open"
+        request.title = "Solicitação"
+        request.save(update_fields=("queue_name", "external_state_name", "external_state_type", "title"))
+        payload = {"scope": "cancellation", "metric": "tickets", "group_by": "cancellation_stage",
+                   "start": "2026-10-01", "end": "2026-10-31", "filters": {}}
+        result = AnalyticsQueryService().query(payload, user=self.user)
+        self.assertEqual(result["kpis"][0]["label"], "Solicita\u00e7\u00f5es")
+        self.assertEqual(result["kpis"][0]["value"], 1)
+        response = self.client.post(reverse("analytics-export"), data=json.dumps({
+            **payload, "format": "pdf",
+        }), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_cockpit_operational_series_is_hourly_for_one_day_and_aging_counts_only_active_tickets(self):
+        now = datetime(2026, 10, 5, 6, tzinfo=datetime_timezone.utc)
+        opened = self._ticket(1821, "OPEN", True, 5)
+        opened.source_created_at = now - timedelta(hours=3)
+        opened.save(update_fields=("source_created_at",))
+        pending = self._ticket(1822, "PENDING", True, 5)
+        pending.source_created_at = now - timedelta(hours=5)
+        pending.save(update_fields=("source_created_at",))
+        old = self._ticket(1823, "OPEN", True, 4)
+        old.source_created_at = now - timedelta(hours=30)
+        old.save(update_fields=("source_created_at",))
+        closed = self._ticket(1824, "RESOLVED", False, 5)
+        closed.source_created_at = now - timedelta(hours=3)
+        closed.resolved_at = now - timedelta(hours=2)
+        closed.terminal_state_at = now - timedelta(hours=2)
+        closed.save(update_fields=("source_created_at", "resolved_at", "terminal_state_at"))
+
+        with patch("django.utils.timezone.now", return_value=now):
+            result = AnalyticsQueryService().query({
+                "scope": "support", "metric": "tickets", "group_by": "status",
+                "start": "2026-10-05", "end": "2026-10-05", "filters": {},
+            }, user=self.user)
+        series = result["operational"]["series"]
+        self.assertEqual(result["operational"]["grain"], "hour")
+        self.assertEqual([item["label"] for item in series], [f"{hour:02d}h" for hour in range(24)])
+        self.assertEqual((series[0]["entries"], series[0]["closed"], series[0]["balance"]), (2, 0, 2))
+        self.assertEqual((series[1]["entries"], series[1]["closed"], series[1]["balance"]), (0, 1, -1))
+        aging = {item["key"]: item["total"] for item in result["operational"]["aging"]}
+        self.assertEqual(aging["0-4"], 1)
+        self.assertEqual(aging["4-8"], 1)
+        self.assertEqual(aging["24-48"], 1)
+        self.assertEqual(sum(aging.values()), 3)
+        self.assertTrue(result["operational"]["backlog"]["available"])
+        self.assertEqual(result["operational"]["backlog"]["final"], sum(aging.values()))
+        long_range = AnalyticsQueryService().query({
+            "scope": "support", "metric": "tickets", "group_by": "status",
+            "start": "2026-10-01", "end": "2026-12-31", "filters": {},
+        }, user=self.user)
+        self.assertEqual(long_range["operational"]["granularity"], "month")
+        self.assertEqual([point["key"] for point in long_range["operational"]["series"]], ["2026-10", "2026-11", "2026-12"])
+        self.assertFalse(long_range["operational"]["backlog"]["available"])
+        self.assertTrue(all(point["backlog"] is None for point in long_range["operational"]["series"]))
+
+    def test_operational_granularity_and_labels_scale_with_the_period(self):
+        cases = (
+            (date(2026, 10, 29), date(2026, 10, 29), "hour"),
+            (date(2026, 10, 23), date(2026, 10, 29), "day"),
+            (date(2026, 10, 16), date(2026, 10, 29), "day"),
+            (date(2026, 10, 15), date(2026, 10, 29), "week"),
+            (date(2026, 10, 1), date(2026, 10, 30), "week"),
+            (date(2026, 8, 31), date(2026, 10, 29), "week"),
+            (date(2026, 8, 30), date(2026, 10, 29), "month"),
+            (date(2026, 8, 1), date(2026, 10, 29), "month"),
+            (date(2026, 1, 1), date(2026, 12, 31), "month"),
+        )
+        for start, end, expected in cases:
+            self.assertEqual(resolve_time_granularity(start, end), expected)
+
+        hourly_grain, hourly = _operational_buckets(date(2026, 10, 29), date(2026, 10, 29))
+        self.assertEqual(hourly_grain, "hour")
+        self.assertEqual(len(hourly), 24)
+        self.assertEqual([point[1] for point in hourly], [f"{hour:02d}h" for hour in range(24)])
+
+        month_grain, months = _operational_buckets(date(2026, 1, 1), date(2026, 10, 29))
+        self.assertEqual(month_grain, "month")
+        self.assertEqual([point[1] for point in months], ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out"])
+        cross_year_grain, cross_year = _operational_buckets(date(2025, 11, 1), date(2026, 2, 28))
+        self.assertEqual(cross_year_grain, "month")
+        self.assertEqual([point[1] for point in cross_year], ["Nov/25", "Dez/25", "Jan/26", "Fev/26"])
+
+    def test_backlog_reconstructs_initial_flow_final_and_current_aging(self):
+        baseline_at = datetime(2026, 10, 4, 12, tzinfo=datetime_timezone.utc)
+        closed_at = datetime(2026, 10, 7, 15, tzinfo=datetime_timezone.utc)
+        for index in range(30):
+            status = "CLOSED" if index < 2 else "OPEN"
+            ticket = self._ticket(1900 + index, status, status == "OPEN", 4)
+            ticket.source_created_at = baseline_at
+            if status == "CLOSED":
+                ticket.resolved_at = closed_at
+                ticket.terminal_state_at = closed_at
+            ticket.save(update_fields=("source_created_at", "resolved_at", "terminal_state_at"))
+        for index in range(5):
+            ticket = self._ticket(1940 + index, "OPEN", True, 6)
+            ticket.source_created_at = datetime(2026, 10, 6, 12, tzinfo=datetime_timezone.utc)
+            ticket.save(update_fields=("source_created_at",))
+
+        result = AnalyticsQueryService().query({
+            "scope": "support", "metric": "tickets", "start": "2026-10-05",
+            "end": "2026-10-10", "filters": {},
+        }, user=self.user)
+        operational = result["operational"]
+        self.assertTrue(operational["backlog"]["available"])
+        self.assertEqual(operational["period"]["backlog_initial"], 30)
+        self.assertEqual(operational["period"]["entries"], 5)
+        self.assertEqual(operational["period"]["closed"], 2)
+        self.assertEqual(operational["period"]["net"], 3)
+        self.assertEqual(operational["period"]["backlog_final"], 33)
+        self.assertEqual([item["value"] for item in operational["primary_kpis"]], [30, 5, 2, 33])
+        self.assertEqual(operational["series"][-1]["backlog"], 33)
+        self.assertEqual(sum(item["total"] for item in operational["aging"]), operational["current"]["total"])
+        self.assertEqual(operational["current"]["total"], operational["period"]["backlog_final"])
+
+    def test_backlog_counts_same_period_creation_and_closure_without_changing_stock(self):
+        for index in range(10):
+            ticket = self._ticket(1960 + index, "OPEN", True, 4)
+            ticket.source_created_at = datetime(2026, 10, 4, 12, tzinfo=datetime_timezone.utc)
+            ticket.save(update_fields=("source_created_at",))
+        same_period = self._ticket(1970, "CLOSED", False, 6)
+        same_period.source_created_at = datetime(2026, 10, 6, 12, tzinfo=datetime_timezone.utc)
+        same_period.resolved_at = datetime(2026, 10, 8, 15, tzinfo=datetime_timezone.utc)
+        same_period.terminal_state_at = same_period.resolved_at
+        same_period.save(update_fields=("source_created_at", "resolved_at", "terminal_state_at"))
+
+        result = AnalyticsQueryService().query({
+            "scope": "support", "metric": "tickets", "start": "2026-10-05",
+            "end": "2026-10-10", "filters": {},
+        }, user=self.user)["operational"]
+        self.assertEqual(result["period"]["entries"], 1)
+        self.assertEqual(result["period"]["closed"], 1)
+        self.assertEqual(result["period"]["net"], 0)
+        self.assertEqual(result["period"]["backlog_initial"], 10)
+        self.assertEqual(result["period"]["backlog_final"], 10)
+
+    def test_backlog_counts_older_tickets_closed_during_period_and_net_reduction(self):
+        closed_at = datetime(2026, 10, 7, 15, tzinfo=datetime_timezone.utc)
+        for index in range(9):
+            ticket = self._ticket(1981 + index, "CLOSED", False, 4)
+            ticket.source_created_at = datetime(2026, 10, 4, 12, tzinfo=datetime_timezone.utc)
+            ticket.resolved_at = closed_at
+            ticket.terminal_state_at = closed_at
+            ticket.save(update_fields=("source_created_at", "resolved_at", "terminal_state_at"))
+        for index in range(4):
+            ticket = self._ticket(1991 + index, "OPEN", True, 6)
+            ticket.source_created_at = datetime(2026, 10, 6, 12, tzinfo=datetime_timezone.utc)
+            ticket.save(update_fields=("source_created_at",))
+
+        result = AnalyticsQueryService().query({
+            "scope": "support", "metric": "tickets", "start": "2026-10-05",
+            "end": "2026-10-10", "filters": {},
+        }, user=self.user)["operational"]
+        self.assertEqual(result["period"]["backlog_initial"], 9)
+        self.assertEqual(result["period"]["entries"], 4)
+        self.assertEqual(result["period"]["closed"], 9)
+        self.assertEqual(result["period"]["net"], -5)
+        self.assertEqual(result["period"]["backlog_final"], 4)
+
+    def test_backlog_uses_canceled_at_for_canceled_ticket_closure(self):
+        for index in range(3):
+            ticket = self._ticket(2000 + index, "OPEN", True, 4)
+            ticket.source_created_at = datetime(2026, 10, 4, 12, tzinfo=datetime_timezone.utc)
+            ticket.save(update_fields=("source_created_at",))
+        canceled = self._ticket(2003, "CANCELED", False, 4)
+        canceled.source_created_at = datetime(2026, 10, 3, 12, tzinfo=datetime_timezone.utc)
+        canceled.terminal_state_at = datetime(2026, 10, 7, 15, tzinfo=datetime_timezone.utc)
+        canceled.canceled_at = datetime(2026, 10, 8, 15, tzinfo=datetime_timezone.utc)
+        canceled.save(update_fields=("source_created_at", "terminal_state_at", "canceled_at"))
+
+        result = AnalyticsQueryService().query({
+            "scope": "support", "metric": "tickets", "start": "2026-10-05",
+            "end": "2026-10-10", "filters": {},
+        }, user=self.user)["operational"]
+        self.assertEqual(result["period"]["backlog_initial"], 4)
+        self.assertEqual(result["period"]["closed"], 1)
+        self.assertEqual(result["period"]["backlog_final"], 3)
+        closed_by_day = {point["key"]: point["closed"] for point in result["series"]}
+        self.assertEqual(closed_by_day["2026-10-07"], 0)
+        self.assertEqual(closed_by_day["2026-10-08"], 1)
+
+    def test_backlog_hides_history_before_the_first_reliable_mirror_date(self):
+        ticket = self._ticket(1980, "OPEN", True, 5)
+        result = AnalyticsQueryService().query({
+            "scope": "support", "metric": "tickets", "start": "2026-10-01",
+            "end": "2026-10-29", "filters": {},
+        }, user=self.user)["operational"]
+        self.assertFalse(result["backlog"]["available"])
+        self.assertEqual(result["backlog"]["history_start"], "2026-10-05")
+        self.assertIsNone(result["period"]["backlog_initial"])
+        self.assertTrue(all(item["backlog"] is None for item in result["series"]))
 
     def test_cockpit_page_starts_with_noc_filters_and_paged_results(self):
         response = self.client.get(reverse("cockpit"))
@@ -1215,17 +1556,17 @@ class MirrorAnalyticsTests(TestCase):
         temporal = body.index('aria-labelledby="cockpit-visual-title"')
         secondary = body.index('id="cockpit-secondary-sections"')
         self.assertLess(temporal, secondary)
-        for key in ("dimensions", "distribution", "tickets"):
+        for key in ("aging", "dimensions", "distribution", "tickets"):
             self.assertIn(f'data-collapse-toggle="{key}"', body)
             self.assertIn(f'data-collapse-panel="{key}"', body)
-        self.assertIn('data-details-global aria-expanded="true" aria-controls="cockpit-secondary-sections"', body)
+        self.assertIn('data-details-global aria-expanded="true" aria-controls="cockpit-aging-panel cockpit-secondary-sections"', body)
         self.assertIn('data-analysis-title', body)
         self.assertIn('data-current-period', body)
 
         static_root = Path(settings.BASE_DIR) / "static"
         script = (Path(settings.BASE_DIR.parent) / "frontend_src" / "js" / "painel" / "cockpit.js").read_text(encoding="utf-8")
         styles = (static_root / "css" / "painel" / "cockpit.css").read_text(encoding="utf-8")
-        self.assertIn('DETAIL_COLLAPSE_DEFAULTS = { dimensions: false, distribution: true, tickets: false }', script)
+        self.assertIn('DETAIL_COLLAPSE_DEFAULTS = { aging: false, dimensions: false, distribution: true, tickets: false }', script)
         self.assertIn("sessionStorage", script)
         self.assertIn('setDetailCollapsed("tickets", false)', script)
         self.assertIn('scrollIntoView({ behavior, block: "start" })', script)
@@ -1410,15 +1751,33 @@ class MirrorAnalyticsTests(TestCase):
         response = self.client.post(reverse("analytics-export"), data=json.dumps({"format": "csv"}), content_type="application/json")
         self.assertEqual(response.status_code, 403)
 
-    def test_cockpit_chart_keeps_months_in_one_scrollable_row(self):
-        template = Path("arion_geo/static/css/painel/cockpit.css").read_text(encoding="utf-8")
+    def test_cockpit_operational_chart_has_view_modes_and_no_temporal_scroll_row(self):
+        styles = Path("arion_geo/static/css/painel/cockpit.css").read_text(encoding="utf-8")
         script = (Path(settings.BASE_DIR.parent) / "frontend_src" / "js" / "painel" / "cockpit.js").read_text(encoding="utf-8")
-        self.assertIn("grid-template-columns: repeat(var(--series-count, 12)", template)
-        self.assertIn("data-chart-key=", script)
-        self.assertIn(".cockpit-chart { overflow-x: auto; }", template)
-        self.assertIn("min-width: 760px", template)
+        template = Path("arion_geo/templates/painel/cockpit.html").read_text(encoding="utf-8")
+        for mode in ("all", "created", "closed", "backlog"):
+            self.assertIn(f'data-chart-view="{mode}"', template)
+        self.assertIn('data-chart-origin="consolidated" aria-pressed="true">Consolidado', template)
+        self.assertIn('data-chart-origin="origin" aria-pressed="false">Por origem', template)
+        self.assertIn(".cockpit-ops-point-grid", styles)
+        self.assertIn("data-chart-view", script)
+        self.assertIn('chart_view', script)
+        self.assertNotIn("cockpit-ops-scroll", styles + script)
+        operational_render = script[script.index("function renderOperationalChart"):script.index("function renderAgingChart")]
+        self.assertNotIn('class="cockpit-chart"', operational_render)
         self.assertIn("data.chart_specs", script)
-        self.assertIn("--series-count:${values.length}", script)
+        self.assertIn("--series-count:${rows.length}", script)
+        self.assertIn("class=\"cockpit-ops-bar-value\"", operational_render)
+        self.assertIn("value > 0 ? `<span class=\"cockpit-ops-bar-value\"", operational_render)
+        self.assertIn('const originMode = general && queryState.chart_origin === "origin"', operational_render)
+        self.assertIn('const entryDefs = originMode ? entryOriginDefs : [["entries", "Novos", "entries"]]', operational_render)
+        self.assertIn('const closedDefs = originMode ? closedOriginDefs : [["closed", "Encerrados", "closed"]]', operational_render)
+        self.assertIn("mode === \"backlog\" && points.filter(Boolean).length <= 8", operational_render)
+        self.assertIn("mode === \"backlog\" && lastBacklogIndex >= 0 ? [lastBacklogIndex]", operational_render)
+        self.assertIn('definitions = mode === "created" ? [[entriesKey, "Novos"', operational_render)
+        self.assertIn('mode === "created" ? `<small>Novos:', operational_render)
+        self.assertIn('mode === "closed" ? `<small>Encerrados:', operational_render)
+        self.assertIn("const visualHeight = grain === \"hour\" ? 260 : 268", operational_render)
 
     def test_cockpit_api_uses_real_query_and_rejects_bad_payload(self):
         ticket = self._ticket(104, "OPEN", True, 5)

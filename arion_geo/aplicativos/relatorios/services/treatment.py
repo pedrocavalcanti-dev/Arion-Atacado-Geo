@@ -146,18 +146,21 @@ def treatment_queryset(competence, params=None):
     filters = {
         "cliente": ("source_row__canonical_data__client__icontains", 100),
         "uf": ("source_row__canonical_data__uf__iexact", 8),
-        "isp": ("isp__icontains", 160),
         "causa": ("root_cause__icontains", 240),
     }
     for param, (field, limit) in filters.items():
         value = (params.get(param) or "").strip()[:limit]
         if value:
             rows = rows.filter(**{field: value})
+    isp_filter = (params.get("isp") or "").strip()[:160]
+    if isp_filter:
+        # ISP filters accept business labels only; a numeric query is a technical ID.
+        rows = rows.none() if isp_filter.isdecimal() else rows.filter(isp__icontains=isp_filter)
     ticket = params.get("ticket", "")
     if ticket == "sem":
         rows = rows.filter(evidence_status__in=(PenaltyTreatmentRow.EvidenceStatus.NOT_FOUND, PenaltyTreatmentRow.EvidenceStatus.NOT_CHECKED))
     if params.get("isp_ausente") == "1":
-        rows = rows.filter(Q(isp="") | Q(isp__isnull=True))
+        rows = rows.filter(Q(isp="") | Q(isp__isnull=True) | Q(isp__regex=r"^\d+$"))
     if params.get("pausa") == "1":
         rows = rows.filter(pauses__isnull=False).distinct()
     if params.get("override") == "1":
@@ -409,6 +412,69 @@ def _auto_allowed(value, origin):
     return origin in (PenaltyTreatmentRow.Origin.OTRS, PenaltyTreatmentRow.Origin.CMDB, PenaltyTreatmentRow.Origin.IMPORTED)
 
 
+def cmdb_isp_identity(link):
+    """Resolve a display name and preserve the CMDB identifiers as separate evidence."""
+    raw_isp = str(getattr(link, "isp_raw", "") or "").strip()
+    operator = getattr(link, "operator", None)
+    full_name = (operator.name or "").strip() if operator else ""
+    raw_without_trailing_id = re.sub(r"\s*\(\s*(\d+)\s*\)\s*$", "", raw_isp).strip()
+    raw_id_match = re.search(r"\(\s*(\d+)\s*\)\s*$", raw_isp)
+    raw_technical_id = raw_isp if raw_isp.isdecimal() else (raw_id_match.group(1) if raw_id_match else "")
+    operator_name = " ".join(re.sub(r"\s*\(\s*\d+\s*\)\s*$", "", full_name).split())
+    operator_label = operator_name.split("(", 1)[0].strip()
+    raw_name = " ".join(raw_without_trailing_id.split())
+    raw_label = raw_name.split("(", 1)[0].strip()
+    raw_matches_operator = False
+    if operator and raw_isp:
+        operator_ids = {
+            str(operator.source_config_item_id or "").strip().casefold(),
+            str(operator.source_number or "").strip().casefold(),
+        }
+        raw_matches_operator = raw_isp.casefold() in operator_ids
+        if not raw_matches_operator and not raw_isp.isdecimal():
+            raw_matches_operator = raw_name.casefold() == operator_name.casefold()
+            # The explicit ISP property often stores only the provider label,
+            # while the associated Operadora CI includes its legal name.
+            if not raw_matches_operator and "(" not in raw_name:
+                raw_matches_operator = raw_label.casefold() == operator_label.casefold()
+    conflict = bool(operator and raw_isp and not raw_matches_operator)
+    if conflict:
+        raw_display = raw_label or raw_name
+        operator_display = operator_label or operator_name
+        return {
+            "name": "", "full_name": "", "id": str(operator.source_config_item_id or ""),
+            "number": str(operator.source_number or ""),
+            "raw_id": raw_technical_id,
+            "raw": raw_isp,
+            "config_item_id": getattr(link, "source_config_item_id", ""),
+            "confidence": "AMBIGUOUS", "conflict": True,
+            "candidates": sorted({value for value in (raw_display if not raw_isp.isdecimal() else "", operator_display) if value}),
+        }
+    if operator:
+        full_name = operator_name
+        name = operator_label or full_name
+        confidence = "HIGH"
+    elif raw_isp and not raw_isp.isdecimal():
+        full_name = raw_name
+        name = raw_label or raw_name
+        confidence = "HIGH"
+    else:
+        name = ""
+        confidence = "NONE"
+    return {
+        "name": name,
+        "full_name": full_name,
+        "id": str(operator.source_config_item_id or "") if operator else raw_technical_id,
+        "number": str(operator.source_number or "") if operator else "",
+        "raw_id": raw_technical_id,
+        "raw": raw_isp,
+        "config_item_id": getattr(link, "source_config_item_id", ""),
+        "confidence": confidence,
+        "conflict": False,
+        "candidates": [],
+    }
+
+
 @transaction.atomic
 def enrich_competence(competence_id, *, user=None, batch_size=500, treatment_ids=None, include_direct=True, eligible_only=True, remote_lookup=False):
     """Resolve Claro PU evidence locally, with an explicit general-OTRS fallback."""
@@ -418,7 +484,9 @@ def enrich_competence(competence_id, *, user=None, batch_size=500, treatment_ids
         rows_query = eligible_treatments(rows_query)
     if treatment_ids is not None:
         rows_query = rows_query.filter(pk__in=treatment_ids)
-    rows = list(rows_query.select_related("source_row", "ticket").prefetch_related("ticket_relations__otrs_ticket").order_by("pk"))
+    rows = list(rows_query.select_related("source_row", "ticket").prefetch_related(
+        "ticket_relations__otrs_ticket__config_items__cmdb_link__operator",
+    ).order_by("pk"))
     identifier_by_pk = {
         row.pk: _ticket_identifier(
             row.source_row.canonical_data,
@@ -793,12 +861,16 @@ def enrich_competence(competence_id, *, user=None, batch_size=500, treatment_ids
             ticket_snapshot = remote_snapshot or _snapshot_from_ticket(ticket)
             opened_at = _snapshot_datetime(ticket_snapshot.get("created_at"))
             resolved_at = _snapshot_datetime(ticket_snapshot.get("resolved_at"))
-            if _auto_allowed(row.arion_opening_at, row.arion_opening_origin) and opened_at:
-                row.arion_opening_at = opened_at
-                row.arion_opening_origin = PenaltyTreatmentRow.Origin.OTRS
-            if _auto_allowed(row.arion_fetec_at, row.arion_fetec_origin) and resolved_at:
-                row.arion_fetec_at = resolved_at
-                row.arion_fetec_origin = PenaltyTreatmentRow.Origin.OTRS
+            if opened_at:
+                row.arion_opening_auto_at = opened_at
+                if _auto_allowed(row.arion_opening_at, row.arion_opening_origin):
+                    row.arion_opening_at = opened_at
+                    row.arion_opening_origin = PenaltyTreatmentRow.Origin.OTRS
+            if resolved_at:
+                row.arion_fetec_auto_at = resolved_at
+                if _auto_allowed(row.arion_fetec_at, row.arion_fetec_origin):
+                    row.arion_fetec_at = resolved_at
+                    row.arion_fetec_origin = PenaltyTreatmentRow.Origin.OTRS
             row.arion_values.update({
                 "otrs_status": ticket_snapshot.get("business_status") or ticket_snapshot.get("state", ""),
                 "otrs_queue": ticket_snapshot.get("queue", ""),
@@ -829,6 +901,10 @@ def enrich_competence(competence_id, *, user=None, batch_size=500, treatment_ids
                 "source": remote_snapshot.get("source", "OTRS_GENERAL"),
             })
         isp_values = set()
+        isp_sources = {}
+        unresolved_isp_ids = set()
+        unresolved_isp_sources = []
+        ambiguous_isp_candidates = set()
         procedence_values = set()
         for linked_relation in linked:
             linked_ticket = linked_relation.otrs_ticket
@@ -844,20 +920,46 @@ def enrich_competence(competence_id, *, user=None, batch_size=500, treatment_ids
                 procedence_values.add(linked_ticket.responsibility_normalized)
             for config_item in linked_ticket.config_items.all():
                 link = config_item.cmdb_link
-                if config_item.is_present_in_source and link and link.is_present_in_source and link.isp_raw.strip():
-                    isp_values.add(link.isp_raw.strip())
-        if len(isp_values) == 1 and _auto_allowed(row.isp, row.field_origins.get("isp", "")):
-            row.isp = next(iter(isp_values))
-            row.field_origins["isp"] = PenaltyTreatmentRow.Origin.CMDB
-            isp_count += 1
-        elif len(isp_values) > 1:
+                if config_item.is_present_in_source and link and link.is_present_in_source:
+                    source_info = cmdb_isp_identity(link)
+                    if source_info["name"]:
+                        isp_values.add(source_info["name"])
+                        isp_sources.setdefault(source_info["name"], []).append(source_info)
+                    elif source_info["conflict"]:
+                        ambiguous_isp_candidates.update(source_info["candidates"])
+                        unresolved_isp_sources.append(source_info)
+                        unresolved_isp_ids.update(value for value in (source_info["id"], source_info["raw_id"]) if value)
+                    elif source_info["id"]:
+                        unresolved_isp_ids.add(source_info["id"])
+                        unresolved_isp_sources.append(source_info)
+        if unresolved_isp_ids:
+            row.arion_values["cmdb_isp_unresolved_ids"] = sorted(unresolved_isp_ids)
+            row.arion_values["cmdb_isp_unresolved_id"] = next(iter(unresolved_isp_ids)) if len(unresolved_isp_ids) == 1 else ""
+        else:
+            row.arion_values.pop("cmdb_isp_unresolved_ids", None)
+            row.arion_values.pop("cmdb_isp_unresolved_id", None)
+        if len(isp_values) == 1 and not unresolved_isp_ids:
+            resolved_isp = next(iter(isp_values))
+            row.arion_values["cmdb_isp_sources"] = isp_sources.get(resolved_isp, [])
+            row.arion_values.pop("cmdb_isp_candidates", None)
+            if _auto_allowed(row.isp, row.field_origins.get("isp", "")):
+                row.isp = resolved_isp
+                row.field_origins["isp"] = PenaltyTreatmentRow.Origin.CMDB
+                isp_count += 1
+        elif len(isp_values) > 1 or unresolved_isp_ids or ambiguous_isp_candidates:
             if row.field_origins.get("isp") == PenaltyTreatmentRow.Origin.CMDB:
                 row.isp = ""
                 row.field_origins.pop("isp", None)
-            row.arion_values["cmdb_isp_candidates"] = sorted(isp_values)
+            candidates = set(isp_values)
+            candidates.update(ambiguous_isp_candidates)
+            if unresolved_isp_ids:
+                candidates.add("ISP não identificado")
+            row.arion_values["cmdb_isp_candidates"] = sorted(candidates)
+            row.arion_values["cmdb_isp_sources"] = [source for label in sorted(isp_sources) for source in isp_sources[label]] + unresolved_isp_sources
             ambiguous += 1
         else:
             row.arion_values.pop("cmdb_isp_candidates", None)
+            row.arion_values.pop("cmdb_isp_sources", None)
             if row.field_origins.get("isp") == PenaltyTreatmentRow.Origin.CMDB:
                 row.isp = ""
                 row.field_origins.pop("isp", None)
@@ -884,6 +986,10 @@ def enrich_competence(competence_id, *, user=None, batch_size=500, treatment_ids
                 if getattr(row, attribute) == PenaltyTreatmentRow.Origin.OTRS:
                     setattr(row, field, None)
                     setattr(row, attribute, PenaltyTreatmentRow.Origin.MANUAL)
+            if row.arion_opening_origin == PenaltyTreatmentRow.Origin.MANUAL and not row.arion_opening_at:
+                row.arion_opening_auto_at = None
+            if row.arion_fetec_origin == PenaltyTreatmentRow.Origin.MANUAL and not row.arion_fetec_at:
+                row.arion_fetec_auto_at = None
             for key in ("otrs_status", "otrs_queue", "otrs_responsible_user_id", "otrs_ticket_number", "otrs_title", "otrs_opened_at", "otrs_resolved_at", "otrs_closing_code", "otrs_tickets"):
                 row.arion_values.pop(key, None)
             row.field_origins.pop("ticket", None)
@@ -893,8 +999,8 @@ def enrich_competence(competence_id, *, user=None, batch_size=500, treatment_ids
 
     if relation_updates:
         PenaltyTreatmentTicket.objects.bulk_update(relation_updates, ("is_primary", "source"), batch_size=batch_size)
-    fields = ("ticket_identifier", "ticket", "evidence_status", "arion_opening_at", "arion_opening_origin",
-              "arion_fetec_at", "arion_fetec_origin", "isp", "field_origins", "arion_values", "procedence", "procedence_origin", "version", "updated_at")
+    fields = ("ticket_identifier", "ticket", "evidence_status", "arion_opening_auto_at", "arion_opening_at", "arion_opening_origin",
+              "arion_fetec_auto_at", "arion_fetec_at", "arion_fetec_origin", "isp", "field_origins", "arion_values", "procedence", "procedence_origin", "version", "updated_at")
     for start in range(0, len(changed), batch_size):
         PenaltyTreatmentRow.objects.bulk_update(changed[start:start + batch_size], fields, batch_size=batch_size)
     from .calculations import calculate_treatment
@@ -953,6 +1059,14 @@ def treatment_export_dataset(competence, *, scope="eligible", decision=None):
         snapshot_ticket_number = (row.arion_values or {}).get("ticket_snapshot", {}).get("number")
         if snapshot_ticket_number and snapshot_ticket_number not in related_ticket_numbers:
             related_ticket_numbers.append(snapshot_ticket_number)
+        isp_internal_id = (row.arion_values or {}).get("cmdb_isp_unresolved_id", "")
+        for isp_source in (row.arion_values or {}).get("cmdb_isp_sources", []):
+            if isp_source.get("id"):
+                isp_internal_id = isp_source["id"]
+                break
+        isp_label = row.isp if row.isp and not row.isp.isdecimal() else None
+        if not isp_internal_id and row.isp and row.isp.isdecimal():
+            isp_internal_id = row.isp
         yield {
             "REC": source.get("rec"), "Designação": source.get("designation"), "Cliente": source.get("client"),
             "UF": source.get("uf"), "LP": source.get("lp"), "Fornecedor": source.get("provider"),
@@ -960,13 +1074,15 @@ def treatment_export_dataset(competence, *, scope="eligible", decision=None):
             "Tickets ARION relacionados": ", ".join(related_ticket_numbers),
             "Banda": source.get("bandwidth"), "Abertura Claro": source.get("opening"), "Abertura ARION": row.arion_opening_at,
             "Fetec Claro": source.get("fetec"), "Fetec ARION": row.arion_fetec_at,
-            "Tempo Claro": source.get("duration"), "TMP ARION": row.tmp_calculated_minutes,
-            "EV Claro": source.get("events"), "EV ARION calculado": row.ev_calculated,
+            "Tempo Claro": source.get("duration"), "TMP ARION calculado": row.tmp_gross_minutes,
+            "TMP ARION efetivo": row.tmp_effective_minutes,
+            "EV Claro": source.get("events"), "EV ARION calculado": row.ev_calculated, "EV ARION efetivo": row.ev_effective,
             "Vlr Mensal": source.get("monthly_value"), "Inter Claro": source.get("interconnection_fine"),
             "Inter ARION": row.inter_effective, "Indisp Claro": source.get("unavailability_fine"),
             "Indisp ARION": row.unavailability_effective, "Penal Claro": source.get("penalty_fine"),
             "Penal ARION calculado": row.penalty_arion, "Penal ARION efetivo": row.penalty_effective,
-            "Qtd/Horas": source.get("hours_quantity"), "ISP": row.isp or None,
+            "Qtd/Horas": source.get("hours_quantity"), "ISP": isp_label,
+            "ISP ID interno CMDB": isp_internal_id or None,
             "Causa Raiz": row.root_cause or None, "Observação": row.observation or None,
             "Procedência": row.get_procedence_display(),
             "Valor cobrado Claro": row.total_claro, "Valor calculado ARION": row.total_calculated_arion,

@@ -787,3 +787,15 @@
   .reports-layout.is-sidebar-collapsed { display:block; }
   .reports-layout.is-sidebar-collapsed .reports-sidebar { display:none; }
 }
+
+/* Aproveita o espaço do workspace financeiro sem alterar o limite das páginas de visão geral. */
+.reports-sidebar { position:sticky; top:var(--arion-global-header-height); height:calc(100dvh - var(--arion-global-header-height)); min-height:0; padding-top:14px; padding-bottom:14px; }
+.reports-page .reports-content:has(.spreadsheet-surface) { box-sizing:border-box; width:100%; max-width:none; padding:14px clamp(12px,1.7vw,28px) 28px; }
+.spreadsheet-surface--treatment { display:flex; min-height:0; flex-direction:column; }
+.spreadsheet-surface--treatment .treatment-grid-wrap { min-height:280px; max-height:calc(100dvh - 430px); }
+.spreadsheet-surface--treatment .spreadsheet-footer { flex:0 0 auto; }
+.spreadsheet-surface:fullscreen,.spreadsheet-surface.is-fullscreen { width:100vw; height:100dvh; min-height:100dvh; }
+@media(max-width:760px) {
+  .reports-page .reports-content:has(.spreadsheet-surface) { padding:12px 9px 20px; }
+  .spreadsheet-surface--treatment .treatment-grid-wrap { min-height:0; max-height:none; }
+}

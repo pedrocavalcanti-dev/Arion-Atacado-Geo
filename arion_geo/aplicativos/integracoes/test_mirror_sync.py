@@ -3,6 +3,9 @@ from unittest.mock import patch
 from django.test import TestCase as DjangoTestCase, override_settings
 
 from .models import CMDBLinkMirror, CMDBOperatorMirror, OTRSStateMapping, OTRSTicket, OTRSTicketConfigItem
+from .otrs_queues import (
+    CANCELLATION_PROFILE_ACTIVE_STATES, CANCELLATION_REQUEST_QUEUE_NAME, COCKPIT_QUEUE_NAMES, NOC_QUEUE_NAME,
+)
 from .services.cmdb_sync import CMDBSyncService
 from .services.otrs_sync import OTRSSyncService, _otrs_naive_local_datetime
 
@@ -106,7 +109,7 @@ class CMDBMirrorSyncTests(DjangoTestCase):
 
 
 class FakeOTRSReadOnlyClient:
-    def __init__(self, *, states=None, relations=None, queue_id=107):
+    def __init__(self, *, states=None, relations=None, queue_id=107, queues=None):
         self.select_queries_count = 0
         self.states = states or [{"id": 10, "name": "em atendimento", "type_id": 1}]
         self.relations = relations if relations is not None else [
@@ -116,6 +119,13 @@ class FakeOTRSReadOnlyClient:
         ]
         self.ticket = {"id": 100, "tn": "2026000000000100", "title": "Link service", "queue_id": queue_id, "state_id": self.states[0]["id"], "priority_id": 2, "type_id": 3, "service_id": 4, "sla_id": 5, "responsible_user_id": 13, "customer_id": "ACME", "timeout": 12, "until_time": 20, "escalation_time": -2, "escalation_update_time": 3, "escalation_response_time": 4, "escalation_solution_time": 5, "create_time": datetime(2025, 1, 1, tzinfo=datetime_timezone.utc), "change_time": datetime(2025, 1, 2)}
         self.ticket_rows = [self.ticket]
+        self.queues = queues or [
+            {"id": queue_id, "name": NOC_QUEUE_NAME},
+            {"id": 108, "name": CANCELLATION_REQUEST_QUEUE_NAME},
+            {"id": 109, "name": "NOC - RETIRA EQUIPAMENTO"},
+            {"id": 110, "name": "NOC \u2013 PENDENTE PAGAMENTO"},
+            {"id": 222, "name": "OUTSIDE QUEUE"},
+        ]
         self.last_changed_since = None
         self.last_changed_since_parameter = None
         self.dynamic_values = []
@@ -137,7 +147,12 @@ class FakeOTRSReadOnlyClient:
         self.select_queries_count += 1
         normalized = sql.casefold()
         if "from `queue`" in normalized:
-            return [{"id": 107, "name": "NOC - ATACADO"}]
+            if " = %s" in normalized:
+                return [row for row in self.queues if row["name"] == params[0]]
+            if " in (" in normalized:
+                selected_ids = set(params)
+                return [row for row in self.queues if row["id"] in selected_ids]
+            return list(self.queues)
         if "from `ticket_state_type`" in normalized:
             return [{"id": 1, "name": "open"}, {"id": 2, "name": "pending auto"}]
         if "from `dynamic_field`" in normalized:
@@ -164,20 +179,22 @@ class FakeOTRSReadOnlyClient:
             return [{"id": 5, "name": "Padrão"}]
         if "from `ticket`" in normalized:
             if " >= %s" in normalized:
-                queue_id = params[0]
+                first_in = normalized.split(" in (", 1)[1].split(")", 1)[0]
+                queue_ids_count = first_in.count("%s")
+                queue_ids = set(params[:queue_ids_count])
                 self.last_changed_since_parameter = params[-1]
                 cutoff = params[-1]
                 # PyMySQL serializes aware datetime fields as wall time, dropping tzinfo.
                 if cutoff.tzinfo is not None:
                     cutoff = cutoff.replace(tzinfo=None)
                 self.last_changed_since = cutoff
-                known_ids = set(params[1:-1])
+                known_ids = set(params[queue_ids_count:-1])
                 rows = [row for row in self.ticket_rows
-                        if (row["queue_id"] == queue_id or row["id"] in known_ids)
+                        if (row["queue_id"] in queue_ids or row["id"] in known_ids)
                         and row["change_time"] >= cutoff]
             else:
-                queue_id = params[0]
-                rows = [row for row in self.ticket_rows if row["queue_id"] == queue_id]
+                queue_ids = set(params)
+                rows = [row for row in self.ticket_rows if row["queue_id"] in queue_ids]
             return [dict(row) for row in rows]
         if "from `link_object`" in normalized:
             return [{"id": 1, "name": "Ticket"}, {"id": 4, "name": "ITSMConfigItem"}]
@@ -197,8 +214,14 @@ class OTRSMirrorSyncTests(DjangoTestCase):
 
     def test_explicit_business_status_rule_and_unknown_is_not_open(self):
         cases = {
+            "new": (OTRSStateMapping.BusinessStatus.OPEN, True),
+            "merged": (OTRSStateMapping.BusinessStatus.CLOSED, False),
             "em atendimento": (OTRSStateMapping.BusinessStatus.OPEN, True),
             "Pendente": (OTRSStateMapping.BusinessStatus.PENDING, True),
+            "pendente operadora": (OTRSStateMapping.BusinessStatus.PENDING, True),
+            "pendente aprova\u00e7\u00e3o": (OTRSStateMapping.BusinessStatus.PENDING, True),
+            "aguardando aprova\u00e7\u00e3o do gestor": (OTRSStateMapping.BusinessStatus.PENDING, True),
+            "Projeto Especial": (OTRSStateMapping.BusinessStatus.OPEN, True),
             "agendado": (OTRSStateMapping.BusinessStatus.SCHEDULED, True),
             "resolvido": (OTRSStateMapping.BusinessStatus.RESOLVED, False),
             "closed successful": (OTRSStateMapping.BusinessStatus.CLOSED, False),
@@ -211,6 +234,13 @@ class OTRSMirrorSyncTests(DjangoTestCase):
                 status = OTRSSyncService._state_status(name)
                 self.assertEqual(status, expected)
                 self.assertEqual(status in {"OPEN", "PENDING", "SCHEDULED"}, is_open)
+
+        for name in CANCELLATION_PROFILE_ACTIVE_STATES:
+            with self.subTest(profile_state=name):
+                self.assertNotEqual(
+                    OTRSSyncService._state_status(name),
+                    OTRSStateMapping.BusinessStatus.UNKNOWN,
+                )
 
     def test_snapshot_upserts_dimensions_and_relations_and_excludes_invalid_relationships(self):
         client = FakeOTRSReadOnlyClient()
@@ -227,6 +257,44 @@ class OTRSMirrorSyncTests(DjangoTestCase):
         self.assertEqual(result["relations"]["found"], 1)
         self.assertEqual(result["business_open"], 1)
         self.assertEqual(result["business_status"]["UNKNOWN"], 0)
+
+    def test_multi_queue_snapshot_imports_cockpit_queues_and_reconciles_only_that_scope(self):
+        client = FakeOTRSReadOnlyClient(relations=[])
+        cancellation_ticket = dict(client.ticket)
+        cancellation_ticket.update(
+            id=200, tn="2026000000000200", title="Solicitação de cancelamento",
+            queue_id=108,
+        )
+        client.ticket_rows.append(cancellation_ticket)
+        unrelated = OTRSTicket.objects.create(
+            external_id=999, ticket_number="2026000000000999", queue_external_id=999,
+            queue_name="OUTRA FILA", external_state_id=1,
+            external_state_name="em atendimento", is_present_in_queue=True,
+        )
+        stale = OTRSTicket.objects.create(
+            external_id=300, ticket_number="2026000000000300", queue_external_id=109,
+            queue_name="NOC - RETIRA EQUIPAMENTO", external_state_id=1,
+            external_state_name="em atendimento", is_present_in_queue=True,
+        )
+        stale_relation = OTRSTicketConfigItem.objects.create(
+            ticket=stale, config_item_id="ci-stale", relation_type="DependsOn",
+            relation_state="Valid", is_present_in_source=True,
+        )
+
+        result = OTRSSyncService(client).run(queue_names=COCKPIT_QUEUE_NAMES, apply=True)
+
+        imported = OTRSTicket.objects.get(external_id=200)
+        stale.refresh_from_db()
+        stale_relation.refresh_from_db()
+        unrelated.refresh_from_db()
+        self.assertEqual(imported.queue_name, CANCELLATION_REQUEST_QUEUE_NAME)
+        self.assertTrue(imported.is_present_in_queue)
+        self.assertFalse(stale.is_present_in_queue)
+        self.assertFalse(stale_relation.is_present_in_source)
+        self.assertTrue(unrelated.is_present_in_queue)
+        self.assertEqual(result["tickets"]["created"], 2)
+        self.assertEqual(result["tickets"]["stale"], 1)
+        self.assertEqual([queue["name"] for queue in result["queues"]], list(COCKPIT_QUEUE_NAMES))
 
     def test_duplicate_source_relations_are_counted_but_reconciled_once(self):
         relation = {"source_object_id": 4, "source_key": "ci-1", "target_object_id": 1, "target_key": "100", "type_id": 3, "state_id": 1, "create_time": None}

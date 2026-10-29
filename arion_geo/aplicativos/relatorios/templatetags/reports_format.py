@@ -92,6 +92,18 @@ def duration_label(value):
 
 
 @register.filter
+def isp_display(value):
+    text = str(value or "").strip()
+    return "ISP não identificado" if not text or text.isdecimal() else text
+
+
+@register.filter
+def isp_internal_id(value):
+    text = str(value or "").strip()
+    return text if text.isdecimal() else ""
+
+
+@register.filter
 def datetime_local(value):
     if not value:
         return ""

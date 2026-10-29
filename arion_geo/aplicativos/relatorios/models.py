@@ -168,8 +168,10 @@ class PenaltyTreatmentRow(models.Model):
     source_values = models.JSONField(default=dict, blank=True)
     arion_values = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    arion_opening_auto_at = models.DateTimeField(null=True, blank=True)
     arion_opening_at = models.DateTimeField(null=True, blank=True)
     arion_opening_origin = models.CharField(max_length=12, choices=Origin.choices, default=Origin.MANUAL)
+    arion_fetec_auto_at = models.DateTimeField(null=True, blank=True)
     arion_fetec_at = models.DateTimeField(null=True, blank=True)
     arion_fetec_origin = models.CharField(max_length=12, choices=Origin.choices, default=Origin.MANUAL)
     isp = models.CharField(max_length=160, blank=True)
@@ -180,7 +182,9 @@ class PenaltyTreatmentRow(models.Model):
     tmp_gross_minutes = models.PositiveIntegerField(null=True, blank=True)
     pause_minutes = models.PositiveIntegerField(default=0)
     tmp_calculated_minutes = models.PositiveIntegerField(null=True, blank=True)
+    tmp_effective_minutes = models.PositiveIntegerField(null=True, blank=True)
     ev_calculated = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    ev_effective = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
     inter_calculated = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     inter_effective = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     unavailability_calculated = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
@@ -257,6 +261,7 @@ class PenaltyTreatmentPause(models.Model):
     ended_at = models.DateTimeField(null=True, blank=True)
     minutes = models.PositiveIntegerField(null=True, blank=True)
     reason = models.CharField(max_length=300)
+    evidence = models.CharField(max_length=500, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -268,6 +273,8 @@ class PenaltyTreatmentPause(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
+        if not (self.evidence or "").strip():
+            raise ValidationError({"evidence": "Informe a evidência ou observação que justifica esta pausa."})
         if self.kind == self.Kind.MINUTES and (not self.minutes or self.started_at or self.ended_at):
             raise ValidationError("Informe somente os minutos para este tipo de pausa.")
         if self.kind == self.Kind.INTERVAL and (not self.started_at or not self.ended_at or self.ended_at <= self.started_at or self.minutes):

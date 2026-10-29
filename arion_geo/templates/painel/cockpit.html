@@ -9,11 +9,11 @@
 <section class="dashboard-page cockpit" data-cockpit data-initial-loading="true" data-results-ready="false" data-default-start="{{ default_start }}" data-default-end="{{ default_end }}" data-query-url="{% url 'analytics-query' %}" data-saved-url="{% url 'analytics-saved-views' %}" data-export-url="{% url 'analytics-export' %}" aria-labelledby="cockpit-title">
   {% csrf_token %}
   <header class="cockpit-heading">
-    <div class="cockpit-heading-copy"><p class="section-kicker">NOC ATACADO <span>/</span> COCKPIT</p><h1 id="cockpit-title">Explore os tickets da opera&ccedil;&atilde;o</h1><p>Filtros e an&aacute;lises baseados somente na fila NOC - ATACADO.</p><span class="source-badge"><i></i>Espelhos locais CMDB e OTRS</span></div>
+    <div class="cockpit-heading-copy"><p class="section-kicker">NOC ATACADO <span>/</span> COCKPIT</p><h1 id="cockpit-title">Explore os tickets da opera&ccedil;&atilde;o</h1><div class="cockpit-context-switch" role="group" aria-label="Contexto do Cockpit"><button type="button" data-scope="support" aria-pressed="true">Suporte</button><button type="button" data-scope="cancellation" aria-pressed="false">Cancelamentos</button><button type="button" data-scope="general" aria-pressed="false">Geral</button></div><p data-scope-description>Suporte operacional da fila NOC - ATACADO.</p><span class="source-badge" data-source-badge aria-live="polite"><i aria-hidden="true"></i><span data-source-badge-label>Espelhos locais CMDB e OTRS</span></span></div>
     <aside class="cockpit-current-analysis" aria-label="An&aacute;lise atual" title="" data-current-analysis>
       <span class="panel-kicker">AN&Aacute;LISE ATUAL</span>
       <strong data-analysis-title>Preparando an&aacute;lise...</strong>
-      <p><span data-current-period></span><span aria-hidden="true"> &middot; </span><span data-period-semantics></span></p>
+      <p><span data-current-period></span><button type="button" class="cockpit-analysis-info" data-period-semantics aria-label="Sobre a base do per&iacute;odo" title="">i</button></p>
     </aside>
   </header>
   <section class="cockpit-query-panel" aria-label="Consulta">
@@ -36,7 +36,9 @@
         <label>M&eacute;trica<select name="metric"><option value="tickets" title="N&atilde;o inclui tickets cancelados ou n&atilde;o classificados.">Tickets criados</option><option value="backlog">Backlog atual</option><option value="open_tickets">Em atendimento</option><option value="pending_tickets">Pendentes</option><option value="scheduled_tickets">Agendados</option><option value="resolved_tickets">Resolvidos</option><option value="closed_tickets">Encerrados</option><option value="resolved_closed_tickets">Resolvidos + Encerrados</option><option value="canceled_tickets">Cancelados</option><option value="links_affected">Links afetados</option><option value="recurrences">Links reincidentes</option></select></label>
         <label>De<input type="date" name="start" required></label><label>At&eacute;<input type="date" name="end" required></label>
         <label>Motivo<select name="termination_reason" data-option="termination_reason"><option value="all">Todos</option></select></label>
+        <label data-scope-filter="stage" hidden>Etapa<select name="stage" data-option="stage"><option value="all">Todas</option></select></label>
         <label>Provedor<select name="provider" data-option="provider"><option value="all">Todos</option></select></label>
+        <label data-scope-filter="origin" hidden>Origem<select name="origin" data-option="origin"><option value="all">Todas</option></select></label>
         <label>Status<select name="status" data-option="status"><option value="all">Todos</option></select></label>
       </div>
       <details class="cockpit-more-filters" data-more-filters><summary><span data-more-label>Mais filtros</span></summary><div>
@@ -45,6 +47,7 @@
         <label>SLA<select name="sla" data-option="sla"><option value="all">Todos</option></select></label>
         <label>Prioridade<select name="priority" data-option="priority"><option value="all">Todas</option></select></label>
         <label>Servi&ccedil;o<select name="service" data-option="service"><option value="all">Todos</option></select></label>
+        <label>Projeto / cliente<select name="project" data-option="project"><option value="all">Todos</option></select></label>
         <label>Compara&ccedil;&atilde;o<input type="month" name="compare_to"></label>
       </div></details>
       <div class="cockpit-filter-footer"><div class="cockpit-query-summary"><strong>Filtros ativos</strong><div data-query-summary aria-live="polite"></div></div><div><button type="button" class="cockpit-action" data-clear>Limpar filtros</button><button type="submit" class="cockpit-action cockpit-action-primary">Aplicar an&aacute;lise</button></div></div>
@@ -53,11 +56,12 @@
   <div class="cockpit-error" data-error role="alert" hidden><span>N&atilde;o foi poss&iacute;vel carregar esta an&aacute;lise.</span><button type="button" data-retry>Tentar novamente</button></div>
   <p class="cockpit-status" data-status role="status" aria-live="polite"></p>
   <section class="cockpit-kpi-section" aria-labelledby="analysis-results-title">
-    <header><h2 id="analysis-results-title">Indicadores da an&aacute;lise</h2><div class="cockpit-kpi-actions"><span data-comparison></span><button type="button" class="cockpit-global-collapse" data-details-global aria-expanded="true" aria-controls="cockpit-secondary-sections"><span data-details-global-label>Recolher detalhes</span><i aria-hidden="true"></i></button></div></header>
+    <header><h2 id="analysis-results-title">Indicadores da an&aacute;lise</h2><div class="cockpit-kpi-actions"><span data-comparison></span><button type="button" class="cockpit-global-collapse" data-details-global aria-expanded="true" aria-controls="cockpit-aging-panel cockpit-secondary-sections"><span data-details-global-label>Recolher detalhes</span><i aria-hidden="true"></i></button></div></header>
     <div class="dashboard-kpis cockpit-kpis" data-kpis aria-live="polite"><article class="cockpit-skeleton cockpit-skeleton-kpi"></article><article class="cockpit-skeleton cockpit-skeleton-kpi"></article><article class="cockpit-skeleton cockpit-skeleton-kpi"></article><article class="cockpit-skeleton cockpit-skeleton-kpi"></article></div>
+    <div class="cockpit-secondary-kpis" data-secondary-kpis aria-label="Indicadores operacionais complementares" hidden></div>
   </section>
   <section class="cockpit-visual cockpit-temporal dash-card" aria-labelledby="cockpit-visual-title">
-    <header><div><span class="panel-kicker">AN&Aacute;LISE TEMPORAL</span><h2 id="cockpit-visual-title">Evolu&ccedil;&atilde;o da an&aacute;lise</h2></div></header>
+    <header class="cockpit-visual-header"><div><span class="panel-kicker">FLUXO OPERACIONAL</span><h2 id="cockpit-visual-title">Evolu&ccedil;&atilde;o operacional</h2><p class="cockpit-visual-subtitle" data-operational-subtitle>Novos, encerrados e evolu&ccedil;&atilde;o do backlog no per&iacute;odo selecionado.</p></div><div class="cockpit-chart-controls"><div class="cockpit-origin-mode" data-chart-origin-control role="group" aria-label="Detalhamento por origem" hidden><button type="button" data-chart-origin="consolidated" aria-pressed="true">Consolidado</button><button type="button" data-chart-origin="origin" aria-pressed="false">Por origem</button></div><div class="cockpit-chart-mode" role="group" aria-label="S&eacute;ries exibidas no gr&aacute;fico"><button type="button" data-chart-view="all" aria-pressed="true">Ambos</button><button type="button" data-chart-view="created" aria-pressed="false">Novos</button><button type="button" data-chart-view="closed" aria-pressed="false">Encerrados</button><button type="button" data-chart-view="backlog" aria-pressed="false">Backlog</button></div></div></header>
     <div class="cockpit-chart-grid cockpit-overview-grid" data-overview-grid aria-live="polite"><article class="cockpit-skeleton cockpit-skeleton-chart"></article></div>
     <section class="cockpit-calendar" data-calendar data-calendar-loading="true" aria-labelledby="cockpit-calendar-title">
       <header><div><span class="panel-kicker">DETALHE MENSAL</span><h3 id="cockpit-calendar-title" data-calendar-title>Detalhe do m&ecirc;s</h3><p data-calendar-subtitle>Distribui&ccedil;&atilde;o di&aacute;ria dos registros da consulta.</p></div><label>M&ecirc;s<select data-month-select aria-label="M&ecirc;s do detalhe anal&iacute;tico"></select></label></header>
@@ -67,13 +71,17 @@
       </div>
     </section>
   </section>
+  <section class="cockpit-aging-section dash-card" aria-labelledby="cockpit-aging-title">
+    <header class="cockpit-aging-header"><button type="button" class="cockpit-collapse-toggle" data-collapse-toggle="aging" aria-expanded="true" aria-controls="cockpit-aging-panel"><span class="cockpit-collapse-heading"><span class="panel-kicker">ENVELHECIMENTO DO ESTOQUE</span><strong id="cockpit-aging-title">Aging do estoque atual</strong><small>Tempo em aberto dos tickets ainda ativos.</small></span><i class="cockpit-chevron" aria-hidden="true"></i></button></header>
+    <div class="cockpit-collapse-panel" id="cockpit-aging-panel" data-collapse-panel="aging" aria-hidden="false"><div class="cockpit-collapse-inner"><div class="cockpit-aging-content" data-aging-chart aria-live="polite"><span class="cockpit-skeleton cockpit-skeleton-row"></span></div></div></div>
+  </section>
   <div class="cockpit-secondary-sections" id="cockpit-secondary-sections">
   <section class="cockpit-distributions dash-card" aria-labelledby="cockpit-distributions-title" data-detail-section="dimensions">
     <header class="cockpit-distributions-header">
       <button type="button" class="cockpit-collapse-toggle cockpit-distributions-toggle" data-collapse-toggle="dimensions" aria-expanded="true" aria-controls="cockpit-dimensions-panel">
         <span class="cockpit-collapse-heading"><span class="panel-kicker">DISTRIBUI&Ccedil;&Otilde;ES</span><strong id="cockpit-distributions-title">Distribui&ccedil;&otilde;es da an&aacute;lise</strong><small>Explore o resultado por provedor, UF, prioridade e outras dimens&otilde;es.</small></span><i class="cockpit-chevron" aria-hidden="true"></i>
       </button>
-      <label class="cockpit-visualize-by">Visualizar por<select aria-label="Visualizar por" data-breakdown><option value="provider">Provedor</option><option value="uf">UF</option><option value="status">Status</option><option value="source_state">Situa&ccedil;&atilde;o OTRS</option><option value="priority">Prioridade</option><option value="sla">SLA</option><option value="termination_reason">Motivo</option><option value="month">Per&iacute;odo</option></select></label>
+      <label class="cockpit-visualize-by">Visualizar por<select aria-label="Visualizar por" data-breakdown><option value="provider">Provedor</option><option value="uf">UF</option><option value="status">Status</option><option value="source_state">Situa&ccedil;&atilde;o OTRS</option><option value="cancellation_stage">Etapa do cancelamento</option><option value="operational_origin">Origem</option><option value="project">Projeto / cliente</option><option value="priority">Prioridade</option><option value="sla">SLA</option><option value="termination_reason">Motivo</option><option value="month">Per&iacute;odo</option></select></label>
     </header>
     <div class="cockpit-collapse-panel" id="cockpit-dimensions-panel" data-collapse-panel="dimensions" aria-hidden="false"><div class="cockpit-collapse-inner">
       <div class="cockpit-chart-grid cockpit-dimension-grid" data-dimension-grid aria-live="polite"><article class="cockpit-skeleton cockpit-skeleton-chart"></article></div>

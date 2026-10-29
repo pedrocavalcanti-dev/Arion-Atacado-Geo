@@ -31,6 +31,7 @@ from .services.calculations import calculate_treatment, effective_values
 from .services.treatment import (
     TERMINAL_DECISIONS,
     claro_treatment_candidates,
+    cmdb_isp_identity,
     competence_financial_summary,
     enrich_competence,
     treatment_export_dataset,
@@ -621,10 +622,18 @@ def competence_workspace(request, pk):
         {"value": value, "label": label, "count": eligible_rows.filter(decision=value).count()}
         for value, label in PenaltyTreatmentRow.Decision.choices
     ]
-    isp_breakdown = list(
+    raw_isp_breakdown = list(
         eligible_rows.exclude(isp="").values("isp").annotate(count=Count("pk"), contested=Sum("amount_contested"))
-        .order_by("-count", "isp")[:8]
+        .order_by("-count", "isp")
     )
+    isp_groups = {}
+    for item in raw_isp_breakdown:
+        label = "ISP não identificado" if item["isp"].isdecimal() else item["isp"]
+        group = isp_groups.setdefault(label, {"isp": label, "count": 0, "contested": None})
+        group["count"] += item["count"]
+        if item["contested"] is not None:
+            group["contested"] = (group["contested"] or Decimal("0")) + item["contested"]
+    isp_breakdown = sorted(isp_groups.values(), key=lambda item: (-item["count"], item["isp"]))[:8]
     root_cause_breakdown = list(
         eligible_rows.exclude(root_cause="").values("root_cause").annotate(count=Count("pk"))
         .order_by("-count", "root_cause")[:8]
@@ -733,13 +742,21 @@ def treatment_detail_data(request, pk):
         PenaltyTreatmentRow.objects.select_related("source_row__competence", "ticket")
         .prefetch_related(
             "pauses__created_by", "overrides__created_by", "financial_changes__actor",
-            "ticket_relations__otrs_ticket__config_items__cmdb_link",
+            "ticket_relations__otrs_ticket__config_items__cmdb_link__operator",
         ), pk=pk,
     )
     competence = treatment.source_row.competence
     if competence.deleted_at and not request.user.has_perm("relatorios.delete_finalized_penaltycompetence"):
         raise Http404
     source = treatment.source_row.canonical_data or {}
+    isp_sources_saved = (treatment.arion_values or {}).get("cmdb_isp_sources", [])
+    isp_label = treatment.isp if treatment.isp and not treatment.isp.isdecimal() else "ISP não identificado"
+    resolved_isp_source = next((item for item in isp_sources_saved if item.get("name") == treatment.isp), {})
+    isp_internal_id = (
+        resolved_isp_source.get("id")
+        or (treatment.arion_values or {}).get("cmdb_isp_unresolved_id", "")
+        or (treatment.isp if treatment.isp.isdecimal() else "")
+    )
     from aplicativos.chamados.services import otrs_ticket_url
 
     ticket_relations = list(treatment.ticket_relations.all())
@@ -755,12 +772,17 @@ def treatment_detail_data(request, pk):
         for linked_config in ticket.config_items.all():
             link = linked_config.cmdb_link
             if linked_config.is_present_in_source and link and link.is_present_in_source:
-                if link.isp_raw.strip():
-                    isps.add(link.isp_raw.strip())
+                isp_identity = cmdb_isp_identity(link)
+                if isp_identity["name"]:
+                    isps.add(isp_identity["name"])
                 config_items.append({
                     "id": link.source_config_item_id,
                     "name": link.name or link.source_number or link.source_config_item_id,
-                    "isp": link.isp_raw or "",
+                    "isp": isp_identity["name"] or "ISP não identificado",
+                    "isp_internal_id": isp_identity["id"],
+                    "isp_full_name": isp_identity["full_name"],
+                    "isp_provider_number": isp_identity["number"],
+                    "isp_confidence": isp_identity["confidence"],
                     "relation_type": linked_config.relation_type,
                     "state": linked_config.relation_state,
                 })
@@ -829,14 +851,14 @@ def treatment_detail_data(request, pk):
     effective = effective_values(treatment)
     calculation_data = {}
     formula_labels = {
-        "tmp": "TMP líquido = FETEC ARION − Abertura ARION − pausas",
-        "ev": "EV = TMP líquido ÷ 30, conforme a regra da competência",
+        "tmp": "Base calculada: FETEC OTRS − Abertura OTRS. Efetivo: intervalo das datas ARION efetivas menos pausas.",
+        "ev": "EV calculado sobre o TMP bruto da base; EV efetivo usa o TMP efetivo conforme a regra da competência.",
         "inter": "Inter ARION = (3 × Valor mensal Claro × EV efetivo) ÷ 1440",
-        "unavailability": "Indisp ARION = Valor mensal Claro × faixa SLA, pelo TMP líquido",
+        "unavailability": "Indisp calculada: faixa SLA aplicada ao TMP bruto. Indisp efetiva: faixa SLA aplicada ao TMP efetivo.",
         "total": "Total ARION = Inter efetivo + Indisp efetivo + Penal efetivo + valor não cobrado",
     }
     calc_fields = {
-        "tmp": (treatment.tmp_calculated_minutes, effective.get("tmp"), PenaltyTreatmentOverride.Field.TMP),
+        "tmp": (treatment.tmp_gross_minutes, effective.get("tmp"), PenaltyTreatmentOverride.Field.TMP),
         "ev": (treatment.ev_calculated, effective.get("ev"), PenaltyTreatmentOverride.Field.EV),
         "inter": (treatment.inter_calculated, treatment.inter_effective, PenaltyTreatmentOverride.Field.INTER),
         "unavailability": (treatment.unavailability_calculated, treatment.unavailability_effective, PenaltyTreatmentOverride.Field.UNAVAILABILITY),
@@ -885,9 +907,17 @@ def treatment_detail_data(request, pk):
         "arion": {
             "opening": _display_datetime(treatment.arion_opening_at),
             "opening_input": timezone.localtime(treatment.arion_opening_at).strftime("%Y-%m-%dT%H:%M") if treatment.arion_opening_at else "",
+            "opening_auto": _display_datetime(treatment.arion_opening_auto_at),
             "fetec": _display_datetime(treatment.arion_fetec_at),
             "fetec_input": timezone.localtime(treatment.arion_fetec_at).strftime("%Y-%m-%dT%H:%M") if treatment.arion_fetec_at else "",
-            "isp": treatment.isp or "—", "root_cause": treatment.root_cause or "—",
+            "fetec_auto": _display_datetime(treatment.arion_fetec_auto_at),
+            "isp": isp_label,
+            "isp_internal_id": isp_internal_id,
+            "isp_config_item_id": resolved_isp_source.get("id", ""),
+            "isp_provider_number": resolved_isp_source.get("number", ""),
+            "isp_full_name": resolved_isp_source.get("full_name", ""),
+            "isp_confidence": resolved_isp_source.get("confidence", ""),
+            "root_cause": treatment.root_cause or "—",
             "observation": treatment.observation or "—", "decision": treatment.get_decision_display(),
             "decision_code": treatment.decision, "decision_reason": treatment.decision_reason,
             "status_code": treatment.status, "status": treatment.get_status_display(),
@@ -929,6 +959,7 @@ def treatment_detail_data(request, pk):
             "rec": source.get("rec", ""),
             "lp": source.get("lp", ""),
             "isp_candidates": (treatment.arion_values or {}).get("cmdb_isp_candidates", []),
+            "isp_sources": (treatment.arion_values or {}).get("cmdb_isp_sources", []),
             "procedence_candidates": (treatment.arion_values or {}).get("otrs_procedence_candidates", []),
         },
         "calculations": calculation_data,
@@ -939,17 +970,23 @@ def treatment_detail_data(request, pk):
             "reduction": f"{treatment.reduction_percent}%" if treatment.reduction_percent is not None else "—",
             "tmp_gross": treatment.tmp_gross_minutes,
             "pause_minutes": treatment.pause_minutes,
-            "tmp_net": treatment.tmp_calculated_minutes,
+            "tmp_net": effective.get("tmp"),
+            "tmp_effective": effective.get("tmp"),
         },
         "grid": {
-            "isp": treatment.isp or "—",
+            "isp": isp_label,
+            "isp_title": ("Nome completo CMDB: " + resolved_isp_source.get("full_name", "")) if resolved_isp_source.get("full_name") else ("ID interno CMDB: " + isp_internal_id) if isp_internal_id else "",
             "opening": _display_datetime(treatment.arion_opening_at),
             "fetec": _display_datetime(treatment.arion_fetec_at),
             "pauses": f"{treatment.pause_minutes} min",
-            "tmp": f"{treatment.tmp_calculated_minutes} min" if treatment.tmp_calculated_minutes is not None else "—",
-            "ev": str(treatment.ev_calculated) if treatment.ev_calculated is not None else "—",
+            "tmp": f"{effective.get('tmp')} min" if effective.get("tmp") is not None else "—",
+            "tmp_title": f"Bruto: {treatment.tmp_gross_minutes} min · Pausas: {treatment.pause_minutes} min · Efetivo: {effective.get('tmp')} min" if treatment.tmp_gross_minutes is not None and effective.get("tmp") is not None else "",
+            "ev": str(effective.get("ev")) if effective.get("ev") is not None else "—",
+            "ev_title": "EV efetivo calculado a partir do TMP efetivo segundo a regra da competência.",
             "inter": _display_currency(treatment.inter_effective),
+            "inter_title": "Valor calculado pelo ARION com base no EV efetivo e no valor mensal.",
             "indisp": _display_currency(treatment.unavailability_effective),
+            "indisp_title": "Indisp. efetiva calculada pelo TMP efetivo segundo o perfil SLA da competência.",
             "cause": treatment.root_cause or "—",
             "observation": treatment.observation or "—",
             "procedence": treatment.get_procedence_display(),
@@ -975,6 +1012,7 @@ def treatment_detail_data(request, pk):
             "second_configured": bool(treatment.validation_code_2_ciphertext),
         },
         "pauses": [{"duration": pause.duration_minutes, "kind": pause.get_kind_display(),
+                    "reason": pause.reason, "evidence": pause.evidence,
                     "created_at": timezone.localtime(pause.created_at).strftime("%d/%m/%Y %H:%M"),
                     "user": pause.created_by.get_username() if pause.created_by else "Sistema"}
                    for pause in treatment.pauses.all()],
@@ -1262,8 +1300,20 @@ def treatment_inline_edit(request, pk):
             source="INLINE_EDIT",
         )
 
+    date_adjustments = {}
+    for field, key, automatic_field, origin_field in (
+        ("arion_opening_at", "opening", "arion_opening_auto_at", "arion_opening_origin"),
+        ("arion_fetec_at", "fetec", "arion_fetec_auto_at", "arion_fetec_origin"),
+    ):
+        if field in changed_fields:
+            date_adjustments[key] = {
+                "automatic": _display_datetime(getattr(treatment, automatic_field)),
+                "effective": _display_datetime(getattr(treatment, field)),
+                "origin": getattr(treatment, origin_field),
+            }
     _audit(request, action="TREATMENT_FIELDS_CHANGED", description="Campo da tratativa atualizado pela planilha.", competence=competence,
-           metadata={"treatment_row_id": treatment.pk, "fields": changed_fields, "version": treatment.version})
+           metadata={"treatment_row_id": treatment.pk, "fields": changed_fields, "version": treatment.version,
+                     "reason": reason if date_adjustments else "", "date_adjustments": date_adjustments})
     if "decision" in changed_fields:
         _audit(request, action="FINANCIAL_DECISION_CHANGED", description="Decisão financeira alterada pela planilha.", competence=competence,
                metadata={"treatment_row_id": treatment.pk, "decision": treatment.decision})
@@ -1273,12 +1323,12 @@ def treatment_inline_edit(request, pk):
         "display": {
             "arion_opening_at": _display_datetime(treatment.arion_opening_at),
             "arion_fetec_at": _display_datetime(treatment.arion_fetec_at),
-            "isp": treatment.isp or "—", "root_cause": treatment.root_cause or "—",
+            "isp": treatment.isp if treatment.isp and not treatment.isp.isdecimal() else "ISP não identificado", "root_cause": treatment.root_cause or "—",
             "observation": treatment.observation or "—", "decision": treatment.get_decision_display(),
             "procedence": treatment.get_procedence_display(),
             "pause_minutes": f"{treatment.pause_minutes} min",
-            "tmp": f"{treatment.tmp_calculated_minutes} min" if treatment.tmp_calculated_minutes is not None else "—",
-            "ev": _display_decimal(treatment.ev_calculated),
+            "tmp": f"{treatment.tmp_effective_minutes} min" if treatment.tmp_effective_minutes is not None else "—",
+            "ev": _display_decimal(treatment.ev_effective),
             "inter": _display_currency(treatment.inter_effective),
             "unavailability": _display_currency(treatment.unavailability_effective),
             "claro": _display_currency(treatment.total_claro), "arion": _display_currency(treatment.total_arion),
@@ -1403,8 +1453,21 @@ def treatment_edit(request, pk):
             if treatment.status == PenaltyTreatmentRow.Status.PENDING and changed:
                 _audit(request, action="TREATMENT_STARTED", description="Tratativa iniciada na linha.", competence=competence,
                        metadata={"treatment_row_id": treatment.pk})
+            date_adjustments = {}
+            for field, key, automatic_field, origin_field in (
+                ("arion_opening_at", "opening", "arion_opening_auto_at", "arion_opening_origin"),
+                ("arion_fetec_at", "fetec", "arion_fetec_auto_at", "arion_fetec_origin"),
+            ):
+                if field in changed:
+                    date_adjustments[key] = {
+                        "automatic": _display_datetime(getattr(treatment, automatic_field)),
+                        "effective": _display_datetime(getattr(treatment, field)),
+                        "origin": getattr(treatment, origin_field),
+                    }
             _audit(request, action="TREATMENT_FIELDS_CHANGED", description="Campos da tratativa atualizados.", competence=competence,
-                   metadata={"treatment_row_id": treatment.pk, "fields": changed, "version": treatment.version + 1})
+                   metadata={"treatment_row_id": treatment.pk, "fields": changed, "version": treatment.version + 1,
+                             "reason": form.cleaned_data.get("treatment_justification", "") if date_adjustments else "",
+                             "date_adjustments": date_adjustments})
             if "status" in changed:
                 _audit(request, action="TREATMENT_STATUS_CHANGED", description="Status da linha atualizado.", competence=competence,
                        metadata={"treatment_row_id": treatment.pk, "status": form.cleaned_data["status"]})
@@ -1528,7 +1591,8 @@ def treatment_pause_add(request, pk):
                 calculate_treatment(treatment)
                 record_financial_change(
                     treatment=treatment, actor=request.user, previous_total=previous_total_arion,
-                    new_total=treatment.total_arion, reason=pause.reason, source="PAUSE_ADDED",
+                    new_total=treatment.total_arion,
+                    reason=f"{pause.reason} · Evidência: {pause.evidence}", source="PAUSE_ADDED",
                 )
         except Exception:
             if _wants_json(request):
@@ -1536,7 +1600,9 @@ def treatment_pause_add(request, pk):
             messages.error(request, "Não foi possível registrar essa pausa.")
         else:
             _audit(request, action="TREATMENT_PAUSE_ADDED", description="Pausa adicionada à tratativa.", competence=treatment.source_row.competence,
-                   metadata={"treatment_row_id": treatment.pk, "pause_id": pause.pk, "kind": pause.kind, "minutes": pause.duration_minutes})
+                   metadata={"treatment_row_id": treatment.pk, "pause_id": pause.pk, "kind": pause.kind,
+                             "minutes": pause.duration_minutes, "reason": pause.reason,
+                             "evidence": pause.evidence, "created_at": pause.created_at})
             if _wants_json(request):
                 return JsonResponse({"ok": True, "version": treatment.version})
             messages.success(request, "Pausa adicionada.")
@@ -1564,16 +1630,19 @@ def treatment_pause_remove(request, pk, pause_pk):
         previous_total_arion = treatment.total_arion
         pause = get_object_or_404(PenaltyTreatmentPause, pk=pause_pk, treatment=treatment)
         minutes, pause_id = pause.duration_minutes, pause.pk
+        reason, evidence = pause.reason, pause.evidence
         pause.delete()
         treatment.version += 1
         treatment.save(update_fields=("version", "updated_at"))
         calculate_treatment(treatment)
         record_financial_change(
             treatment=treatment, actor=request.user, previous_total=previous_total_arion,
-            new_total=treatment.total_arion, reason=f"Remoção da pausa {pause_id} ({minutes} min).", source="PAUSE_REMOVED",
+            new_total=treatment.total_arion,
+            reason=f"Remoção da pausa {pause_id} ({minutes} min): {reason} · Evidência: {evidence}", source="PAUSE_REMOVED",
         )
     _audit(request, action="TREATMENT_PAUSE_REMOVED", description="Pausa removida da tratativa.", competence=treatment.source_row.competence,
-           metadata={"treatment_row_id": treatment.pk, "pause_id": pause_id, "minutes": minutes})
+           metadata={"treatment_row_id": treatment.pk, "pause_id": pause_id, "minutes": minutes,
+                     "reason": reason, "evidence": evidence})
     return redirect("relatorios:treatment-edit", pk=pk)
 
 
@@ -1595,7 +1664,7 @@ def treatment_override_add(request, pk):
                 messages.error(request, "A linha mudou ou foi finalizada. Recarregue antes de continuar.")
                 return redirect("relatorios:treatment-edit", pk=pk)
             previous_total_arion = treatment.total_arion
-            calculated = {"tmp": treatment.tmp_calculated_minutes, "ev": treatment.ev_calculated,
+            calculated = {"tmp": treatment.tmp_gross_minutes, "ev": treatment.ev_calculated,
                           "inter": treatment.inter_calculated, "unavailability": treatment.unavailability_calculated,
                           "penalty": treatment.penalty_arion}.get(field)
             previous = list(PenaltyTreatmentOverride.objects.filter(treatment=treatment, field=field, removed_at__isnull=True))

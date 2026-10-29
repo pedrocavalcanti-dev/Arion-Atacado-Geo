@@ -19,7 +19,7 @@ O scheduler compara a última execução e o estado sincronizado de cada fonte. 
 | Rotina | Cadência | Trabalho |
 |---|---:|---|
 | OTRS FAST | 2 min | Delta por `ticket.change_time`; janela de segurança de 2 min. |
-| OTRS FULL | 30 min | Reconcilia fila e relações; tem prioridade sobre FAST. |
+| OTRS FULL | 30 min | Reconcilia as quatro filas configuradas para o Cockpit e relações; tem prioridade sobre FAST. Um FULL é antecipado quando a cobertura configurada ainda não foi aplicada. |
 | CMDB FULL | 10 min | Busca Search/Get completa e reconcilia snapshot validado. |
 | Retry de falha | 2 min | Agenda nova tentativa e preserva o mirror atual. |
 
@@ -62,7 +62,7 @@ A --> N[Commit e avanço do cursor]
 
 ### OTRS FULL e CMDB FULL
 
-OTRS FULL resolve a fila exata, lê tickets atuais e dimensões, lê relações/fields, faz upsert e reconcilia presença na fila. CMDB FULL lista os IDs, carrega detalhes, valida classe/completude/duplicação e só então aplica a reconciliação. Um snapshot parcial não deve marcar como ausentes objetos não recebidos.
+OTRS FULL resolve os nomes exatos das filas selecionadas, lê tickets atuais e dimensões, lê relações/fields, faz upsert e reconcilia presença somente nas filas incluídas, preservando os demais registros. Por padrão, o conjunto do Cockpit contém `NOC - ATACADO`, `NOC - CANCELAMENTOS NGO`, `NOC - RETIRA EQUIPAMENTO` e `NOC – PENDENTE PAGAMENTO` (travessão no nome real). FAST usa o cursor compartilhado e exige exatamente esse conjunto após um FULL bem-sucedido com a mesma cobertura. CMDB FULL lista os IDs, carrega detalhes, valida classe/completude/duplicação e só então aplica a reconciliação. Um snapshot parcial não deve marcar como ausentes objetos não recebidos.
 
 ## Lease e concorrência
 
@@ -111,9 +111,11 @@ Os comandos manuais usam o mesmo mecanismo de lease para evitar concorrência. U
 
 ```powershell
 .venv\Scripts\python.exe arion_geo\gerenciar.py sincronizar_cmdb --apply
-.venv\Scripts\python.exe arion_geo\gerenciar.py sincronizar_otrs --queue "NOC - ATACADO" --full --apply
-.venv\Scripts\python.exe arion_geo\gerenciar.py sincronizar_otrs --queue "NOC - ATACADO" --fast --apply
+.venv\Scripts\python.exe arion_geo\gerenciar.py sincronizar_otrs --full --apply
+.venv\Scripts\python.exe arion_geo\gerenciar.py sincronizar_otrs --fast --apply
 ```
+
+Sem `--queue`, o comando usa as quatro filas do Cockpit. `--queue` pode ser repetido para um FULL de conjunto específico; FAST não aceita cobertura parcial. Um FULL parcial não torna o conjunto completo apto para FAST.
 
 Não coloque credenciais nos argumentos de shell compartilhado nem em logs.
 
@@ -123,7 +125,7 @@ Não coloque credenciais nos argumentos de shell compartilhado nem em logs.
 2. Compare `last_success_at`, `last_full_success_at` e `change_cursor`.
 3. Verifique owner/heartbeat/expiração do lease e se há processo concorrente.
 4. Confirme conectividade e configuração mascarada; nunca revele secret.
-5. OTRS: confirme schema e resolução única da fila `NOC - ATACADO`. CMDB: confirme Search e Get completos para as classes esperadas.
+5. OTRS: confirme schema e resolução única de todas as filas do conjunto esperado para o Cockpit. CMDB: confirme Search e Get completos para as classes esperadas.
 6. Corrija a causa e rode FULL controlado se o delta não for confiável.
 
 ### Troubleshooting por sintoma

@@ -50,14 +50,17 @@ def calculate_treatment(treatment, *, save=True):
     """Recalculate one row; missing inputs remain NULL rather than becoming zero."""
     competence = treatment.source_row.competence
     source = treatment.source_row.canonical_data or treatment.source_values or {}
-    opening = treatment.arion_opening_at
-    fetec = treatment.arion_fetec_at
+    opening = treatment.arion_opening_auto_at or treatment.arion_opening_at
+    fetec = treatment.arion_fetec_auto_at or treatment.arion_fetec_at
     gross = None
     if opening and fetec:
         gross = max(0, int((fetec - opening).total_seconds() // 60))
+    effective_gross = None
+    if treatment.arion_opening_at and treatment.arion_fetec_at:
+        effective_gross = max(0, int((treatment.arion_fetec_at - treatment.arion_opening_at).total_seconds() // 60))
     pauses = sum(pause.duration_minutes for pause in treatment.pauses.all())
-    net = max(0, gross - pauses) if gross is not None else None
-    ev = _calculate_ev(net, competence.calculation_rule_set)
+    net = max(0, effective_gross - pauses) if effective_gross is not None else None
+    ev = _calculate_ev(gross, competence.calculation_rule_set)
 
     overrides = _active_overrides(treatment)
     effective_tmp = int(overrides[PenaltyTreatmentOverride.Field.TMP]) if PenaltyTreatmentOverride.Field.TMP in overrides else net
@@ -66,7 +69,7 @@ def calculate_treatment(treatment, *, save=True):
     inter_calculated = money((Decimal(3) * monthly * ev) / Decimal(1440)) if monthly is not None and ev is not None else None
     inter_effective = money((Decimal(3) * monthly * effective_ev) / Decimal(1440)) if monthly is not None and effective_ev is not None else None
     profile = competence.sla_profile
-    indisp_calculated = _calculate_indisp(monthly, net, profile)
+    indisp_calculated = _calculate_indisp(monthly, gross, profile)
     indisp_effective = _calculate_indisp(monthly, effective_tmp, profile)
     if PenaltyTreatmentOverride.Field.INTER in overrides:
         inter_effective = money(overrides[PenaltyTreatmentOverride.Field.INTER])
@@ -97,7 +100,9 @@ def calculate_treatment(treatment, *, save=True):
     treatment.tmp_gross_minutes = gross
     treatment.pause_minutes = pauses
     treatment.tmp_calculated_minutes = net
+    treatment.tmp_effective_minutes = effective_tmp
     treatment.ev_calculated = ev
+    treatment.ev_effective = effective_ev
     treatment.inter_calculated = inter_calculated
     treatment.inter_effective = inter_effective
     treatment.unavailability_calculated = indisp_calculated
@@ -116,7 +121,7 @@ def calculate_treatment(treatment, *, save=True):
     treatment.calculation_state = "CALCULATED" if total_arion is not None else "INCOMPLETE"
     if save:
         treatment.save(update_fields=(
-            "tmp_gross_minutes", "pause_minutes", "tmp_calculated_minutes", "ev_calculated",
+            "tmp_gross_minutes", "pause_minutes", "tmp_calculated_minutes", "tmp_effective_minutes", "ev_calculated", "ev_effective",
             "inter_calculated", "inter_effective", "unavailability_calculated", "unavailability_effective",
             "penalty_arion", "penalty_effective", "amount_charged", "amount_due", "total_calculated_arion", "total_arion", "total_claro", "difference",
             "amount_contested", "reduction_percent", "comparison_status", "calculation_state", "updated_at",
@@ -154,8 +159,8 @@ def _calculate_indisp(monthly, tmp_minutes, profile):
 
 def effective_values(treatment):
     overrides = _active_overrides(treatment)
-    tmp = overrides.get(PenaltyTreatmentOverride.Field.TMP, treatment.tmp_calculated_minutes)
-    ev = overrides.get(PenaltyTreatmentOverride.Field.EV, _calculate_ev(tmp, treatment.source_row.competence.calculation_rule_set))
+    tmp = overrides.get(PenaltyTreatmentOverride.Field.TMP, treatment.tmp_effective_minutes)
+    ev = overrides.get(PenaltyTreatmentOverride.Field.EV, treatment.ev_effective)
     return {
         "tmp": tmp,
         "ev": ev,
