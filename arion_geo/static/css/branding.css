@@ -1,0 +1,147 @@
+/* Institutional ARION accents for shared controls; data colors stay in module styles. */
+body :focus-visible {
+  outline-color: var(--brand-focus);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--arion-green);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([aria-invalid="true"]):focus-visible,
+select:not([aria-invalid="true"]):focus-visible,
+textarea:not([aria-invalid="true"]):focus-visible {
+  border-color: var(--brand-focus);
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-focus) 18%, transparent);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([aria-invalid="true"]):focus:not(:focus-visible),
+select:not([aria-invalid="true"]):focus:not(:focus-visible),
+textarea:not([aria-invalid="true"]):focus:not(:focus-visible) {
+  border-color: var(--brand-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-focus) 18%, transparent);
+}
+
+:is(
+  .links-primary-button,
+  .button-primary,
+  .cockpit-action-primary,
+  .ranking-button--primary,
+  .settings-button:not(.settings-button--secondary):not(.settings-button--danger),
+  .reports-button--primary,
+  .ari-dialog-primary,
+  .error-button--primary,
+  .pwa-update__accept,
+  .pwa-install-action
+) {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary);
+  color: var(--brand-primary-contrast);
+}
+
+:is(
+  .links-primary-button,
+  .button-primary,
+  .cockpit-action-primary,
+  .ranking-button--primary,
+  .settings-button:not(.settings-button--secondary):not(.settings-button--danger),
+  .reports-button--primary,
+  .ari-dialog-primary,
+  .error-button--primary,
+  .pwa-update__accept,
+  .pwa-install-action
+):hover:not(:disabled) {
+  border-color: var(--brand-primary-hover);
+  background: var(--brand-primary-hover);
+  color: var(--brand-primary-contrast);
+}
+
+.header-link:hover,
+.header-link.is-active {
+  color: var(--brand-link);
+}
+
+.header-link.is-active::after {
+  background: var(--arion-green);
+}
+
+.mobile-navigation__links a:hover,
+.mobile-navigation__secondary a:hover {
+  background: var(--arion-green-soft);
+  color: var(--brand-link);
+}
+
+.mobile-navigation__links a[aria-current="page"] {
+  background: var(--arion-green-soft);
+  color: var(--brand-link);
+}
+
+.ticket-tabs a.is-active,
+.base-view-tabs a.is-active {
+  border-bottom-color: var(--arion-green);
+}
+
+.ranking-mode-switch a.is-active {
+  box-shadow: inset 0 -2px 0 var(--arion-green);
+}
+
+.reports-nav a.is-active,
+.reports-nav a.is-active .reports-nav-icon {
+  color: var(--brand-link);
+}
+
+.ticket-tabs a.is-active,
+.base-view-tabs a.is-active,
+.base-view-switch a[aria-current="page"] {
+  color: var(--text-primary);
+}
+
+.settings-nav a.is-active svg {
+  color: var(--brand-link);
+}
+
+.overview-module-cta,
+.overview-account-cta {
+  color: var(--brand-link);
+}
+
+.overview-module-card:focus-visible,
+.overview-admin-link:focus-visible,
+.overview-account-link:focus-visible {
+  outline-color: var(--brand-focus);
+}
+
+.main-content a[href]:not([class]) {
+  color: var(--brand-link);
+}
+
+.main-content a[href]:not([class]):hover {
+  color: var(--brand-primary-hover);
+}
+
+.error-page a {
+  color: var(--brand-link);
+}
+
+.error-page a:hover {
+  color: var(--brand-primary-hover);
+}
+
+.main-content a[href]:not([class]):focus-visible {
+  color: var(--brand-link);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .header-link,
+  .user-menu-link,
+  .links-primary-button,
+  .button-primary,
+  .cockpit-action-primary,
+  .ranking-button--primary,
+  .settings-button,
+  .reports-button--primary,
+  .ari-dialog-primary {
+    transition-duration: 140ms;
+  }
+}

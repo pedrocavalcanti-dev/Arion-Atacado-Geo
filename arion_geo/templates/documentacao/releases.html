@@ -1,6 +1,6 @@
 {% extends "documentacao/base_documentacao.html" %}
 {% load static %}
-{% block title %}Atualiza&ccedil;&otilde;es e vers&otilde;es &middot; ARION ATACADO GEO{% endblock %}
+{% block title %}Atualiza&ccedil;&otilde;es e vers&otilde;es &middot; ARION OPS{% endblock %}
 {% block docs_content %}
 <div class="docs-releases">
   <label class="docs-release-picker">Vers&atilde;o
@@ -8,17 +8,17 @@
       {% for release in releases %}<option value="{{ release.version }}"{% if selected_release.version == release.version %} selected{% endif %}>v{{ release.version }}{% if release.version == version %} &middot; Atual{% endif %}</option>{% endfor %}
     </select>
   </label>
-  <nav class="docs-breadcrumb" aria-label="Caminho"><span>ARION ATACADO GEO</span><span aria-hidden="true">/</span><span>Atualiza&ccedil;&otilde;es e vers&otilde;es</span></nav>
+  <nav class="docs-breadcrumb" aria-label="Caminho"><span>ARION OPS</span><span aria-hidden="true">/</span><span>Atualiza&ccedil;&otilde;es e vers&otilde;es</span></nav>
   <header class="docs-release-hero">
     <div>
       <p class="docs-eyebrow">ATUALIZA&Ccedil;&Otilde;ES</p>
       <h1>Atualiza&ccedil;&otilde;es e vers&otilde;es</h1>
-      <p class="docs-lead">Novidades, melhorias e corre&ccedil;&otilde;es do ARION ATACADO GEO.</p>
+      <p class="docs-lead">Novidades, melhorias e corre&ccedil;&otilde;es do ARION OPS.</p>
     </div>
     <div class="docs-release-current" aria-live="polite">
       <span>VERS&Atilde;O DISPON&Iacute;VEL NO SERVIDOR</span>
       <strong data-release-current-version>v{{ version }}</strong>
-      <small data-release-version-status>Seu ARION est&aacute; atualizado.</small>
+      <small data-release-version-status>Seu ARION OPS est&aacute; atualizado.</small>
       <small>Vers&atilde;o carregada nesta p&aacute;gina: v{{ arion_version }}</small>
     </div>
   </header>

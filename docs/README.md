@@ -1,6 +1,6 @@
-﻿# Documentação oficial — ARION ATACADO GEO
+﻿# Documentação oficial — ARION OPS
 
-Esta pasta é a fonte Markdown da Central web em `/configuracoes/documentacao/`. Produto: **ARION ATACADO GEO**; operação atendida: **NOC ATACADO**. OTRS e CMDB permanecem fontes oficiais; o banco ARION contém mirrors e dados próprios.
+Esta pasta é a fonte Markdown da Central web em `/configuracoes/documentacao/`. Produto/interface: **ARION OPS**; empresa: **ARION**; operação atendida: **NOC ATACADO**. O nome interno do projeto e repositório permanece ARION ATACADO GEO. OTRS e CMDB permanecem fontes oficiais; o banco ARION contém mirrors e dados próprios.
 
 ## Começar
 

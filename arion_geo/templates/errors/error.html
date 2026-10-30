@@ -1,5 +1,5 @@
 {% extends "errors/base_error.html" %}
-{% block title %}{{ error.title|default:"Não foi possível concluir a solicitação" }} · Arion Atacado Geo{% endblock %}
+{% block title %}{{ error.title|default:"Não foi possível concluir a solicitação" }} · ARION OPS{% endblock %}
 {% block error_content %}
 <section class="error-card" role="alert" aria-labelledby="error-title">
   <p class="error-status">{{ error.status_code|default:"400" }} <span>· {{ error.code|default:"BAD_REQUEST" }}</span></p>

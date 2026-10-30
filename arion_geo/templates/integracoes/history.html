@@ -1,6 +1,6 @@
 {% extends "integracoes/base_integracoes.html" %}
 {% load static %}
-{% block title %}Histórico de Integrações · Arion{% endblock %}
+{% block title %}Histórico de Integrações · ARION OPS{% endblock %}
 {% block integration_title %}Histórico de integrações{% endblock %}
 {% block integration_description %}Testes, leituras e inspeções das fontes conectadas.{% endblock %}
 {% block integration_content %}<div class="integration-detail-top"><a class="integration-back" href="{% url 'configuracoes:integrations' %}">← Todas as integrações</a></div><section class="settings-section integration-section">{% include "integracoes/_run_list.html" with run_list=runs %}</section>{% endblock %}

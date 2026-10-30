@@ -1,10 +1,10 @@
-﻿# Projeto — ARION ATACADO GEO
+﻿# Projeto — ARION OPS
 
-> **Identidade:** Produto: **ARION ATACADO GEO**. Operação atendida: **NOC ATACADO**. A operação não altera o nome do produto.
+> **Identidade visual:** Produto/interface **ARION OPS**. Empresa: **ARION**. Operação atendida: **NOC ATACADO**. O nome interno do projeto e repositório permanece ARION ATACADO GEO.
 
 ## Objetivo e público
 
-O ARION ATACADO GEO é uma plataforma Django de inteligência operacional. Reúne a base de links da CMDB, os chamados sincronizados do OTRS e o acompanhamento local da equipe. Dashboard, Cockpit, Mapa e Rankings reutilizam espelhos locais para cruzar chamado, Link, Provider/ISP, Cliente, Projeto e UF conforme as limitações das fontes disponíveis.
+O ARION OPS é uma plataforma Django de inteligência operacional. Reúne a base de links da CMDB, os chamados sincronizados do OTRS e o acompanhamento local da equipe. Dashboard, Cockpit, Mapa e Rankings reutilizam espelhos locais para cruzar chamado, Link, Provider/ISP, Cliente, Projeto e UF conforme as limitações das fontes disponíveis.
 
 O sistema reduz a fragmentação entre consultas e facilita a leitura consolidada de fila, impacto, recorrência e distribuição geográfica. É uma ferramenta de exploração operacional diária; não substitui OTRS/CMDB como registro técnico nem BI/relatórios formais.
 

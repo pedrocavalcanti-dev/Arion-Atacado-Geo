@@ -15,11 +15,14 @@ def _safe_cell(value):
 
 
 def _view_label(filters):
-    return "Consolidado 3 meses" if filters["view"] == "3months" else "Período personalizado" if filters["view"] == "custom" else "Visão do mês"
+    return {
+        "3months": "Consolidado 3 meses", "6months": "Consolidado 6 meses",
+        "12months": "Consolidado 12 meses", "custom": "Período personalizado",
+    }.get(filters["view"], "Visão do mês")
 
 
 def _ranking_label(filters):
-    return {"best": "Melhor desempenho observado", "stable": "Sem ocorrências"}.get(filters["ranking_view"], "Maior risco")
+    return {"links": "Maior exposição de links ativos", "best": "Melhor desempenho observado", "stable": "Sem ocorrências"}.get(filters["ranking_view"], "Maior risco")
 
 
 def _filter_labels(filters):
@@ -41,7 +44,8 @@ def _provider_values(row):
     return [
         row.get("name"), row.get("risk_score"), row.get("risk_label"), row.get("impact_noc_score"),
         row.get("affected_base_score"), row.get("recurrent_score"), row.get("over_24h_score"),
-        row.get("backlog_score"), row.get("links_total"), row.get("tickets"), row.get("tickets_per_link"),
+        row.get("backlog_score"), row.get("links_total"), row.get("links_active"), row.get("tickets"), row.get("tickets_per_link"),
+        row.get("tickets_per_100_active_links"), row.get("avg_resolution_display"),
         row.get("links_affected"), row.get("affected_rate_pct"), row.get("recurrent_links"),
         row.get("recurrent_rate_pct"), row.get("tickets_over_24h"), row.get("over_24h_rate_pct"),
         row.get("backlog_current"), row.get("high_critical_tickets"), row.get("procedentes"),
@@ -87,6 +91,7 @@ def build_xlsx(data, filters, providers, podium, generated_at, generated_by):
     summary.append(["Indicadores", "Valor"])
     for label, value in (
         ("Provedores analisados", len(providers)), ("Links CMDB", data["links_total"]),
+        ("Links ativos atuais", data["links_active"]), ("Concentração Top 10", data["top10_link_concentration"]),
         ("Chamados válidos", data["tickets_valid"]), ("Links afetados", data["links_affected"]),
         ("Links reincidentes", data["links_recurrent"]), ("Chamados ARION >24h", data["tickets_over_24h"]),
         ("Backlog atual", data["backlog_current"]),
@@ -100,12 +105,12 @@ def build_xlsx(data, filters, providers, podium, generated_at, generated_by):
     summary.append(["Exposição", "Chamados por provedor podem se sobrepor; abas Links e Tickets respeitam o Data Scope."])
     summary.append([])
     summary.append(["Pódio · " + _ranking_label(filters)])
-    summary.append(["Posição", "Provedor / ISP", "Índice ARION V2", "Nível", "Links", "Chamados"])
+    summary.append(["Posição", "Provedor / ISP", "Índice ARION V2", "Nível", "Links ativos", "Chamados", "Chamados / 100 ativos"])
     for position, row in enumerate(podium, 1):
-        summary.append([position, _safe_cell(row["name"]), row["risk_score"], row["risk_label"], row["links_total"], row["tickets"]])
+        summary.append([position, _safe_cell(row["name"]), row["risk_score"], row["risk_label"], row["links_active"], row["tickets"], row["tickets_per_100_active_links"]])
 
     ranking = workbook.create_sheet("Ranking")
-    ranking_headers = ["Pos.", "Provedor / ISP", "Índice ARION V2", "Nível", "Impacto no NOC /30", "Base afetada /20", "Reincidência /20", "ARION >24h /20", "Backlog atual /10", "Links", "Chamados", "Chamados / link", "Links afetados", "% base afetada", "Reincidentes", "Taxa de reincidência %", "Chamados >24h", "Taxa >24h %", "Backlog", "Alta / crítica", "Procedentes", "Improcedentes", "Indeterminados", "Procedência %", "Improcedentes %", "Tendência"]
+    ranking_headers = ["Pos.", "Provedor / ISP", "Índice ARION V2", "Nível", "Impacto no NOC /30", "Base afetada /20", "Reincidência /20", "ARION >24h /20", "Backlog atual /10", "Links CMDB", "Links ativos", "Chamados", "Chamados / link CMDB", "Chamados / 100 ativos", "Tempo médio resolução", "Links afetados", "% base afetada", "Reincidentes", "Taxa de reincidência %", "Chamados >24h", "Taxa >24h %", "Backlog", "Alta / crítica", "Procedentes", "Improcedentes", "Indeterminados", "Procedência %", "Improcedentes %", "Tendência"]
     ranking.append(ranking_headers)
     for position, row in enumerate(providers, 1):
         ranking.append([position, *[_safe_cell(value) for value in _provider_values(row)], row.get("trend_label", "")])
@@ -210,21 +215,21 @@ def build_pdf(data, filters, providers, podium, generated_at, generated_by):
     ]
     story += [table(metadata, [30 * mm, 220 * mm], header=False), Spacer(1, 5 * mm), p("Indicadores do recorte", "ArionReportSection")]
     kpis = [
-        [p("Provedores"), p("Links CMDB"), p("Chamados válidos"), p("Links afetados"), p("Reincidentes"), p("ARION >24h"), p("Backlog")],
-        [p(len(providers)), p(data["links_total"]), p(data["tickets_valid"]), p(data["links_affected"]), p(data["links_recurrent"]), p(data["tickets_over_24h"]), p(data["backlog_current"])],
+        [p("Provedores"), p("Links CMDB"), p("Links ativos"), p("Top 10 %"), p("Chamados válidos"), p("Links afetados"), p("Reincidentes"), p("Backlog")],
+        [p(len(providers)), p(data["links_total"]), p(data["links_active"]), p(f"{data['top10_link_concentration']:.1f}%"), p(data["tickets_valid"]), p(data["links_affected"]), p(data["links_recurrent"]), p(data["backlog_current"])],
     ]
-    story.append(table(kpis, [35 * mm] * 7))
-    story += [p(f"Top {10 if filters['ranking_view'] == 'stable' else 3} · {mode}", "ArionReportSection")]
-    top_rows = [[p("Pos."), p("Provedor / ISP"), p("Índice ARION V2"), p("Nível"), p("Links"), p("Chamados"), p("Impacto / 30")]]
+    story.append(table(kpis, [31 * mm] * 8))
+    story += [p(f"Top {10 if filters['ranking_view'] == 'stable' else 20 if filters['ranking_view'] == 'links' else 3} · {mode}", "ArionReportSection")]
+    top_rows = [[p("Pos."), p("Provedor / ISP"), p("Índice ARION V2"), p("Nível"), p("Links ativos"), p("Chamados"), p("/100 ativos"), p("Impacto / 30")]]
     for position, row in enumerate(podium, 1):
-        top_rows.append([p(position), p(row["name"]), p(f"{row['risk_score']:.1f} / 100"), p(row["risk_label"]), p(row["links_total"]), p(row["tickets"]), p(f"{row['impact_noc_score']:.1f} / 30")])
-    story.append(table(top_rows, [13 * mm, 73 * mm, 28 * mm, 34 * mm, 19 * mm, 20 * mm, 25 * mm]))
+        top_rows.append([p(position), p(row["name"]), p(f"{row['risk_score']:.1f} / 100"), p(row["risk_label"]), p(row["links_active"]), p(row["tickets"]), p(row["tickets_per_100_active_links"] if row["tickets_per_100_active_links"] is not None else "—"), p(f"{row['impact_noc_score']:.1f} / 30")])
+    story.append(table(top_rows, [11 * mm, 65 * mm, 24 * mm, 29 * mm, 17 * mm, 18 * mm, 21 * mm, 24 * mm]))
     story += [p("Ranking completo · primeiros 20", "ArionReportSection")]
-    headers = ["Pos.", "Provedor / ISP", "Índice V2", "Nível", "Links", "Chamados", "Chamados/link", "Impacto/30", "Base/20", "Reincid./20", ">24h/20", "Backlog/10"]
+    headers = ["Pos.", "Provedor / ISP", "Índice V2", "Nível", "Links ativos", "Chamados", "/100 ativos", "Tempo médio", "Chamados/link", "Impacto/30", "Base/20", "Reincid./20", ">24h/20", "Backlog/10"]
     rows = [[p(value) for value in headers]]
     for position, row in enumerate(providers[:20], 1):
-        rows.append([p(position), p(row["name"]), p(f"{row['risk_score']:.1f}"), p(row["risk_label"]), p(row["links_total"]), p(row["tickets"]), p(f"{row['tickets_per_link']:.2f}"), p(f"{row['impact_noc_score']:.1f}"), p(f"{row['affected_base_score']:.1f}"), p(f"{row['recurrent_score']:.1f}"), p(f"{row['over_24h_score']:.1f}"), p(f"{row['backlog_score']:.1f}")])
-    story.append(table(rows, [11 * mm, 50 * mm, 16 * mm, 24 * mm, 13 * mm, 15 * mm, 19 * mm, 17 * mm, 15 * mm, 17 * mm, 15 * mm, 18 * mm]))
+        rows.append([p(position), p(row["name"]), p(f"{row['risk_score']:.1f}"), p(row["risk_label"]), p(row["links_active"]), p(row["tickets"]), p(row["tickets_per_100_active_links"] if row["tickets_per_100_active_links"] is not None else "—"), p(row["avg_resolution_display"]), p(f"{row['tickets_per_link']:.2f}"), p(f"{row['impact_noc_score']:.1f}"), p(f"{row['affected_base_score']:.1f}"), p(f"{row['recurrent_score']:.1f}"), p(f"{row['over_24h_score']:.1f}"), p(f"{row['backlog_score']:.1f}")])
+    story.append(table(rows, [9 * mm, 43 * mm, 14 * mm, 20 * mm, 14 * mm, 13 * mm, 17 * mm, 21 * mm, 17 * mm, 16 * mm, 14 * mm, 14 * mm, 14 * mm, 16 * mm]))
     unique_tickets = {}
     for item in data["ticket_export_rows"]:
         unique_tickets.setdefault(item["external_id"], item)

@@ -4,17 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <title>{% block title %}Arion Atacado Geo{% endblock %}</title>
-  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/arion.svg' %}">
+  <title>{% block title %}ARION OPS{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="{% static 'favicon/favicon.ico' %}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'favicon/favicon-32x32.png' %}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'favicon/favicon-16x16.png' %}">
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
   <link rel="stylesheet" href="{% static 'css/errors.css' %}">
+  <link rel="stylesheet" href="{% static 'css/branding.css' %}">
   <script src="{% arion_js 'js/theme.js' %}"></script>
   <script src="{% arion_js 'js/errors.js' %}" defer></script>
 </head>
 <body>
   <header class="error-brand-header">
-    <a class="error-brand" href="{{ home_url|default:'/' }}" aria-label="Arion Atacado Geo, início">
-      <span class="error-brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span>ARION <b>ATACADO GEO</b></span>
+    <a class="error-brand" href="{{ home_url|default:'/' }}" aria-label="ARION OPS, início">
+      <img class="error-brand-logo error-brand-logo--dark" src="{% static 'branding/arion/arion-logo-light.png' %}" width="2172" height="724" alt="">
+      <img class="error-brand-logo error-brand-logo--light" src="{% static 'branding/arion/arion-logo-primary.png' %}" width="2172" height="724" alt="">
+      <span class="error-brand-product">OPS</span>
     </a>
   </header>
   <main class="error-main" id="main-content">{% block error_content %}{% endblock %}</main>

@@ -1,10 +1,10 @@
 # Roadmap — próxima release
 
-Revisado em 29/10/2026. Este documento planeja trabalho futuro; os itens abaixo não foram implementados nesta rodada. A versão e as notas apresentadas aos usuários ficam em `docs/releases/releases.json`; o procedimento de release está em [Implantação e Produção](IMPLANTACAO-E-PRODUCAO.md#versionamento-e-notas-de-release). Mudanças locais só entram nas notas quando a próxima versão for preparada.
+Revisado em 29/10/2026. A primeira rodada de exposição de Rankings foi implementada localmente. As pendências remanescentes estão marcadas abaixo; esta alteração não prepara release, deploy ou produção. A versão e as notas apresentadas aos usuários ficam em `docs/releases/releases.json` e só são atualizadas ao preparar a próxima versão.
 
 ## Foco inicial: evolução de Rankings
 
-A próxima frente é evoluir a tela existente de Rankings, com prioridade para Rankings de Provedores. Neste roadmap, “Rankings V2” identifica essa próxima rodada de produto. O **Índice ARION V2** e o ranking absoluto já existentes continuam ativos e devem ser preservados; o novo trabalho adiciona perspectivas complementares sem substituir a página inteira.
+A tela existente de Rankings recebeu a visão **Mais links** como primeira perspectiva, mantendo as visões de risco, melhor desempenho e sem ocorrências. O **Índice ARION V2** e seu cálculo continuam preservados; os novos indicadores de exposição são mostrados em separado.
 
 ### Perguntas que a evolução deve responder
 
@@ -26,33 +26,33 @@ O resultado deve oferecer as duas leituras em conjunto: **VOLUME / EXPOSIÇÃO**
 
 Hoje, a visão **Sem ocorrências** já pode ordenar até 10 provedores pelo número de Links, mas inclui somente provedores sem chamados nem backlog. A nova visão de Exposição deve cobrir todos os provedores elegíveis do recorte, sem duplicar ou substituir esse uso existente.
 
-## Contratos de dados a fechar antes da implementação
+## Decisões de dados adotadas
 
-- **Link ativo:** identificar o campo real da CMDB/Base Links e acordar a regra operacional. Excluir desativados, cancelados e duplicados somente se os dados e a regra confirmarem que não pertencem ao estoque ativo. Não escolher um campo por suposição.
-- **Origem da exposição:** contar Links atuais da CMDB/Base Links, não inferir inventário pela quantidade de tickets. O nome do provedor deve vir da relação Provider/ISP resolvida; não usar ID técnico como nome nem hardcodear catálogo.
-- **Denominador e período:** Links atuais são um snapshot; Chamados são fluxo do período escolhido. A interface deve rotular claramente, por exemplo, “Links ativos atuais” e “Chamados nos últimos 30 dias”. Não descrever a taxa como se o inventário de links fosse histórico.
+- **Link ativo:** `CMDBLinkMirror.is_present_in_source=True` e implantação `Operacional` ou `Operational`. No snapshot local de 29/10/2026 há 3.194 links operacionais, 251 cancelados e 1 em manutenção. Estados vazios ou não reconhecidos não entram.
+- **Origem da exposição:** agregação atual em CMDB por `CMDBLinkMirror.operator`, cuja resolução usa ConfigItemID ou nome único exato. Não usa fuzzy matching, nomes hardcoded nem ID técnico como nome.
+- **Denominador e período:** links são snapshot atual; chamados são contados pela criação no período. A interface e a documentação explicitam essa diferença, inclusive na visão de 12 meses.
 - **Reuso da taxa atual:** a página já documenta Chamados por Link. Auditar o cálculo e reutilizá-lo; a nova apresentação por 100 links deve ser escala/formatação consistente da mesma taxa, sem criar uma segunda definição incompatível.
 - **Histórico do inventário:** sem snapshots históricos da CMDB, a taxa histórica usa o denominador atual e precisa dizer isso. Se houver snapshots no futuro, avaliar a comparação de links ativos e chamados no mesmo mês.
 - **Granularidade de evidência:** deduplicar tickets por provedor segundo as regras de Ranking atuais e explicar quando um ticket associado a vários provedores conta uma vez em cada linha. Preservar o total nacional distinto e sua diferença para a soma das linhas.
-- **Limite mínimo de Links:** analisar a distribuição real antes de escolher limites ou defaults. Considerar uma opção como Todos / mínimo de Links, mas não fixar agora valores como 10, 20 ou 30 sem evidência.
+- **Limite mínimo de Links:** Todos por padrão; filtros opcionais 10+, 30+, 50+ e 100+. Provedores pequenos continuam visíveis sem o filtro.
 - **Filtros:** avaliar Projeto, Cliente, UF, Operadora/Provedor e Período, respeitando permissões, Data Scope e as dimensões disponíveis. A combinação deve continuar sendo a interseção aplicada pelo backend.
-- **Indicadores internos:** validar o significado e a regra de cálculo de ANOP, ETIT e outros termos operacionais em fontes internas antes de implementar. A busca atual no código e em `docs/` não encontrou definição comprovada; não presumir significados.
+- **Indicadores internos:** ANOP e ETIT seguem sem definição comprovada. A busca nos documentos encontrou somente pendências; os campos armazenados nos mirrors locais não têm esses tokens e o banco não possui linhas Claro importadas. Não foram implementados.
 
 ## Plano de trabalho
 
-1. Auditar a tela atual de Rankings, serviços, dados, exports e Data Scope; mapear os componentes e cálculos que devem ser reutilizados.
-2. Mapear Base Links/CMDB e definir, com evidência, a regra de Link ativo.
-3. Conferir e consolidar o nome canônico dos provedores, preservando variações de negócio que não sejam equivalentes.
-4. Criar Top 10 por quantidade de Links como uma perspectiva de exposição.
-5. Cruzar quantidade de Links e chamados por provedor sem alterar o ranking absoluto existente.
-6. Calcular e apresentar Chamados por 100 links, deixando claro o snapshot atual do denominador e o período dos chamados.
-7. Preservar a leitura de provedores pequenos com alta incidência e avaliar limite mínimo usando a distribuição real.
-8. Avaliar filtros de Projeto, Cliente, UF, Provedor e Período conforme disponibilidade e Data Scope.
-9. Validar ANOP, ETIT e demais indicadores com responsáveis/fontes internas.
-10. Avaliar backlog, tempo médio por provedor, tickets acima de 24h e SLA individualmente quanto à confiabilidade.
-11. Validar unicidade, escopo, consistência com Base/Cockpit, consultas e performance.
-12. Refinar a interface sem redesenhar a página toda: usar uma alternância/tabs como Exposição, Incidência, Backlog e Desempenho para evitar vários rankings longos ao mesmo tempo.
-13. Registrar limites e fontes dos indicadores, atualizar documentação técnica e notas da release somente quando a implementação for fechada para publicação.
+1. [x] Auditar tela, serviço, filtros, exportações e Data Scope; reutilizar os padrões existentes.
+2. [x] Definir link ativo a partir do estado de implantação CMDB e validar a distribuição local.
+3. [x] Usar a entidade CMDB resolvida por ConfigItemID ou nome único exato, sem fuzzy matching.
+4. [x] Criar a visão Mais links, com Top 20 padrão e opções 10/20/30/50/Todos.
+5. [x] Mostrar chamados absolutos e contexto ativo sem substituir o cálculo ARION V2.
+6. [x] Calcular Chamados por 100 links ativos atuais e explicar a janela temporal.
+7. [x] Preservar provedores pequenos e tornar o mínimo de links um filtro opcional.
+8. [x] Reutilizar filtros de Cliente, Projeto, Provedor, UF e período sob Data Scope backend.
+9. [ ] Confirmar ANOP/ETIT com a área responsável; não há definição nos dados locais revisados.
+10. [x] Incluir backlog, >24h e tempo médio de tickets encerrados no período; não incluir SLA sem regra comparável validada.
+11. [x] Validar contagem agrupada no banco, filtro de escopo e testes focados.
+12. [x] Integrar a visão de exposição à página atual sem redesenho e manter as três visões existentes.
+13. [x] Atualizar a documentação funcional e registrar limitações. As notas da release ficam para o preparo de uma versão.
 
 ## Princípios de UX
 
@@ -74,6 +74,6 @@ Hoje, a visão **Sem ocorrências** já pode ordenar até 10 provedores pelo nú
 - UNKNOWN em Cancelamentos é uma condição real de classificação/cobertura e precisa permanecer visível, não ser convertido automaticamente em uma das etapas.
 - ANOP e ETIT seguem sem definição comprovada nos materiais revisados; suas fórmulas não devem ser inventadas.
 
-## Fora do escopo desta rodada documental
+## Estado da implementação local
 
-Não houve alteração da tela de Rankings, fórmula do Índice ARION V2, filtros, modelos ou dados. Esta rodada registra requisitos, perguntas e decisões pendentes para a próxima release; a implementação deve começar após a auditoria dos dados e a validação da regra de Link ativo.
+A visão usa somente mirrors locais; nenhuma migration foi necessária e o OTRS remoto não é consultado durante a abertura da tela. A validação focada foi executada com banco SQLite de teste porque o usuário MySQL local não pode criar o banco temporário de testes. O `check` do Django passou. ANOP/ETIT e eventual comparação com regra contratual específica de provedor seguem pendentes de validação de negócio.

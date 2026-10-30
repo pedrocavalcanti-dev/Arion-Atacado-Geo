@@ -1,6 +1,6 @@
 {% extends "integracoes/base_integracoes.html" %}
 {% load static %}
-{% block title %}Banco Arion &middot; Integra&ccedil;&otilde;es{% endblock %}
+{% block title %}Banco Arion &middot; Integra&ccedil;&otilde;es · ARION OPS{% endblock %}
 {% block extra_js %}{{ block.super }}<script src="{% arion_js 'js/integracoes/arion-database.js' %}" defer></script>{% endblock %}
 {% block integration_content %}
 <a class="integration-back" href="{% url 'configuracoes:integrations' %}">&#8592; Todas as integra&ccedil;&otilde;es</a>

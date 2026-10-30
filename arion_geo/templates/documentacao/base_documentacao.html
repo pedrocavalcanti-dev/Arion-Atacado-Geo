@@ -6,11 +6,13 @@
   <meta name="theme-color" content="#090a0a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ARION">
-  <title>{% block title %}Documentação · ARION ATACADO GEO{% endblock %}</title>
-  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/arion.svg' %}">
+  <meta name="apple-mobile-web-app-title" content="ARION OPS">
+  <title>{% block title %}Documentação · ARION OPS{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="{% static 'favicon/favicon.ico' %}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'favicon/favicon-32x32.png' %}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'favicon/favicon-16x16.png' %}">
   <link rel="manifest" href="{% url 'pwa-manifest' %}">
-  <link rel="apple-touch-icon" href="{% static 'pwa/arion-apple-touch-icon.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'favicon/apple-touch-icon.png' %}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19,6 +21,7 @@
   <script src="{% arion_js 'js/pwa/launch.js' %}"></script>
   <link rel="stylesheet" href="{% static 'css/documentacao.css' %}">
   <link rel="stylesheet" href="{% static 'css/pwa.css' %}">
+  <link rel="stylesheet" href="{% static 'css/branding.css' %}">
 </head>
 <body class="{% if release_only %}docs-app docs-app--releases{% else %}docs-app{% endif %}">
   <form class="docs-csrf" aria-hidden="true">{% csrf_token %}</form>
@@ -28,9 +31,9 @@
       <svg class="docs-icon-desktop" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 2.5 12 9 19M13 5l-6.5 7L13 19M20 5v14"/></svg>
       <span class="docs-menu-label">Seções</span>
     </button>{% endif %}
-    <a class="docs-brand" href="{% if release_only %}{% url 'configuracoes:documentation-releases' %}{% else %}{% url 'configuracoes:documentation' %}{% endif %}" aria-label="ARION ATACADO GEO">
-      <span class="docs-brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19h16M6 16v-5m6 5V6m6 10v-8"/></svg></span>
-      <span><strong>ARION ATACADO GEO</strong><small>{% if release_only %}ATUALIZA&Ccedil;&Otilde;ES{% else %}NOC ATACADO &middot; DOCUMENTA&Ccedil;&Atilde;O{% endif %}</small></span>
+    <a class="docs-brand" href="{% if release_only %}{% url 'configuracoes:documentation-releases' %}{% else %}{% url 'configuracoes:documentation' %}{% endif %}" aria-label="ARION OPS">
+      <img class="docs-brand-logo" src="{% static 'branding/symbols/arion-symbol-primary.png' %}" width="1024" height="1024" alt="">
+      <span><strong>ARION OPS</strong><small>{% if release_only %}ATUALIZA&Ccedil;&Otilde;ES{% else %}NOC ATACADO &middot; DOCUMENTA&Ccedil;&Atilde;O{% endif %}</small></span>
     </a>
 {% if not release_only %}    <form class="docs-search docs-search--header" action="{% url 'configuracoes:documentation-search' %}" method="get" role="search">
       <label class="visually-hidden" for="docs-search-header">Pesquisar na documentação</label>
@@ -45,7 +48,7 @@
     <button class="mobile-nav-toggle" type="button" aria-label="Abrir menu principal" aria-haspopup="dialog" aria-expanded="false" aria-controls="mobile-navigation" data-mobile-nav-open>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
-    <a class="docs-return" href="{% url 'painel:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7"/></svg><span>Voltar ao ARION</span></a>
+    <a class="docs-return" href="{% url 'painel:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7"/></svg><span>Voltar ao ARION OPS</span></a>
   </header>
   {% include "partials/mobile_navigation.html" %}
   <div class="docs-shell" data-docs-shell>
@@ -72,18 +75,18 @@
       </details>
       {% endif %}{% endfor %}
 {% endif %}
-{% if not release_only %}      <a class="docs-sidebar-return" href="{% url 'painel:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7"/></svg><span>Voltar ao Arion</span></a>{% endif %}
+{% if not release_only %}      <a class="docs-sidebar-return" href="{% url 'painel:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7"/></svg><span>Voltar ao ARION OPS</span></a>{% endif %}
     </aside>
     <main class="docs-main" id="main-content">
       {% block docs_content %}{% endblock %}
     </main>
   </div>
-  <div class="pwa-launch" data-pwa-launch aria-hidden="true"><img src="{% static 'pwa/arion-mark.svg' %}" alt=""><strong>ARION</strong><span>ATACADO GEO</span></div>
+  <div class="pwa-launch" data-pwa-launch aria-hidden="true"><img src="{% static 'branding/symbols/arion-symbol-primary.png' %}" alt=""><strong>ARION</strong><span>OPS</span></div>
   {% include "partials/pwa_update.html" %}
   <dialog class="pwa-install-help" data-pwa-install-help aria-labelledby="pwa-install-title">
     <button class="pwa-install-help__close" type="button" aria-label="Fechar" data-pwa-install-close>×</button>
     <img src="{% static 'pwa/arion-apple-touch-icon.png' %}" alt="" width="64" height="64">
-    <h2 id="pwa-install-title">Instalar ARION</h2>
+    <h2 id="pwa-install-title">Instalar ARION OPS</h2>
     <ol><li>Toque em <strong>Compartilhar</strong> no Safari.</li><li>Escolha <strong>Adicionar à Tela de Início</strong>.</li><li>Confirme em <strong>Adicionar</strong>.</li></ol>
   </dialog>
   <script src="{% arion_js 'js/base.js' %}" defer></script>

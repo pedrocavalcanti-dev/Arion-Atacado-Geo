@@ -1,4 +1,4 @@
-# Arquitetura do ARION ATACADO GEO
+# Arquitetura do ARION OPS
 
 ## Limite entre request e sincronização
 

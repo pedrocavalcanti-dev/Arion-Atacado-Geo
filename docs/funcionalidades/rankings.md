@@ -1,6 +1,6 @@
 # Rankings operacionais · NOC Atacado
 
-O módulo **Rankings** compara a pressão operacional dos provedores/ISPs do CMDB com chamados espelhados do OTRS. A identidade do produto permanece **ARION ATACADO GEO**; NOC Atacado identifica a operação atendida. As consultas usam somente os mirrors locais e não escrevem na origem.
+O módulo **Rankings** compara a pressão operacional dos provedores/ISPs do CMDB com chamados espelhados do OTRS. A identidade visual do produto/interface é **ARION OPS**; NOC Atacado identifica a operação atendida. As consultas usam somente os mirrors locais e não escrevem na origem.
 
 ## Universo, escopo e filtros
 
@@ -12,6 +12,22 @@ O módulo **Rankings** compara a pressão operacional dos provedores/ISPs do CMD
 - Filtro e Top Motivos usam `ClosingReasonCanonicalizer`, compartilhado com Cockpit e Mapa. Valores raw sem equivalência confirmada permanecem separados.
 
 Um chamado relacionado a vários ConfigItems do mesmo provedor conta uma vez para esse provedor; cada link distinto afetado conta uma vez. Se os links pertencem a provedores diferentes, o chamado conta uma vez em cada provedor. Por isso, a soma dos chamados por provedor pode superar o KPI nacional distinto.
+
+## Exposição por links ativos
+
+- A visão padrão da rota `/rankings/` é **Mais links** e mostra Top 20. As opções Top 10/20/30/50 exibem esse conjunto diretamente; **Todos** usa a paginação atual. O filtro mínimo de links (Todos, 10+, 30+, 50+, 100+) é opcional e começa em Todos.
+- Link ativo é um `CMDBLinkMirror` presente em `is_present_in_source=True` com `deployment_state` igual a `Operacional` ou `Operational`, sem distinção de caixa. `Cancelado`, `Em Manutenção`, estado vazio e demais valores ficam fora da exposição ativa. O mirror garante unicidade por `source_config_item_id`; CIs distintos continuam sendo links separados. Não se deduplica por nome, circuito ou aproximação de texto.
+- A contagem ativa é uma agregação agrupada no banco por `operator_id`, a partir do queryset já filtrado por Data Scope, cliente, projeto, ISP, UF e busca. Links sem operadora CMDB atual ou sem resolução do ISP ficam no total de inventário e são apresentados como não identificados; não entram nos rankings por ISP.
+- A identidade canônica é a FK `CMDBLinkMirror.operator` resolvida na sincronização CMDB por `ConfigItemID` ou correspondência única e exata do nome. Nomes parecidos não são fundidos. `isp_raw` não vira um provedor separado nem recebe fuzzy matching.
+- **Links ativos** representam o snapshot operacional atual. Não há snapshots históricos de links; por isso, a visão de 12 meses compara chamados da janela selecionada com o estoque ativo de hoje e não afirma quantos links existiam em meses anteriores.
+- **Chamados no período** continuam sendo IDs distintos válidos da fila NOC relacionados a links CMDB atuais e são contados pela criação (`source_created_at`). Um ticket pode aparecer uma vez em cada ISP distinto ao qual está relacionado. Assim, chamados podem incluir relações a links que hoje têm status de implantação inativo; a fonte não conserva o status histórico do link na data do ticket.
+- **Chamados / 100 links** é `chamados no período ÷ links ativos atuais × 100`. Sem links ativos, o valor é nulo e a interface mostra `—`. Volume absoluto, backlog, aging e Índice ARION permanecem métricas separadas.
+- **Tempo médio de resolução** usa tickets `RESOLVED`/`CLOSED` cujo término operacional (`resolved_at`, com `terminal_state_at` como fallback) ocorreu dentro do período e cuja duração desde `source_created_at` é não negativa. Tickets abertos não entram. É tempo operacional calculado; não equivale a SLA contratual.
+- **Top 10 da exposição** é `soma dos links ativos dos 10 maiores ISPs resolvidos ÷ total de links ativos no recorte × 100`. Links não identificados permanecem no denominador e não são redistribuídos entre provedores.
+- O cálculo de risco V2, sua composição e as visões Maior risco/Melhor desempenho/Sem ocorrências permanecem preservados. As tabelas/detalhes acrescentam links ativos como contexto; o V2 continua usando os campos e universo CMDB que já usava.
+- No snapshot local consultado em 29/10/2026, 3.446 links estavam presentes: 3.194 com implantação `Operacional`, 251 `Cancelado` e 1 `Em Manutenção`. O inventário ativo e a cobertura de identidade variam após novas sincronizações.
+- ANOP e ETIT não têm definição operacional validada e não são calculados. No código e nos documentos, aparecem somente como itens pendentes, sem fórmula. A busca por tokens completos não encontrou valores nos campos armazenados dos mirrors CMDB/OTRS; não há linhas Claro importadas no banco atual. O OTRS remoto não foi consultado; a sincronização local persiste somente campos dinâmicos mapeados, então não existe cobertura dos demais valores dinâmicos remotos.
+- A Central de Relatórios contém TMP, EV, Inter e Indisp definidos para conciliação financeira do contrato Claro com o ARION: EV legado é TMP/30, Inter tem fórmula financeira própria e Indisp usa o perfil SLA da competência. Esses indicadores avaliam o cálculo/penalidade Claro aplicado à operação e dependem de valor mensal, perfil contratual, datas e pausas. Não são regras gerais por provedor; nenhum deles foi copiado para Rankings. O tempo médio desta tela é apenas uma duração observada de ticket e não equivale ao TMP efetivo do relatório. Consulte [Relatórios](relatorios.md#calculado-efetivo-e-tratado).
 
 ## Métricas operacionais
 
@@ -46,6 +62,7 @@ Provedores com menos de cinco links continuam visíveis e recebem **Amostra pequ
 
 ## Visões e desempates
 
+- **Mais links:** visão padrão. Lista provedores resolvidos por links ativos atuais e combina exposição, chamados, Chamados/100 links, backlog, >24h, tempo médio e Índice ARION. Top 20 é o padrão; Top 10/30/50 e Todos estão disponíveis. A ordenação pode mudar sem compor um score novo.
 - **Maior risco:** inclui `chamados >= 1 OU backlog > 0`. A ordenação padrão é Índice ARION decrescente; empates usam Impacto no NOC, chamados e links afetados em ordem decrescente, depois nome.
 - **Melhor desempenho:** inclui somente provedores com ao menos um chamado válido. Ordena o índice crescente; empates priorizam maior exposição, primeiro links CMDB e depois chamados avaliados. Zero eventos não são tratados como desempenho de atendimento.
 - **Sem ocorrências:** inclui `chamados = 0 E backlog = 0`; exibe até 10 provedores por maior exposição de links e apresenta links, clientes, projetos e UFs.
@@ -54,7 +71,9 @@ Os atalhos de ordenação incluem Índice ARION, impacto no NOC, chamados, perce
 
 ## Período, consolidação e tendência
 
-A visão mensal usa o mês selecionado (até hoje quando for o mês corrente). **Consolidado 3 meses** agrega os dados brutos desde o primeiro dia de dois meses antes até o fim do mês selecionado, ou hoje se for o mês corrente, e então recalcula o V2 uma vez. Não soma scores mensais. O gráfico histórico recalcula o V2 separadamente para cada mês.
+A visão mensal usa o mês selecionado (até hoje quando for o mês corrente). As janelas **3, 6 e 12 meses** agregam meses-calendário até o mês selecionado; no mês corrente, o limite final é hoje. Assim, em outubro/2026, 12 meses começa em novembro/2025 e termina em hoje. O consolidado recalcula o V2 uma vez sobre os dados brutos, sem somar scores mensais. Período personalizado conserva as datas informadas. O gráfico histórico do drawer recalcula o V2 separadamente para cada mês.
+
+Todas as janelas de tickets continuam separadas do estoque: a visão de 12 meses compara tickets criados desde novembro/2025 com os links operacionais atuais. O tempo médio de resolução usa data de término operacional dentro da janela, mesmo quando a criação foi anterior.
 
 A tendência compara o score recalculado do mês selecionado com o mês calendário anterior: diferença acima de 2 pontos indica piora, abaixo de -2 indica melhora; entre esses limites é estável. A análise não altera a fonte nem simula meta ou SLA.
 

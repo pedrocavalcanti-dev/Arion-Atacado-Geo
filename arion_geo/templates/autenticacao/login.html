@@ -1,25 +1,110 @@
-{% extends "base.html" %}
-{% load static %}
-{% block title %}Entrar · ARION ATACADO GEO{% endblock %}
-{% block body_class %}login-page{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/autenticacao/login.css' %}">{% endblock %}
-{% block content %}
-<section class="login-layout" aria-labelledby="login-title">
-  <div class="login-panel">
-    <div class="login-brand-mark" aria-hidden="true"><i></i><i></i><i></i></div>
-    <p class="login-eyebrow">ARION <span>ATACADO GEO</span></p>
-    <h1 id="login-title">Inteligência geográfica<br>do NOC Atacado.</h1>
-    <p class="login-description">Acesse a plataforma operacional da Arion.</p>
-    <form class="login-form" method="post">
-      {% csrf_token %}
-      {% if form.non_field_errors %}<div class="form-error" role="alert">{% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
-      {% for field in form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<span class="field-error">{{ field.errors|join:", " }}</span>{% endif %}</div>{% endfor %}
-      <input type="hidden" name="next" value="{{ next|default:'' }}">
-      <button class="login-submit" type="submit">Entrar <span aria-hidden="true">↗</span></button>
-    </form>
-    <p class="login-footnote">Arion Serviços de Telecomunicações</p>
-    <div class="login-install-row"><button class="pwa-install-action" type="button" data-pwa-install hidden><span aria-hidden="true">↓</span><span><strong>Instalar ARION</strong><small>Usar como aplicativo</small></span></button></div>
-  </div>
-  <p class="login-index" aria-hidden="true">NOC ATACADO <span>·</span> PLATAFORMA INTERNA</p>
-</section>
-{% endblock %}
+{% load static %}<!doctype html>
+<html lang="pt-br" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F3F6F5">
+  <meta name="color-scheme" content="light">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ARION OPS">
+  <title>Entrar · ARION OPS</title>
+  <link rel="icon" type="image/x-icon" href="{% static 'favicon/favicon.ico' %}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'favicon/favicon-32x32.png' %}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'favicon/favicon-16x16.png' %}">
+  <link rel="manifest" href="{% url 'pwa-manifest' %}">
+  <link rel="apple-touch-icon" href="{% static 'favicon/apple-touch-icon.png' %}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="{% arion_js 'js/pwa/launch.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/pwa.css' %}">
+  <link rel="stylesheet" href="{% static 'css/autenticacao/login.css' %}">
+</head>
+<body class="login-page">
+  <main id="main-content" class="login-layout">
+    <section class="login-shell" aria-labelledby="login-title">
+      <aside class="login-art" data-login-carousel role="region" aria-roledescription="carousel" aria-label="Carrossel ARION OPS">
+        <div class="login-art__slides" data-login-slides aria-live="off">
+          <article class="login-art__slide is-active" data-login-slide role="group" aria-roledescription="slide" aria-label="1 de 3" aria-hidden="false">
+            <img class="login-art__image" src="{% static 'branding/arion/login/arion-ops-login-hero.webp' %}" data-image-src="{% static 'branding/arion/login/arion-ops-login-hero.webp' %}" data-fallback-src="{% static 'branding/arion/login/arion-ops-login-hero.webp' %}" width="1108" height="1420" fetchpriority="high" alt="Globo digital conectado com destaque para a América do Sul e as marcas Claro, Vivo, Banco do Brasil e Bradesco.">
+            <div class="login-carousel__copy">
+              <h2 class="login-slide__title">Conectando grandes empresas a operações que não podem parar.</h2>
+              <div class="login-slide__credit"><span>Desenvolvido por</span><strong>Pedro Cavalcanti</strong><small>ARION OPS</small></div>
+            </div>
+          </article>
+          <article class="login-art__slide" data-login-slide role="group" aria-roledescription="slide" aria-label="2 de 3" aria-hidden="true">
+            <img class="login-art__image" src="{% static 'branding/arion/login/arion-ops-login-hero.webp' %}" data-image-src="{% static 'branding/arion/login/arion-ops-login-relatorios.webp' %}" data-fallback-src="{% static 'branding/arion/login/arion-ops-login-hero.webp' %}" width="1108" height="1420" alt="">
+            <div class="login-carousel__copy">
+              <h2 class="login-slide__title">Dados transformados em decisões operacionais.</h2>
+              <p class="login-slide__description">Indicadores, análises e relatórios em uma visão centralizada.</p>
+              <div class="login-slide__credit"><strong>ARION OPS</strong><small>Inteligência operacional</small></div>
+            </div>
+          </article>
+          <article class="login-art__slide" data-login-slide role="group" aria-roledescription="slide" aria-label="3 de 3" aria-hidden="true">
+            <img class="login-art__image" src="{% static 'branding/arion/login/arion-ops-login-hero.webp' %}" data-image-src="{% static 'branding/arion/login/arion-ops-login-operacao.webp' %}" data-fallback-src="{% static 'branding/arion/login/arion-ops-login-hero.webp' %}" width="1108" height="1420" alt="">
+            <div class="login-carousel__copy">
+              <h2 class="login-slide__title">Uma visão única para acompanhar toda a operação.</h2>
+              <p class="login-slide__description">Links, chamados, provedores e desempenho em um só ambiente.</p>
+              <div class="login-slide__credit"><strong>ARION OPS</strong><small>NOC ATACADO</small></div>
+            </div>
+          </article>
+        </div>
+        <div class="login-carousel__controls" aria-label="Controles do carrossel">
+          <div class="login-carousel__dots" role="group" aria-label="Selecionar slide">
+            <button class="login-carousel__dot is-active" type="button" aria-label="Ir para o slide 1" aria-current="true" data-login-go-to="0"></button>
+            <button class="login-carousel__dot" type="button" aria-label="Ir para o slide 2" data-login-go-to="1"></button>
+            <button class="login-carousel__dot" type="button" aria-label="Ir para o slide 3" data-login-go-to="2"></button>
+          </div>
+          <div class="login-carousel__arrows">
+            <button type="button" aria-label="Slide anterior" data-login-previous><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m5-5-5 5 5 5"/></svg></button>
+            <button type="button" aria-label="Próximo slide" data-login-next><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
+          </div>
+        </div>
+      </aside>
+      <div class="login-panel">
+        <div class="login-content">
+          <header class="login-header">
+            <img class="login-logo" src="{% static 'branding/arion/arion-logo-primary.png' %}" width="2172" height="724" alt="ARION">
+            <p id="login-title" class="login-sector">NOC ATACADO</p>
+          </header>
+          <p class="login-description">Acesse sua área de operação.</p>
+          {% if messages %}
+            <div class="login-messages" aria-live="polite" aria-atomic="true">
+              {% for message in messages %}<p class="login-message login-message--{{ message.tags|default:'info' }}" role="status">{{ message }}</p>{% endfor %}
+            </div>
+          {% endif %}
+          <form class="login-form" method="post" aria-label="Acesse sua conta">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+              <div class="form-error" role="alert">{% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>
+            {% endif %}
+            {% for field in form %}
+              <div class="form-field">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<div id="{{ field.auto_id }}_error" class="field-error" role="alert">{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
+              </div>
+            {% endfor %}
+            <input type="hidden" name="next" value="{{ next|default:'' }}">
+            <button class="login-submit" type="submit">Entrar <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
+          </form>
+          <p class="login-security"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg>Ambiente corporativo · acesso autorizado</p>
+
+        </div>
+      </div>
+    </section>
+  </main>
+  <div class="pwa-launch" data-pwa-launch aria-hidden="true"><img src="{% static 'branding/symbols/arion-symbol-primary.png' %}" alt=""><strong>ARION OPS</strong><span>NOC ATACADO</span></div>
+  {% include "partials/pwa_update.html" %}
+  <dialog class="pwa-install-help" data-pwa-install-help aria-labelledby="pwa-install-title">
+    <button class="pwa-install-help__close" type="button" aria-label="Fechar" data-pwa-install-close>×</button>
+    <img src="{% static 'pwa/arion-apple-touch-icon.png' %}" alt="" width="64" height="64">
+    <h2 id="pwa-install-title">Instalar ARION OPS</h2>
+    <ol><li>Toque em <strong>Compartilhar</strong> no Safari.</li><li>Escolha <strong>Adicionar à Tela de Início</strong>.</li><li>Confirme em <strong>Adicionar</strong>.</li></ol>
+  </dialog>
+  <script src="{% arion_js 'js/autenticacao/login.js' %}" defer></script>
+  <script src="{% arion_js 'js/pwa/pwa.js' %}" defer></script>
+</body>
+</html>

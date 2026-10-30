@@ -1,5 +1,22 @@
 :root {
   --arion-global-header-height: 60px;
+  --arion-green: #00bf9a;
+  --arion-green-dark: #007f69;
+  --arion-green-soft: rgba(0, 191, 154, .14);
+  --arion-orange: #ff8440;
+  --arion-orange-soft: rgba(255, 132, 64, .14);
+  --arion-gray: #6d6e71;
+  --arion-gray-dark: #4c4e50;
+  --arion-gray-soft: rgba(109, 110, 113, .16);
+  --brand-primary: var(--arion-green);
+  --brand-primary-hover: #00ac8b;
+  --brand-primary-contrast: #07372f;
+  --brand-accent: var(--arion-orange);
+  --brand-neutral: var(--arion-gray);
+  --brand-link: var(--arion-green);
+  --brand-focus: var(--arion-green);
+  --brand-border: color-mix(in srgb, var(--arion-gray) 23%, var(--border-primary));
+  --brand-surface: var(--surface-primary);
   color-scheme: dark;
   --bg-primary: #090a0a;
   --bg-secondary: #0d0f0f;
@@ -13,7 +30,7 @@
   --text-secondary: #a1a5a4;
   --text-muted: #707574;
   --text-faint: #4e5351;
-  --accent: #d8ddd9;
+  --accent: var(--arion-green);
   --success: #91b9a0;
   --warning: #c9ad77;
   --danger: #d28680;
@@ -71,7 +88,9 @@ html[data-theme="light"] {
   --text-secondary: #5c635f;
   --text-muted: #80877f;
   --text-faint: #a9aea9;
-  --accent: #27302b;
+  --accent: var(--arion-green-dark);
+  --brand-link: var(--arion-green-dark);
+  --brand-focus: #00866d;
   --success: #347d5a;
   --warning: #98743c;
   --danger: #a94f48;
@@ -113,23 +132,24 @@ a { color: inherit; }
 :focus-visible { outline: 2px solid var(--text-primary); outline-offset: 3px; }
 
 .app-header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; height: var(--arion-global-header-height); padding: 0 clamp(18px, 3vw, 48px); border-bottom: 1px solid var(--border-primary); background: var(--bg-primary); }
-.brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; white-space: nowrap; }
-.brand-mark { display: flex; align-items: end; gap: 2px; width: 19px; height: 19px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 6px; transform: rotate(-8deg); }
-.brand-mark i { display: block; width: 3px; border-radius: 2px; background: var(--text-secondary); }
-.brand-mark i:nth-child(1) { height: 6px; }.brand-mark i:nth-child(2) { height: 10px; }.brand-mark i:nth-child(3) { height: 7px; }
-.brand-name { font-size: 11px; font-weight: 600; letter-spacing: .12em; }.brand-name span { color: var(--text-secondary); font-weight: 400; }
+.brand { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; text-decoration: none; white-space: nowrap; }
+.brand-logo { display: block; width: clamp(96px, 7.6vw, 112px); max-height: 38px; height: auto; object-fit: contain; }
+.brand-logo--light { display: none; }
+html[data-theme="light"] .brand-logo--dark { display: none; }
+html[data-theme="light"] .brand-logo--light { display: block; }
+.brand-product { color: var(--brand-link); font-size: 12px; font-weight: 600; letter-spacing: .14em; }
 .header-nav { display: flex; align-items: center; gap: 25px; margin-left: clamp(36px, 7vw, 112px); height: 100%; }
 .header-link { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 100%; color: var(--text-muted); font-size: 12px; text-decoration: none; transition: color var(--transition-fast); }
 .header-link-icon { width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.header-link:hover, .header-link.is-active { color: var(--text-primary); }
-.header-link.is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 1px; background: var(--text-primary); content: ""; }
+.header-link:hover, .header-link.is-active { color: var(--brand-link); }
+.header-link.is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--arion-green); content: ""; }
 
 /* ---------- Menu do usuário ---------- */
 .user-menu { position: relative; flex: 0 1 auto; min-width: 0; margin-left: auto; color: var(--text-secondary); font-size: 12px; }
 .user-menu summary { display: flex; align-items: center; gap: 9px; padding: 7px 10px 7px 12px; border: 1px solid transparent; border-radius: 999px; cursor: pointer; list-style: none; transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast); }
 .user-menu summary:hover, .user-menu[open] summary { border-color: var(--border-primary); background: var(--surface-hover); color: var(--text-primary); }
 .user-menu summary::-webkit-details-marker { display: none; }
-.user-indicator { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-green) 16%, transparent); }
+.user-indicator { width: 6px; height: 6px; border-radius: 50%; background: var(--arion-green); box-shadow: 0 0 0 3px var(--arion-green-soft); }
 .menu-chevron { display: inline-flex; color: var(--text-muted); transition: transform 180ms var(--ease-out); }
 .menu-chevron svg { width: 12px; height: 12px; }
 .user-menu[open]:not(.is-closing) .menu-chevron { transform: rotate(180deg); }
@@ -213,7 +233,8 @@ html[data-theme="light"] .theme-switch-thumb { box-shadow: 0 1px 3px rgba(20, 28
 @media (max-width: 640px) {
   :root { --arion-global-header-height: 56px; }
   .app-header { height: var(--arion-global-header-height); padding-inline: 16px; }
-  .brand-name { font-size: 10px; letter-spacing: .08em; }
+  .brand-logo { width: 96px; }
+  .brand-product { font-size: 11px; }
   .header-nav { gap: 13px; margin-left: auto; margin-right: 12px; }
   .header-link { font-size: 11px; }
   .header-link-icon { display: none; }
@@ -223,8 +244,8 @@ html[data-theme="light"] .theme-switch-thumb { box-shadow: 0 1px 3px rgba(20, 28
 @media (max-width: 480px) {
   .app-header { padding-inline:10px; }
   .brand { gap:6px; }
-  .brand-name { font-size:8px; letter-spacing:.035em; }
-  .brand-mark { width:16px; height:16px; }
+  .brand-logo { width: 82px; }
+  .brand-product { font-size: 10px; letter-spacing: .1em; }
   .header-nav { gap:8px; margin-left:10px; margin-right:8px; }
   .header-link { font-size:9px; }
   .user-menu { font-size:10px; }

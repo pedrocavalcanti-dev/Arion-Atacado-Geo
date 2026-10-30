@@ -23,8 +23,13 @@ Viewports de referência: 1920×1080, 1440×900, 1366×768, 1024×768, 768 px e 
 Gráficos, mapas e rankings devem preservar legibilidade, unidade e período. Percentuais e scores devem ter contexto e origem; dados demonstrativos precisam de identificação visível. Reutilizar padrões existentes em vez de introduzir um sistema visual paralelo.
 ## Central de Documentação
 
-A Central (`templates/documentacao/` e `static/css/documentacao.css`) usa o design system existente, a preferência persistida de tema e categorias recolhíveis. Manter visível a identidade **ARION ATACADO GEO · NOC ATACADO** sem criar um tema paralelo. O portal é server-rendered e seu renderer Markdown permite apenas um subconjunto seguro; conteúdo HTML bruto é escapado.
+A Central (`templates/documentacao/` e `static/css/documentacao.css`) usa o design system existente, a preferência persistida de tema e categorias recolhíveis. Manter visível a identidade **ARION OPS · NOC ATACADO** sem criar um tema paralelo. O portal é server-rendered e seu renderer Markdown permite apenas um subconjunto seguro; conteúdo HTML bruto é escapado.
 
 Diagramas são inline SVG gerados localmente a partir do subconjunto de fluxogramas Mermaid usado nos documentos. Notas tipadas são callouts semânticos com cores discretas. Em tema claro/escuro, reutilizar tokens `--docs-*` mapeados a tokens globais; não introduzir biblioteca de diagramas ou syntax highlighter pesado.
 
 A navegação deve permanecer agrupada/recolhível; home e busca contam documentos do registry em tempo de renderização. Sidebar recolhe em viewport estreita; tabelas/código rolam dentro de seus contêineres; âncoras e índice precisam permanecer navegáveis por teclado. Ao adicionar um Markdown, registre title, description, category, search terms e caminho permitido no registry, crie link na home/documentação e inclua testes de rota, busca e links.
+
+
+## Identidade visual ARION OPS
+
+O nome visual do produto é **ARION OPS**; ARION é a empresa e NOC ATACADO é o contexto operacional. A marca usa `#00BF9A` (verde), `#FF8440` (laranja) e `#6D6E71` (cinza), centralizadas nos tokens de `static/css/base.css`; os componentes compartilhados são ajustados por `static/css/branding.css`. Usar `static/branding/arion/` para as versões principal, clara e monocromática do logotipo, `static/branding/symbols/` para símbolos oficiais, `static/favicon/` para favicons e `static/pwa/` para ícones, manifesto e experiência PWA. Usar o logotipo claro em fundo escuro e o principal em fundo claro.

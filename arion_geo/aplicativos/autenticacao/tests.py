@@ -26,7 +26,12 @@ class AuthenticationFlowTests(TestCase):
     def test_login_page_responds(self):
         response = self.client.get(reverse("autenticacao:login"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Inteligência geográfica")
+        for text in (
+            "ARION OPS", "Plataforma Operacional", "NOC ATACADO",
+            "Acesse sua área de operação.",
+            "Conectando grandes empresas a operações que não podem parar.", "Pedro Cavalcanti",
+        ):
+            self.assertContains(response, text)
 
     def test_map_and_panel_require_authentication(self):
         for url_name in ("mapa:index", "painel:index"):

@@ -1,4 +1,4 @@
-﻿# Estado atual do ARION ATACADO GEO
+﻿# Estado atual do ARION OPS
 
 Revisão do workspace em 29/10/2026. A matriz descreve capacidades encontradas no código, sem publicar contagens voláteis de uma base específica.
 
@@ -10,7 +10,7 @@ Revisão do workspace em 29/10/2026. A matriz descreve capacidades encontradas n
 | Chamados | Ativo | Tickets atuais da fila NOC + `TicketTracking` | Acompanhamento apenas no ARION | OTRS read-only. |
 | Cockpit | Ativo | Mirrors OTRS/CMDB; filas de Suporte e Cancelamentos | `SavedAnalyticsView` local; export de leitura | Contextos Suporte, Cancelamentos e Geral; classificação por etapa e Data Scope no backend. |
 | Mapa | Ativo | Mirrors e relações Ticket-ConfigItem | Sem edição da fonte | Agrega por UF; não geocodifica. |
-| Rankings | Ativo (V2) | Chamados válidos e Links associados | Export de leitura | Índice operacional, não SLA nem causalidade de Provider. |
+| Rankings | Ativo (V2) | Snapshot atual CMDB/Base Links + chamados válidos do mirror OTRS no período | Exportação de leitura | Exposição por links ativos e incidência proporcional; Índice V2 preservado, não é SLA nem prova de causalidade. |
 | Base | Ativo | `CMDBLinkMirror`, `CMDBOperatorMirror` | Consulta/exportação | Importador XLSX legado não é fluxo normal. |
 | ARI | Preview | Models locais de conversas e artifacts | Dados locais de conversa/anexo | Não há integração LLM ativa confirmada. |
 | CMDB Mirror | Ativo no código | ServiceUp Search/Get | Escrita no banco ARION | Sincronizado por processo separado. |

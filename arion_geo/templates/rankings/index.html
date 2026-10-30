@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static humanize %}
-{% block title %}ARION ATACADO GEO · Rankings NOC Atacado{% endblock %}
+{% block title %}ARION OPS · Rankings NOC Atacado{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/rankings/rankings.css' %}">{% endblock %}
 {% block content %}
 <section class="ranking-page ranking-v2" aria-labelledby="ranking-title" data-ranking-root data-detail-url-template="{{ provider_detail_url_template }}" data-base-url="{{ base_url }}" data-cockpit-url="{{ cockpit_url }}">
@@ -16,6 +16,7 @@
     </div>
     <div class="ranking-heading-actions">
       <nav class="ranking-mode-switch" aria-label="Visão do ranking">
+        <a href="{{ ranking_links_url }}" aria-pressed="{% if filters.ranking_view == 'links' %}true{% else %}false{% endif %}"{% if filters.ranking_view == "links" %} class="is-active"{% endif %}>Mais links</a>
         <a href="{{ ranking_risk_url }}" aria-pressed="{% if filters.ranking_view == 'risk' %}true{% else %}false{% endif %}"{% if filters.ranking_view == "risk" %} class="is-active"{% endif %}>Maior risco</a>
         <a href="{{ ranking_best_url }}" aria-pressed="{% if filters.ranking_view == 'best' %}true{% else %}false{% endif %}"{% if filters.ranking_view == "best" %} class="is-active"{% endif %}>Melhor desempenho</a>
         <a href="{{ ranking_stable_url }}" aria-pressed="{% if filters.ranking_view == 'stable' %}true{% else %}false{% endif %}"{% if filters.ranking_view == "stable" %} class="is-active"{% endif %}>Sem ocorrências</a>
@@ -32,8 +33,10 @@
     <input type="hidden" name="ranking_view" value="{{ filters.ranking_view }}">
     <label><span>Mês</span><select name="month">{% for option in month_options %}<option value="{{ option.value }}"{% if filters.month == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
     <div class="ranking-view-switch" role="group" aria-label="Janela do ranking">
-      <button type="button" data-view="month" aria-pressed="{% if filters.view == 'month' %}true{% else %}false{% endif %}"{% if filters.view == "month" %} class="is-active"{% endif %}>Visão do mês</button>
-      <button type="button" data-view="3months" aria-pressed="{% if filters.view == '3months' %}true{% else %}false{% endif %}"{% if filters.view == "3months" %} class="is-active"{% endif %}>Consolidado 3 meses</button>
+      <button type="button" data-view="month" aria-pressed="{% if filters.view == 'month' %}true{% else %}false{% endif %}"{% if filters.view == "month" %} class="is-active"{% endif %}>1 mês</button>
+      <button type="button" data-view="3months" aria-pressed="{% if filters.view == '3months' %}true{% else %}false{% endif %}"{% if filters.view == "3months" %} class="is-active"{% endif %}>3 meses</button>
+      <button type="button" data-view="6months" aria-pressed="{% if filters.view == '6months' %}true{% else %}false{% endif %}"{% if filters.view == "6months" %} class="is-active"{% endif %}>6 meses</button>
+      <button type="button" data-view="12months" aria-pressed="{% if filters.view == '12months' %}true{% else %}false{% endif %}"{% if filters.view == "12months" %} class="is-active"{% endif %}>12 meses</button>
     </div>
     <label><span>Cliente</span><select name="client"><option value="">Todos</option>{% for option in clients %}<option value="{{ option }}"{% if filters.client == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
     <label><span>Projeto</span><select name="project"><option value="">Todos</option>{% for option in projects %}<option value="{{ option }}"{% if filters.project == option %} selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
@@ -49,7 +52,15 @@
         <label class="ranking-check"><input type="checkbox" name="only_recurrent" value="1"{% if filters.only_recurrent %} checked{% endif %}><span>Apenas reincidentes</span></label>
       </div>
     </details>
-    <input type="hidden" name="sort" value="{{ filters.sort }}">
+    {% if filters.ranking_view != "links" %}<input type="hidden" name="sort" value="{{ filters.sort }}">{% endif %}
+    {% if filters.ranking_view == "links" %}
+      <div class="ranking-exposure-controls">
+        <label><span>Provedores</span><select name="top">{% for option in top_options %}<option value="{{ option }}"{% if filters.top == option %} selected{% endif %}>{% if option == "all" %}Todos{% else %}Top {{ option }}{% endif %}</option>{% endfor %}</select></label>
+        <label><span>Mínimo de links ativos</span><select name="min_links">{% for option in min_link_options %}<option value="{{ option }}"{% if filters.min_links == option %} selected{% endif %}>{% if option == "0" %}Todos{% else %}{{ option }}+{% endif %}</option>{% endfor %}</select></label>
+        <label><span>Ordenar por</span><select name="sort">{% for option in sort_options %}<option value="{{ option.value }}"{% if option.active %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
+        <p>Links: inventário atual da CMDB. Chamados: criados no período selecionado.</p>
+      </div>
+    {% endif %}
     <div class="ranking-filter-actions">
       <button type="submit" class="ranking-button ranking-button--primary">Aplicar</button>
       <a class="ranking-button ranking-button--quiet" href="{% url 'rankings:index' %}">Limpar</a>
@@ -64,6 +75,15 @@
     </details>
   </form>
 
+  {% if filters.ranking_view == "links" %}
+  <section class="ranking-kpis ranking-kpis--v2 ranking-exposure-kpis" aria-label="Resumo da exposição atual">
+    <article class="ranking-kpi"><span>Links ativos atuais</span><strong>{{ links_active|intcomma }}</strong><small>CMDB · estado de implantação operacional</small></article>
+    <article class="ranking-kpi"><span>Provedores ativos</span><strong>{{ active_provider_count|intcomma }}</strong><small>Com provedor resolvido no CMDB</small></article>
+    <article class="ranking-kpi"><span>Participação dos Top 10</span><strong>{{ top10_link_concentration|floatformat:1 }}%</strong><small>{{ top10_links|intcomma }} links ativos</small></article>
+    <article class="ranking-kpi"><span>Chamados no período</span><strong>{{ tickets_valid|intcomma }}</strong><small>Criados entre {{ start|date:"d/m/Y" }} e {{ end|date:"d/m/Y" }}</small></article>
+  </section>
+  <p class="exposure-period-note">A quantidade de links representa o inventário operacional atual. Os chamados seguem o período selecionado; não há histórico mensal de inventário CMDB.{% if active_links_unidentified %} {{ active_links_unidentified|intcomma }} links ativos estão sem provedor resolvido.{% endif %}</p>
+  {% else %}
   <section class="ranking-kpis ranking-kpis--v2" aria-label="Resumo do recorte">
     <article class="ranking-kpi"><span>Provedores analisados</span><strong>{{ provider_count|intcomma }}</strong></article>
     <article class="ranking-kpi"><span>Links CMDB</span><strong>{{ links_total|intcomma }}</strong></article>
@@ -73,6 +93,7 @@
     <article class="ranking-kpi" title="Indicador operacional provisório do ARION. Não representa necessariamente o SLA contratual do cliente."><span>ARION &gt;24h</span><strong>{{ tickets_over_24h|intcomma }}</strong><small>{{ aged_open|intcomma }} abertos · {{ terminal_over_24h|intcomma }} RESOLVED/CLOSED</small></article>
     <article class="ranking-kpi"><span>Backlog atual</span><strong>{{ backlog_current|intcomma }}</strong><small>Em atendimento · Pendente · Agendado</small></article>
   </section>
+  {% endif %}
 
   {% if filters.ranking_view == "risk" %}
     <nav class="criteria-wrap" aria-label="Ordenação do ranking">
@@ -85,6 +106,7 @@
     <p class="best-sort-note">Provedores sem chamados válidos e sem backlog, ordenados pela exposição da base CMDB.</p>
   {% endif %}
 
+  {% if filters.ranking_view != "links" %}
   <section class="podium-section" aria-labelledby="podium-title">
     <div class="section-title">
       <div>
@@ -112,7 +134,7 @@
             </header>
             {% if filters.ranking_view == "stable" %}
               <div class="stable-provider-summary">
-                <div class="stable-provider-total"><strong>{{ item.links_total|intcomma }}</strong><span>links monitorados</span></div>
+                <div class="stable-provider-total"><strong>{{ item.links_active|intcomma }}</strong><span>links ativos atuais</span></div>
                 <span class="stable-zero">0 chamados · 0 backlog · Sem ocorr&ecirc;ncias no per&iacute;odo</span>
                 <div class="stable-dimensions">
                   <p><span>Clientes</span><strong>{{ item.clients|join:", "|default:"Não identificados" }}</strong></p>
@@ -123,7 +145,7 @@
             {% else %}
               <div class="podium-score">
                 <div class="podium-index"><span>Índice ARION</span><strong>{{ item.risk_score|floatformat:1 }}<small>/100</small></strong></div>
-                <div class="podium-exposure"><strong>{{ item.links_total|intcomma }} <small>link{{ item.links_total|pluralize }}</small></strong><span>Base CMDB</span><small>{{ item.share|floatformat:1 }}% da base</small></div>
+            <div class="podium-exposure"><strong>{{ item.links_active|intcomma }} <small>link{{ item.links_active|pluralize }}</small></strong><span>Links ativos atuais</span><small>{{ item.active_share|floatformat:1 }}% do inventário</small></div>
               </div>
               <div class="podium-stats">
                 <div><span>Chamados</span><strong>{{ item.tickets|intcomma }}</strong></div>
@@ -146,29 +168,48 @@
       <p class="empty-state">{% if filters.ranking_view == "best" %}Nenhum provedor elegível ao pódio neste recorte.{% else %}Nenhum provedor encontrado neste recorte.{% endif %}</p>
     {% endif %}
   </section>
+  {% endif %}
 
   <section class="table-section ranking-main-table" aria-labelledby="table-title">
     <header class="table-section-heading">
       <div>
         <span class="section-kicker">CMDB + OTRS · SOMENTE LEITURA</span>
-        <h2 id="table-title">{% if filters.ranking_view == "best" %}Ranking de melhor desempenho observado{% elif filters.ranking_view == "stable" %}Provedores sem ocorrências{% else %}Ranking de maior risco{% endif %} <small>{{ page_obj.paginator.count|intcomma }}</small></h2>
+        <h2 id="table-title">{% if filters.ranking_view == "links" %}{% if filters.top == "all" %}Todos os provedores por links ativos{% else %}Top {{ filters.top }} provedores por links ativos{% endif %}{% elif filters.ranking_view == "best" %}Ranking de melhor desempenho observado{% elif filters.ranking_view == "stable" %}Provedores sem ocorrências{% else %}Ranking de maior risco{% endif %} <small>{{ page_obj.paginator.count|intcomma }}</small></h2>
       </div>
-      {% if filters.ranking_view != "stable" %}
+      {% if filters.ranking_view == "links" %}
+        <span class="table-hint">Snapshot atual × chamados criados no período · incidência por 100 links ativos.</span>
+      {% elif filters.ranking_view != "stable" %}
         <span class="table-hint">ARION &gt;24h é um limite operacional provisório, não um SLA contratual.</span>
       {% else %}
         <span class="table-hint">Sem chamados válidos e sem backlog no período selecionado.</span>
       {% endif %}
     </header>
     <div class="table-scroll thin-scroll">
-      {% if filters.ranking_view == "stable" %}
+      {% if filters.ranking_view == "links" %}
+        <table class="risk-table exposure-table">
+          <thead><tr><th>Pos.</th><th>Provedor / ISP</th><th>Links ativos</th><th>Chamados no período</th><th>Chamados / 100 links</th><th>Backlog atual</th><th>&gt;24h</th><th>Tempo médio</th><th>Índice ARION</th></tr></thead>
+          <tbody>
+            {% for item in page_obj %}
+              <tr tabindex="0" data-provider-row="{{ item.id }}" aria-label="Abrir detalhes de {{ item.name }}">
+                <td class="rank-pos rank-pos--{{ item.ranking_position }}">{{ item.ranking_position|stringformat:"02d" }}</td>
+                <td class="provider-table-cell"><button type="button" class="table-provider provider-open" data-provider-open="{{ item.id }}">{{ item.name }}</button></td>
+                <td>{{ item.links_active|intcomma }}</td><td>{{ item.tickets|intcomma }}</td>
+                <td>{% if item.links_active %}{{ item.tickets_per_100_active_links|floatformat:1 }}{% else %}—{% endif %}</td>
+                <td>{{ item.backlog_current|intcomma }}</td><td class="{% if item.tickets_over_24h %}aged-cell{% endif %}">{{ item.tickets_over_24h|intcomma }}</td>
+                <td>{{ item.avg_resolution_display }}</td><td><button type="button" class="score-open" data-provider-open="{{ item.id }}">{{ item.risk_score|floatformat:1 }}</button></td>
+              </tr>
+            {% empty %}<tr><td colspan="9">Nenhum provedor com links ativos atende ao filtro selecionado.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      {% elif filters.ranking_view == "stable" %}
         <table class="risk-table stable-table">
-          <thead><tr><th>Pos.</th><th>Provedor / ISP</th><th>Links monitorados</th><th>Clientes</th><th>Projetos</th><th>UFs</th><th>Status</th></tr></thead>
+          <thead><tr><th>Pos.</th><th>Provedor / ISP</th><th>Links ativos</th><th>Clientes</th><th>Projetos</th><th>UFs</th><th>Status</th></tr></thead>
           <tbody>
             {% for item in page_obj %}
               <tr tabindex="0" data-provider-row="{{ item.id }}" aria-label="Abrir detalhes de {{ item.name }}">
                 <td class="rank-pos">{{ item.ranking_position|stringformat:"02d" }}</td>
                 <td class="provider-table-cell"><button type="button" class="table-provider provider-open" data-provider-open="{{ item.id }}">{{ item.name }}</button></td>
-                <td>{{ item.links_total|intcomma }}</td>
+                <td>{{ item.links_active|intcomma }}</td>
                 <td class="dimension-cell">{{ item.clients|join:", "|default:"—" }}</td>
                 <td class="dimension-cell">{{ item.projects|join:", "|default:"—" }}</td>
                 <td>{{ item.states|join:" · "|default:"—" }}</td>
@@ -180,7 +221,7 @@
       {% else %}
         <table class="risk-table">
           <thead><tr>
-            <th>Pos.</th><th>Provedor / ISP</th><th title="Prioridade operacional calculada a partir de impacto no NOC, base afetada, reincidência, chamados acima de 24h e backlog.">Índice</th><th>Nível</th><th>Links</th>
+            <th>Pos.</th><th>Provedor / ISP</th><th title="Prioridade operacional calculada a partir de impacto no NOC, base afetada, reincidência, chamados acima de 24h e backlog.">Índice</th><th>Nível</th><th>Links CMDB</th><th>Ativos</th>
             <th title="Quantidade de chamados válidos no período selecionado.">Chamados</th>
             <th title="Quantidade de chamados válidos dividida pela quantidade de links atuais associados ao provedor.">Chamados / link</th>
             <th title="Links distintos que tiveram ao menos um chamado válido no período.">Links afetados</th>
@@ -197,12 +238,12 @@
                 <td class="provider-table-cell"><button type="button" class="table-provider provider-open" data-provider-open="{{ item.id }}">{{ item.name }}</button>{% if item.sample_small and not item.no_occurrence %}<small class="row-note">Amostra pequena · {{ item.links_total|intcomma }} link{{ item.links_total|pluralize }}</small>{% endif %}</td>
                 <td><button type="button" class="score-open" data-provider-open="{{ item.id }}">{{ item.risk_score|floatformat:1 }}</button></td>
                 <td><span class="risk-pill risk-pill--{{ item.risk_class }}">{{ item.risk_label }}</span></td>
-                <td>{{ item.links_total|intcomma }}</td><td>{{ item.tickets|intcomma }}</td><td>{{ item.tickets_per_link|floatformat:2 }}</td><td>{{ item.links_affected|intcomma }}</td>
+                <td>{{ item.links_total|intcomma }}</td><td>{{ item.links_active|intcomma }}</td><td>{{ item.tickets|intcomma }}</td><td>{{ item.tickets_per_link|floatformat:2 }}</td><td>{{ item.links_affected|intcomma }}</td>
                 <td>{{ item.affected_rate_pct|floatformat:1 }}%</td><td>{{ item.recurrent_links|intcomma }}</td>
                 <td class="{% if item.tickets_over_24h %}aged-cell{% endif %}">{{ item.tickets_over_24h|intcomma }}</td><td>{{ item.backlog_current|intcomma }}</td>
                 <td class="trend-cell trend-cell--{{ item.trend }}">{% if item.trend == "worse" %}↑ Piorou{% elif item.trend == "better" %}↓ Melhorou{% else %}→ Estável{% endif %} {{ item.trend_delta|floatformat:1 }}</td>
               </tr>
-            {% empty %}<tr><td colspan="13">Nenhum provedor no escopo selecionado.</td></tr>{% endfor %}
+            {% empty %}<tr><td colspan="14">Nenhum provedor no escopo selecionado.</td></tr>{% endfor %}
           </tbody>
         </table>
       {% endif %}
@@ -219,7 +260,7 @@
     {% endif %}
   </section>
 
-  {% if filters.ranking_view != "stable" %}
+  {% if filters.ranking_view != "stable" and filters.ranking_view != "links" %}
     <section class="table-section link-ranking-section" aria-labelledby="links-ranking-title">
       <header class="table-section-heading">
         <div><span class="section-kicker">RECORRÊNCIA POR CIRCUITO</span><h2 id="links-ranking-title">Links com mais chamados <small>{{ ranked_links_total|intcomma }}</small></h2></div>
@@ -249,6 +290,10 @@
   <dialog class="score-dialog" data-score-dialog aria-labelledby="score-dialog-title">
     <header><div><span class="section-kicker">TRANSPARÊNCIA DO CÁLCULO</span><h2 id="score-dialog-title">Como o Índice ARION V2 é calculado?</h2></div><button type="button" class="ranking-button ranking-button--quiet" data-score-close>Fechar</button></header>
     <div class="score-dialog-body">
+      <p><strong>Exposi&ccedil;&atilde;o.</strong> Links ativos s&atilde;o registros presentes no mirror CMDB com estado de implanta&ccedil;&atilde;o <code>Operacional</code> (ou <code>Operational</code>). Cada ConfigItem &eacute; contado uma vez; n&atilde;o h&aacute; deduplica&ccedil;&atilde;o por nome nem fuzzy matching.</p>
+      <p><strong>Incid&ecirc;ncia.</strong> Chamados distintos criados no per&iacute;odo por provedor &divide; links ativos atuais &times; 100. Sem link ativo, a taxa n&atilde;o &eacute; calculada. Links usam o snapshot atual; chamados usam o per&iacute;odo escolhido.</p>
+      <p><strong>Risco atual.</strong> O denominador CMDB do &Iacute;ndice ARION V2 permanece o da f&oacute;rmula aprovada. Essa dimens&atilde;o n&atilde;o muda com o novo contador de exposi&ccedil;&atilde;o.</p>
+      <p><strong>Tempo m&eacute;dio.</strong> Inclui tickets RESOLVED/CLOSED cujo t&eacute;rmino operacional ocorreu no per&iacute;odo e cuja dura&ccedil;&atilde;o n&atilde;o &eacute; negativa.</p>
       <p><strong>Índice ARION V2.</strong> Métrica operacional de 0 a 100. Zero significa sem pressão observada no período. O índice não representa SLA contratual, disponibilidade ou penalidade financeira.</p>
       <div class="score-formula">
         <h3>Composição</h3>

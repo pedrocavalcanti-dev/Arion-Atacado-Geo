@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}{% block reports_title %}Relatórios{% endblock %} · ARION{% endblock %}
+{% block title %}{% block reports_title %}Relatórios{% endblock %} · ARION OPS{% endblock %}
 {% block body_class %}reports-page{% endblock %}
 {% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/relatorios/relatorios.css' %}">{% endblock %}
 {% block content %}
 <div class="reports-layout">
   <aside class="reports-sidebar" aria-label="Navegação de relatórios">
     <button class="reports-sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="true" aria-label="Recolher navegação de relatórios" title="Recolher navegação">‹</button>
-    <a class="reports-brand" href="{% url 'relatorios:dashboard' %}"><span class="reports-brand__mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V11M10 19V5M16 19V8M22 19H2"/></svg></span><span><small>ARION</small><strong>Relatórios</strong></span></a>
+    <a class="reports-brand" href="{% url 'relatorios:dashboard' %}"><span class="reports-brand__mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V11M10 19V5M16 19V8M22 19H2"/></svg></span><span><small>ARION OPS</small><strong>Relatórios</strong></span></a>
     <p class="reports-nav-label">VISÃO GERAL</p>
     <nav class="reports-nav">
       <a href="{% url 'relatorios:dashboard' %}"{% if active_section == 'overview' %} class="is-active" aria-current="page"{% endif %}><span class="reports-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>Visão geral</a>

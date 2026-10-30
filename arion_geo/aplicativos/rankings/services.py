@@ -6,7 +6,7 @@ import unicodedata
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 
 from aplicativos.integracoes.models import OTRSTicketConfigItem
@@ -56,6 +56,7 @@ PRIORITY_GROUPS = {
     "high": {"alto", "high"},
     "critical": {"critico", "critical"},
 }
+ACTIVE_DEPLOYMENT_STATES = ("Operacional", "Operational")
 
 
 def _plain(value):
@@ -230,6 +231,27 @@ class RankingService:
             if link.operator_id and link.operator.is_present_in_source:
                 provider_links[link.operator_id].append(link)
 
+        # Exposure is the current operational inventory, grouped in the database.
+        # Unknown, canceled and maintenance states are not treated as active.
+        active_links_qs = links_qs.filter(
+            Q(deployment_state__iexact=ACTIVE_DEPLOYMENT_STATES[0])
+            | Q(deployment_state__iexact=ACTIVE_DEPLOYMENT_STATES[1])
+        )
+        active_link_groups = list(active_links_qs.values(
+            "operator_id", "operator__name", "operator__is_present_in_source",
+        ).annotate(links_active=Count("pk")).order_by())
+        active_links_total = sum(group["links_active"] for group in active_link_groups)
+        active_links_by_provider = {
+            group["operator_id"]: group["links_active"]
+            for group in active_link_groups
+            if group["operator_id"] and group["operator__is_present_in_source"]
+        }
+        identified_active_links = sum(active_links_by_provider.values())
+        active_links_unidentified = max(0, active_links_total - identified_active_links)
+        active_provider_link_counts = sorted(active_links_by_provider.values(), reverse=True)
+        top10_links = sum(active_provider_link_counts[:10])
+        top10_link_concentration = round(top10_links / active_links_total * 100, 1) if active_links_total else 0.0
+
         start_at, end_exclusive = _period_bounds(date_from, date_to)
         trend_month_start = date_to.replace(day=1)
         prev_month_start, prev_month_end = _previous_month(trend_month_start)
@@ -238,11 +260,16 @@ class RankingService:
         history_start = min(date_from.replace(day=1), chart_history_start)
         history_start_at = _local_bound(history_start)
         filter_ticket_ids = cls._filtered_ticket_ids(links_qs, filters)
+        resolved_in_history = (
+            Q(resolved_at__gte=history_start_at, resolved_at__lt=end_exclusive)
+            | Q(resolved_at__isnull=True, terminal_state_at__gte=history_start_at, terminal_state_at__lt=end_exclusive)
+        )
         relevant_tickets = TicketQueryService.noc_tickets().filter(
             business_status__in=VALID_STATES,
         ).filter(
             Q(source_created_at__gte=history_start_at, source_created_at__lt=end_exclusive)
             | Q(business_status__in=BACKLOG_STATES)
+            | resolved_in_history
         )
         relevant_tickets = cls._apply_ticket_filters(relevant_tickets, filters)
         if filter_ticket_ids is not None:
@@ -309,9 +336,11 @@ class RankingService:
             providers = {}
             for operator_id, links_for_provider in provider_links.items():
                 provider_ticket_ids = set()
+                related_ticket_ids = set()
                 affected_link_ids = set()
                 recurrent_for_provider = set()
                 for link in links_for_provider:
+                    related_ticket_ids.update(link_tickets.get(link.pk, set()))
                     ids = selected_links.get(link.pk, set())
                     if ids:
                         affected_link_ids.add(link.pk)
@@ -345,14 +374,35 @@ class RankingService:
                         normalized = "INDETERMINADO"
                     responsibility_counts[normalized] += 1
                 responsibility_known = responsibility_counts["PROCEDENTE"] + responsibility_counts["IMPROCEDENTE"]
+                resolution_durations = []
+                for ticket_id in related_ticket_ids:
+                    ticket = tickets[ticket_id]
+                    operational_end = operational_resolution_at(ticket)
+                    if (
+                        ticket.business_status in TERMINAL_STATES
+                        and ticket.source_created_at and operational_end
+                        and start_bound <= operational_end < end_bound
+                    ):
+                        duration = (operational_end - ticket.source_created_at).total_seconds() / 3600
+                        if duration >= 0:
+                            resolution_durations.append(duration)
                 providers[operator_id] = {
                     "id": operator_id,
                     "name": links_for_provider[0].operator.name,
                     "links_total": total,
+                    "links_active": active_links_by_provider.get(operator_id, 0),
                     "tickets": tickets_count,
                     "links_affected": affected,
                     "affected_rate": affected / total if total else 0,
                     "tickets_per_100_links": tickets_count / total * 100 if total else 0,
+                    "tickets_per_100_active_links": (
+                        round(tickets_count / active_links_by_provider[operator_id] * 100, 1)
+                        if active_links_by_provider.get(operator_id) else None
+                    ),
+                    "avg_resolution_hours": (
+                        sum(resolution_durations) / len(resolution_durations) if resolution_durations else None
+                    ),
+                    "resolution_tickets": len(resolution_durations),
                     "recurrent_links": recurrent_count,
                     "recurrent_rate": recurrent_count / affected if affected else 0,
                     "backlog_current": backlog_count,
@@ -435,10 +485,21 @@ class RankingService:
             row["trend_label"] = "Piorou" if row["trend"] == "worse" else "Melhorou" if row["trend"] == "better" else "Estável"
             row["sample_small"] = row["links_total"] < SMALL_SAMPLE_LINK_THRESHOLD
             row["share"] = round(row["links_total"] / len(links) * 100, 1) if links else 0
+            row["active_share"] = round(row["links_active"] / active_links_total * 100, 1) if active_links_total else 0
             row["affected_rate_pct"] = round(row["affected_rate"] * 100, 1)
             row["recurrent_rate_pct"] = round(row["recurrent_rate"] * 100, 1)
             row["over_24h_rate_pct"] = round(row["over_24h_rate"] * 100, 1)
             row["tickets_per_100_links"] = round(row["tickets_per_100_links"], 1)
+            row["tickets_per_100_active_links"] = (
+                round(row["tickets_per_100_active_links"], 1)
+                if row["tickets_per_100_active_links"] is not None else None
+            )
+            if row["avg_resolution_hours"] is not None:
+                resolution_minutes = round(row["avg_resolution_hours"] * 60)
+                resolution_hours, resolution_minutes = divmod(resolution_minutes, 60)
+                row["avg_resolution_display"] = f"{resolution_hours}h {resolution_minutes:02d}m"
+            else:
+                row["avg_resolution_display"] = "—"
             row["logo"] = "".join(part[0] for part in row["name"].split()[:2]).upper()
             row["projects"] = sorted({link.business_project for link in row["links_for_provider"] if link.business_project})
             row["clients"] = sorted({link.contracting_client for link in row["links_for_provider"] if link.contracting_client})
@@ -521,6 +582,11 @@ class RankingService:
             "ranked_links_all": link_rows,
             "ticket_export_rows": ticket_export_rows,
             "links_total": len(links),
+            "links_active": active_links_total,
+            "active_links_unidentified": active_links_unidentified,
+            "active_provider_count": len(active_links_by_provider),
+            "top10_links": top10_links,
+            "top10_link_concentration": top10_link_concentration,
             "provider_count": len(rows),
             "tickets_valid": total_tickets,
             "links_affected": len(total_affected_links),

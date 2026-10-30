@@ -9,7 +9,7 @@
   --docs-dim: var(--text-muted);
   --docs-border: var(--border-primary);
   --docs-border-strong: var(--border-strong);
-  --docs-accent: var(--accent-blue);
+  --docs-accent: var(--brand-link);
   --docs-code: var(--bg-secondary);
   --docs-header-height: 70px;
 }
@@ -24,8 +24,7 @@ body.docs-app { min-width: 320px; margin: 0; background: var(--docs-bg); color: 
 /* Global header and persistent system controls */
 .docs-header { position: sticky; z-index: 40; top: 0; display: flex; align-items: center; gap: 22px; height: var(--docs-header-height); padding: 0 clamp(18px, 2.5vw, 38px); border-bottom: 1px solid var(--docs-border); background: var(--docs-bg); transition: background-color 180ms ease, border-color 180ms ease; }
 .docs-brand { display: flex; flex: 0 0 205px; align-items: center; gap: 10px; text-decoration: none; }
-.docs-brand-mark { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid var(--docs-border-strong); border-radius: 9px; background: var(--docs-panel-subtle); color: var(--docs-muted); }
-.docs-brand-mark svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.docs-brand-logo { display:block; width:34px; height:34px; flex:0 0 34px; object-fit:contain; }
 .docs-brand strong, .docs-brand small { display: block; line-height: 1.25; letter-spacing: .1em; }
 .docs-brand strong { font-size: 11px; font-weight: 650; }
 .docs-brand small { margin-top: 4px; color: var(--docs-muted); font-size: 8px; font-weight: 550; letter-spacing: .16em; }
@@ -278,7 +277,7 @@ html[data-theme="dark"] .docs-icon-sun, html[data-theme="light"] .docs-icon-moon
   .docs-icon-mobile { display: block; }
   .docs-icon-desktop { display: none; }
   .docs-brand { flex: 0 0 auto; gap: 7px; }
-  .docs-brand-mark { width: 30px; height: 30px; }
+  .docs-brand-logo { width:30px; height:30px; flex-basis:30px; }
   .docs-brand strong { font-size: 9px; }
   .docs-brand small { margin-top: 3px; font-size: 7px; }
   .docs-search--header { width: auto; height: 35px; flex: 1; margin-left: auto; }
@@ -322,8 +321,7 @@ html[data-theme="dark"] .docs-icon-sun, html[data-theme="light"] .docs-icon-moon
 }
 @media (max-width: 390px) {
   .docs-header { gap: 7px; padding: 0 9px; }
-  .docs-brand-mark { width: 25px; height: 25px; }
-  .docs-brand-mark svg { width: 15px; height: 15px; }
+  .docs-brand-logo { width:25px; height:25px; flex-basis:25px; }
   .docs-brand strong { font-size: 8px; }
   .docs-brand small { display:none; }
   .docs-search--header { display:none; }

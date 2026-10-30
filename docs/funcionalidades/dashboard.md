@@ -1,6 +1,6 @@
 # Dashboard
 
-Identidade visual do produto: **ARION ATACADO GEO**. A identificação da operação nas páginas é **NOC ATACADO**.
+Identidade visual do produto/interface: **ARION OPS**. A identificação da operação nas páginas é **NOC ATACADO**.
 
 O Dashboard combina os Links atuais do mirror CMDB e os tickets presentes na fila exata `NOC - ATACADO`. As consultas usam o banco local; a página não chama ServiceUp nem o MySQL do OTRS. Links e tickets respeitam o Data Scope aplicado no backend.
 

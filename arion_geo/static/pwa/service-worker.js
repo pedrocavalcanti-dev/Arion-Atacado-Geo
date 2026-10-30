@@ -4,7 +4,7 @@ const OFFLINE_URL = "/static/pwa/offline.html";
 const SHELL_ASSETS = [
   OFFLINE_URL,
   "/static/css/pwa-offline.css",
-  "/static/pwa/arion-mark.svg",
+  "/static/branding/symbols/arion-symbol-primary.png",
   "/static/pwa/arion-192.png",
   "/static/pwa/arion-512.png",
   "/static/pwa/arion-512-maskable.png",
@@ -39,7 +39,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(request).catch(async () => {
       const cache = await caches.open(APP_CACHE);
       return (await cache.match(OFFLINE_URL)) || new Response(
-        "<!doctype html><html lang=\"pt-br\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Sem conexão · ARION</title><link rel=\"stylesheet\" href=\"/static/css/pwa-offline.css\"><body><main><h1>ARION ATACADO GEO</h1><h2>Sem conexão</h2><p>Não foi possível acessar os dados operacionais. Verifique sua conexão e tente novamente.</p><a href=\"/\">Tentar novamente</a></main></body></html>",
+        "<!doctype html><html lang=\"pt-br\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Sem conexão · ARION OPS</title><link rel=\"stylesheet\" href=\"/static/css/pwa-offline.css\"><body><main><h1>ARION OPS</h1><h2>Sem conexão</h2><p>Não foi possível acessar os dados operacionais. Verifique sua conexão e tente novamente.</p><a href=\"/\">Tentar novamente</a></main></body></html>",
         { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
       );
     }));

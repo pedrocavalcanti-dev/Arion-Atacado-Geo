@@ -6,11 +6,13 @@
   <meta name="theme-color" content="#090a0a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ARION">
-  <title>{% block title %}ARION ATACADO GEO{% endblock %}</title>
-  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/arion.svg' %}">
+  <meta name="apple-mobile-web-app-title" content="ARION OPS">
+  <title>{% block title %}ARION OPS{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="{% static 'favicon/favicon.ico' %}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'favicon/favicon-32x32.png' %}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'favicon/favicon-16x16.png' %}">
   <link rel="manifest" href="{% url 'pwa-manifest' %}">
-  <link rel="apple-touch-icon" href="{% static 'pwa/arion-apple-touch-icon.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'favicon/apple-touch-icon.png' %}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19,16 +21,18 @@
   <link rel="stylesheet" href="{% static 'css/base.css' %}">
   <link rel="stylesheet" href="{% static 'css/pwa.css' %}">
   {% block extra_css %}{% endblock %}
+  <link rel="stylesheet" href="{% static 'css/branding.css' %}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% if user.is_authenticated %}
   <header class="app-header">
     {% if request.resolver_match.app_name == 'relatorios' %}
-    <a class="reports-topbar-back" href="{% url 'painel:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7M8 12h12"/></svg><span>Voltar para Visão Geral ARION</span></a>
+    <a class="reports-topbar-back" href="{% url 'painel:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7M8 12h12"/></svg><span>Voltar para Visão Geral ARION OPS</span></a>
     {% else %}
-    <a class="brand" href="{% url 'painel:index' %}" aria-label="ARION ATACADO GEO, visão geral">
-      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="brand-name">ARION <span>ATACADO GEO</span></span>
+    <a class="brand" href="{% url 'painel:index' %}" aria-label="ARION OPS, visão geral">
+      <img class="brand-logo brand-logo--dark" src="{% static 'branding/arion/arion-logo-light.png' %}" width="2172" height="724" alt="">
+      <img class="brand-logo brand-logo--light" src="{% static 'branding/arion/arion-logo-primary.png' %}" width="2172" height="724" alt="">
+      <span class="brand-product">OPS</span>
     </a>
     <button class="mobile-nav-toggle" type="button" aria-label="Abrir menu" aria-haspopup="dialog" aria-expanded="false" aria-controls="mobile-navigation" data-mobile-nav-open>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -72,12 +76,12 @@
     {% block content %}{% endblock %}
   </main>
   <div class="global-loading" data-global-loading hidden aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>Carregando</span></div>
-  <div class="pwa-launch" data-pwa-launch aria-hidden="true"><img src="{% static 'pwa/arion-mark.svg' %}" alt=""><strong>ARION</strong><span>ATACADO GEO</span></div>
+  <div class="pwa-launch" data-pwa-launch aria-hidden="true"><img src="{% static 'branding/symbols/arion-symbol-primary.png' %}" alt=""><strong>ARION</strong><span>OPS</span></div>
   {% include "partials/pwa_update.html" %}
   <dialog class="pwa-install-help" data-pwa-install-help aria-labelledby="pwa-install-title">
     <button class="pwa-install-help__close" type="button" aria-label="Fechar" data-pwa-install-close>×</button>
     <img src="{% static 'pwa/arion-apple-touch-icon.png' %}" alt="" width="64" height="64">
-    <h2 id="pwa-install-title">Instalar ARION</h2>
+    <h2 id="pwa-install-title">Instalar ARION OPS</h2>
     <ol><li>Toque em <strong>Compartilhar</strong> no Safari.</li><li>Escolha <strong>Adicionar à Tela de Início</strong>.</li><li>Confirme em <strong>Adicionar</strong>.</li></ol>
   </dialog>
   <script src="{% arion_js 'js/base.js' %}" defer></script>

@@ -16,6 +16,8 @@ from aplicativos.integracoes.services.analytics import LinkQueryService, PeriodS
 from .services import RankingService
 
 SORT_OPTIONS = (
+    ("links_active", "Mais links ativos"),
+    ("tickets_per_100_active_links", "Chamados / 100 links"),
     ("risk_score", "Índice ARION"),
     ("impact_noc_score", "Maior impacto no NOC"),
     ("tickets", "Mais chamados"),
@@ -24,9 +26,12 @@ SORT_OPTIONS = (
     ("tickets_over_24h", "Mais chamados >24h"),
     ("backlog_current", "Maior backlog"),
     ("links_total", "Mais links CMDB"),
+    ("avg_resolution_hours", "Maior tempo médio"),
 )
 SORT_KEYS = {key for key, _ in SORT_OPTIONS}
 PAGE_SIZES = (25, 50, 100)
+TOP_OPTIONS = ("10", "20", "30", "50", "all")
+MIN_LINK_OPTIONS = ("0", "10", "30", "50", "100")
 
 
 def _read_filters(request):
@@ -38,7 +43,7 @@ def _read_filters(request):
         selected_month = today.replace(day=1)
     month = selected_month.strftime("%Y-%m")
     view = request.GET.get("view", "month").strip()
-    if view not in {"month", "3months", "custom"}:
+    if view not in {"month", "3months", "6months", "12months", "custom"}:
         view = "month"
 
     if view == "custom":
@@ -52,14 +57,25 @@ def _read_filters(request):
         end_of_month = date(selected_month.year, selected_month.month, calendar.monthrange(selected_month.year, selected_month.month)[1])
         end = min(today, end_of_month) if selected_month.year == today.year and selected_month.month == today.month else end_of_month
         start = selected_month
-        if view == "3months":
-            # Use calendar months, including February and year boundaries.
-            month_index = selected_month.year * 12 + selected_month.month - 1 - 2
+        month_window = {"month": 1, "3months": 3, "6months": 6, "12months": 12}.get(view, 1)
+        if month_window > 1:
+            # Keep the selected month at the end of each calendar-month window.
+            month_index = selected_month.year * 12 + selected_month.month - 1 - (month_window - 1)
             start = date(month_index // 12, month_index % 12 + 1, 1)
 
-    sort = request.GET.get("sort", "risk_score")
+    ranking_view = request.GET.get("ranking_view", "links").strip()
+    if ranking_view not in {"links", "risk", "best", "stable"}:
+        ranking_view = "links"
+    default_sort = "links_active" if ranking_view == "links" else "risk_score"
+    sort = request.GET.get("sort", default_sort)
     if sort not in SORT_KEYS:
-        sort = "risk_score"
+        sort = default_sort
+    top = request.GET.get("top", "20")
+    if top not in TOP_OPTIONS:
+        top = "20"
+    min_links = request.GET.get("min_links", "0")
+    if min_links not in MIN_LINK_OPTIONS:
+        min_links = "0"
     try:
         page_size = int(request.GET.get("page_size", 25))
     except (TypeError, ValueError):
@@ -68,7 +84,7 @@ def _read_filters(request):
         page_size = 25
     return {
         "month": month, "view": view,
-        "ranking_view": request.GET.get("ranking_view", "risk").strip() if request.GET.get("ranking_view", "risk").strip() in {"risk", "best", "stable"} else "risk",
+        "ranking_view": ranking_view,
         "date_from": start.isoformat(), "date_to": end.isoformat(),
         "operator": request.GET.get("provider", request.GET.get("operator", "")).strip(),
         "client": request.GET.get("client", "").strip(),
@@ -81,7 +97,7 @@ def _read_filters(request):
         "only_recurrent": request.GET.get("only_recurrent") in {"1", "true", "on"},
         "links_all": request.GET.get("links") == "all",
         "q": request.GET.get("q", "").strip()[:100],
-        "sort": sort, "page_size": page_size,
+        "sort": sort, "page_size": page_size, "top": top, "min_links": min_links,
     }
 
 
@@ -115,29 +131,40 @@ def index(request):
     filters = _read_filters(request)
     data = _build(request, filters)
     all_providers = list(data["providers"])
-    risk_providers = [row for row in all_providers if row["risk_eligible"]]
-    best_providers = [row for row in all_providers if row["tickets"] >= 1]
-    stable_providers = [row for row in all_providers if row["no_occurrence"]]
+    minimum_links = int(filters["min_links"])
+    risk_providers = [row for row in all_providers if row["risk_eligible"] and row["links_active"] >= minimum_links]
+    best_providers = [row for row in all_providers if row["tickets"] >= 1 and row["links_active"] >= minimum_links]
+    stable_providers = [row for row in all_providers if row["no_occurrence"] and row["links_active"] >= minimum_links]
     risk_providers.sort(key=lambda row: (
-        -row.get(filters["sort"], 0), -row["risk_score"], -row["impact_noc_score"],
+        -float(row.get(filters["sort"]) or 0), -row["risk_score"], -row["impact_noc_score"],
         -row["tickets"], -row["links_affected"], row["name"].casefold(),
     ))
     best_providers.sort(key=lambda row: (
         row["risk_score"], -row["links_total"], -row["eligible_tickets"], row["name"].casefold(),
     ))
-    stable_providers.sort(key=lambda row: (-row["links_total"], row["name"].casefold()))
-    if filters["ranking_view"] == "best":
+    stable_providers.sort(key=lambda row: (-row["links_active"], -row["links_total"], row["name"].casefold()))
+    if filters["ranking_view"] == "links":
+        providers = [row for row in all_providers if row["links_active"] > 0 and row["links_active"] >= minimum_links]
+        providers.sort(key=lambda row: (
+            -float(row.get(filters["sort"]) or 0), -row["links_active"], -row["tickets"], row["name"].casefold(),
+        ))
+        top_providers = []
+        page_size = 25 if filters["top"] == "all" else int(filters["top"])
+    elif filters["ranking_view"] == "best":
         providers = best_providers
         top_providers = [row for row in providers if row["best_eligible"]][:3]
+        page_size = filters["page_size"]
     elif filters["ranking_view"] == "stable":
         providers = stable_providers
         top_providers = providers[:10]
+        page_size = filters["page_size"]
     else:
         providers = risk_providers
         top_providers = providers[:3]
+        page_size = filters["page_size"]
     for position, item in enumerate(providers, 1):
         item["ranking_position"] = position
-    page_obj = Paginator(providers, filters["page_size"]).get_page(request.GET.get("page"))
+    page_obj = Paginator(providers, page_size).get_page(request.GET.get("page"))
 
     scope_links = LinkQueryService.base(request.user)
     operators = CMDBOperatorMirror.objects.filter(links__in=scope_links, is_present_in_source=True).distinct().order_by("name")
@@ -156,7 +183,7 @@ def index(request):
 
     page_filters = filters.copy()
     page_filters["links_all"] = False
-    sort_options = [{"value": key, "label": label, "url": _url(page_filters, sort=key), "active": key == filters["sort"]}
+    sort_options = [{"value": key, "label": label, "url": _url(page_filters, sort=key, page=1), "active": key == filters["sort"]}
                     for key, label in SORT_OPTIONS]
     return render(request, "rankings/index.html", {
         **data,
@@ -175,6 +202,8 @@ def index(request):
         "ufs": ufs,
         "month_options": month_labels,
         "page_sizes": PAGE_SIZES,
+        "top_options": TOP_OPTIONS,
+        "min_link_options": MIN_LINK_OPTIONS,
         "provider_detail_url_template": reverse("rankings:provider-detail", args=[0]),
         "base_url": reverse("base_links:index"),
         "cockpit_url": reverse("cockpit"),
@@ -182,7 +211,8 @@ def index(request):
         "export_xlsx_url": reverse("rankings:export", args=["xlsx"]) + _url(filters),
         "ranking_risk_url": _url(filters, ranking_view="risk", sort="risk_score", page=1),
         "ranking_best_url": _url(filters, ranking_view="best", sort="risk_score", page=1),
-        "ranking_stable_url": _url(filters, ranking_view="stable", sort="links_total", page=1),
+        "ranking_stable_url": _url(filters, ranking_view="stable", sort="links_active", page=1),
+        "ranking_links_url": _url(filters, ranking_view="links", sort="links_active", page=1),
         "full_links_url": _url(filters, links="all"),
         "previous_page_url": _url(filters, page=page_obj.previous_page_number()) if page_obj.has_previous() else "",
         "next_page_url": _url(filters, page=page_obj.next_page_number()) if page_obj.has_next() else "",
@@ -219,7 +249,13 @@ def export(request, file_format):
     filters["links_all"] = True
     data = _build(request, filters)
     all_providers = list(data["providers"])
-    if filters["ranking_view"] == "best":
+    if filters["ranking_view"] == "links":
+        providers = [row for row in all_providers if row["links_active"] > 0 and row["links_active"] >= int(filters["min_links"])]
+        providers.sort(key=lambda row: (
+            -float(row.get(filters["sort"]) or 0), -row["links_active"], -row["tickets"], row["name"].casefold(),
+        ))
+        podium = providers[:20]
+    elif filters["ranking_view"] == "best":
         providers = [row for row in all_providers if row["tickets"] >= 1]
         providers.sort(key=lambda row: (row["risk_score"], -row["links_total"], -row["eligible_tickets"], row["name"].casefold()))
         podium = [row for row in providers if row["best_eligible"]][:3]
@@ -230,7 +266,7 @@ def export(request, file_format):
     else:
         providers = [row for row in all_providers if row["risk_eligible"]]
         providers.sort(key=lambda row: (
-            -row.get(filters["sort"], 0), -row["risk_score"], -row["impact_noc_score"],
+            -float(row.get(filters["sort"]) or 0), -row["risk_score"], -row["impact_noc_score"],
             -row["tickets"], -row["links_affected"], row["name"].casefold(),
         ))
         podium = providers[:3]

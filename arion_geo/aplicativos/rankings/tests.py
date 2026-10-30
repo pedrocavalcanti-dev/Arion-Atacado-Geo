@@ -30,6 +30,7 @@ class RankingsMirrorTests(TestCase):
         self.link = CMDBLinkMirror.objects.create(
             source_config_item_id="ci-1", source_number="N-1", name="Link Real", state="SP",
             contracting_client="Claro", business_project="Bradesco", operator=self.operator,
+            deployment_state="Operacional",
         )
         self.client.force_login(self.user)
         self._next_id = 910000
@@ -235,6 +236,120 @@ class RankingsMirrorTests(TestCase):
         self.assertEqual(provider["risk_label"], "Sem ocorrências")
         self.assertTrue(provider["no_occurrence"])
 
+    def test_active_exposure_excludes_canceled_maintenance_and_unknown_states(self):
+        extra_active = CMDBLinkMirror.objects.create(
+            source_config_item_id="ci-active-2", operator=self.operator, deployment_state="operational",
+        )
+        for index, state in enumerate(("Cancelado", "Em Manutenção", "", "Em implantação"), 1):
+            CMDBLinkMirror.objects.create(
+                source_config_item_id=f"ci-inactive-{index}", operator=self.operator, deployment_state=state,
+            )
+        data = RankingService.build(
+            self.user, date_from=datetime(2026, 10, 1).date(), date_to=datetime(2026, 10, 24).date(),
+        )
+        provider = next(row for row in data["providers"] if row["id"] == self.operator.pk)
+        self.assertEqual(provider["links_total"], 6)
+        self.assertEqual(provider["links_active"], 2)
+        self.assertEqual(data["links_active"], 2)
+        self.assertEqual(data["active_provider_count"], 1)
+        self.assertGreater(extra_active.pk, 0)
+
+    def test_exposure_incidence_is_per_100_active_links_and_zero_is_undefined(self):
+        provider_a = CMDBOperatorMirror.objects.create(source_config_item_id="op-exposure-a", name="Provider A")
+        provider_a_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="ci-exposure-a", operator=provider_a, deployment_state="Operacional",
+        )
+        for index in range(99):
+            CMDBLinkMirror.objects.create(
+                source_config_item_id=f"ci-exposure-a-{index}", operator=provider_a, deployment_state="Operacional",
+            )
+        provider_b = CMDBOperatorMirror.objects.create(source_config_item_id="op-exposure-b", name="Provider B")
+        provider_b_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="ci-exposure-b", operator=provider_b, deployment_state="Operacional",
+        )
+        for index in range(9):
+            CMDBLinkMirror.objects.create(
+                source_config_item_id=f"ci-exposure-b-{index}", operator=provider_b, deployment_state="Operacional",
+            )
+        provider_zero = CMDBOperatorMirror.objects.create(source_config_item_id="op-exposure-zero", name="Provider zero")
+        zero_link = CMDBLinkMirror.objects.create(
+            source_config_item_id="ci-exposure-zero", operator=provider_zero, deployment_state="Cancelado",
+        )
+        for _ in range(20):
+            self.make_ticket(links=[provider_a_link])
+        for _ in range(10):
+            self.make_ticket(links=[provider_b_link])
+        self.make_ticket(links=[zero_link])
+
+        data = RankingService.build(
+            self.user, date_from=datetime(2026, 10, 1).date(), date_to=datetime(2026, 10, 24).date(),
+        )
+        providers = {row["id"]: row for row in data["providers"]}
+        self.assertEqual(providers[provider_a.pk]["tickets_per_100_active_links"], 20)
+        self.assertEqual(providers[provider_b.pk]["tickets_per_100_active_links"], 100)
+        self.assertIsNone(providers[provider_zero.pk]["tickets_per_100_active_links"])
+        self.assertEqual(providers[provider_zero.pk]["links_active"], 0)
+
+    def test_average_resolution_uses_terminal_tickets_resolved_in_period(self):
+        old_created = datetime(2026, 9, 29, 12, tzinfo=datetime_timezone.utc)
+        self.make_ticket(status="RESOLVED", created_at=old_created, terminal_hours=40)
+        data = RankingService.build(
+            self.user, date_from=datetime(2026, 10, 1).date(), date_to=datetime(2026, 10, 24).date(),
+        )
+        provider = next(row for row in data["providers"] if row["id"] == self.operator.pk)
+        self.assertEqual(provider["tickets"], 0)
+        self.assertEqual(provider["resolution_tickets"], 1)
+        self.assertEqual(provider["avg_resolution_hours"], 40)
+        self.assertEqual(provider["avg_resolution_display"], "40h 00m")
+
+    def test_active_exposure_view_defaults_to_twenty_and_supports_minimum_link_filter(self):
+        operators = []
+        for index in range(21):
+            operator = CMDBOperatorMirror.objects.create(
+                source_config_item_id=f"op-top-{index}", name=f"Provider {index:02d}",
+            )
+            CMDBLinkMirror.objects.create(
+                source_config_item_id=f"ci-top-{index}", operator=operator,
+                deployment_state="Operacional" if index != 0 else "Cancelado",
+            )
+            operators.append(operator)
+        response = self.client.get(reverse("rankings:index"), {
+            "view": "custom", "date_from": "2026-10-01", "date_to": "2026-10-24",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["filters"]["ranking_view"], "links")
+        self.assertEqual(response.context["filters"]["top"], "20")
+        self.assertEqual(response.context["page_obj"].paginator.count, 21)
+        self.assertEqual(len(response.context["page_obj"].object_list), 20)
+        filtered = self.client.get(reverse("rankings:index"), {
+            "view": "custom", "date_from": "2026-10-01", "date_to": "2026-10-24",
+            "top": "all", "min_links": "10",
+        })
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(filtered.context["page_obj"].paginator.count, 0)
+
+    def test_period_windows_top_options_and_minimum_defaults(self):
+        from django.test import RequestFactory
+        from .views import _read_filters
+
+        expected_starts = {
+            "month": "2026-10-01", "3months": "2026-08-01",
+            "6months": "2026-05-01", "12months": "2025-11-01",
+        }
+        for view, expected_start in expected_starts.items():
+            with self.subTest(view=view):
+                request = RequestFactory().get("/rankings/", {"view": view, "month": "2026-10"})
+                filters = _read_filters(request)
+                self.assertEqual(filters["date_from"], expected_start)
+                self.assertEqual(filters["date_to"], "2026-10-29")
+        for top in ("10", "20", "30", "50", "all"):
+            with self.subTest(top=top):
+                request = RequestFactory().get("/rankings/", {"top": top})
+                self.assertEqual(_read_filters(request)["top"], top)
+        defaults = _read_filters(RequestFactory().get("/rankings/"))
+        self.assertEqual(defaults["top"], "20")
+        self.assertEqual(defaults["min_links"], "0")
+
     def test_one_link_one_incident_remains_visible_with_high_proportional_rate(self):
         small = CMDBOperatorMirror.objects.create(source_config_item_id="op-risk", name="Provider 1 link")
         link = CMDBLinkMirror.objects.create(source_config_item_id="ci-risk", operator=small, state="MG")
@@ -256,10 +371,11 @@ class RankingsMirrorTests(TestCase):
             self.make_ticket(created_at=datetime(2026, month, day, 12, tzinfo=datetime_timezone.utc))
         data = RankingService.build(
             self.user, date_from=datetime(2026, 8, 1).date(), date_to=datetime(2026, 10, 24).date(),
-            filters={"client": "Claro", "project": "Bradesco"},
+            filters={"client": "Claro", "project": "Bradesco", "uf": "SP"},
         )
         provider = data["providers"][0]
         self.assertEqual(provider["tickets"], 3)
+        self.assertEqual(data["links_active"], 1)
         self.assertEqual(len(provider["history"]), 3)
         self.assertIn(provider["trend"], {"worse", "better", "stable"})
         self.assertEqual(provider["risk_score"], round(provider["risk_score"], 1))
@@ -303,7 +419,9 @@ class RankingsMirrorTests(TestCase):
         eligible_by_tickets = CMDBOperatorMirror.objects.create(source_config_item_id="op-eligible-tickets", name="Provider elegivel por chamados")
         eligible_ticket_link = CMDBLinkMirror.objects.create(source_config_item_id="ci-eligible-ticket", operator=eligible_by_tickets)
         stable = CMDBOperatorMirror.objects.create(source_config_item_id="op-stable", name="Provider estavel")
-        stable_links = [CMDBLinkMirror.objects.create(source_config_item_id=f"ci-stable-{index}", operator=stable) for index in range(8)]
+        stable_links = [CMDBLinkMirror.objects.create(
+            source_config_item_id=f"ci-stable-{index}", operator=stable, deployment_state="Operacional",
+        ) for index in range(8)]
         self.make_ticket(links=[small_link])
         self.make_ticket(links=[eligible_links[0]])
         for day in (6, 7, 8):
@@ -434,7 +552,8 @@ class RankingsMirrorTests(TestCase):
         ranking_headers = next(workbook["Ranking"].iter_rows(values_only=True))
         self.assertIn("Índice ARION V2", ranking_headers)
         self.assertIn("Impacto no NOC /30", ranking_headers)
-        self.assertIn("Chamados / link", ranking_headers)
+        self.assertIn("Chamados / link CMDB", ranking_headers)
+        self.assertIn("Chamados / 100 ativos", ranking_headers)
         self.assertNotIn("Tickets / 100 links", ranking_headers)
         values = [cell for row in workbook["Links"].iter_rows(values_only=True) for cell in row]
         self.assertNotIn("ci-export-out", values)
@@ -449,6 +568,7 @@ class RankingsMirrorTests(TestCase):
         scope.allowed_operators.set([Operadora.objects.create(name=self.operator.name, normalized_name=self.operator.name.casefold())])
         data = RankingService.build(self.user, date_from=datetime(2026, 10, 1).date(), date_to=datetime(2026, 10, 24).date())
         self.assertEqual(data["links_total"], 0)
+        self.assertEqual(data["links_active"], 0)
         self.assertEqual(data["providers"], [])
 
 

@@ -1,7 +1,8 @@
+{% load static %}
 {% if user.is_authenticated %}
 <dialog class="mobile-navigation" id="mobile-navigation" aria-labelledby="mobile-navigation-title" data-mobile-navigation>
   <div class="mobile-navigation__header">
-    <span class="mobile-navigation__brand" id="mobile-navigation-title"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>ARION <small>ATACADO GEO</small></span>
+    <span class="mobile-navigation__brand" id="mobile-navigation-title"><img class="mobile-navigation__brand-mark" src="{% static 'branding/symbols/arion-symbol-primary.png' %}" width="1024" height="1024" alt="">ARION <small>OPS</small></span>
     <button class="mobile-navigation__close" type="button" aria-label="Fechar menu" data-mobile-nav-close>&times;</button>
   </div>
   <nav class="mobile-navigation__links" aria-label="Navegação principal">
@@ -32,8 +33,8 @@
     <span>Aparência</span>
     <div class="theme-choice-row"><button type="button" data-theme-option="dark" aria-pressed="false">Escuro</button><button type="button" data-theme-option="light" aria-pressed="false">Claro</button></div>
   </div>
-  <button class="pwa-install-action" type="button" data-pwa-install hidden><span aria-hidden="true">↓</span><span><strong>Instalar ARION</strong><small>Usar como aplicativo</small></span></button>
-  <p class="pwa-installed-label" data-pwa-installed hidden>ARION está instalado</p>
+  <button class="pwa-install-action" type="button" data-pwa-install hidden><span aria-hidden="true">↓</span><span><strong>Instalar ARION OPS</strong><small>Usar como aplicativo</small></span></button>
+  <p class="pwa-installed-label" data-pwa-installed hidden>ARION OPS está instalado</p>
   <form class="mobile-navigation__logout" method="post" action="{% url 'autenticacao:logout' %}">{% csrf_token %}<button type="submit">Sair da conta</button></form>
 </dialog>
 {% endif %}

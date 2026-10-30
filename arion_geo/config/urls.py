@@ -27,7 +27,7 @@ urlpatterns = [
     path('api/version/', api_version, name='api-version'),
     path('manifest.webmanifest', pwa_manifest, name='pwa-manifest'),
     path('service-worker.js', pwa_service_worker, name='pwa-service-worker'),
-    path('favicon.ico', RedirectView.as_view(url='/static/favicon/arion.svg', permanent=True), name='favicon'),
+    path('favicon.ico', RedirectView.as_view(url='/static/favicon/favicon.ico', permanent=True), name='favicon'),
     path('admin/', admin.site.urls),
     path('', home, name='home'),
     path('', include('aplicativos.autenticacao.urls')),

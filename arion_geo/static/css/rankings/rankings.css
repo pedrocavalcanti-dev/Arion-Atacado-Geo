@@ -411,3 +411,28 @@ body.ranking-drawer-open { overflow:hidden; }
 @media (prefers-reduced-motion:reduce) {
   .ranking-page *, .ranking-page *::before, .ranking-page *::after { transition-duration:.01ms !important; animation-duration:.01ms !important; }
 }
+
+/* Current CMDB exposure view: compact controls and a readable comparison table. */
+.ranking-exposure-controls { grid-column:1/-1; display:grid; grid-template-columns:minmax(120px,.7fr) minmax(170px,1fr) minmax(210px,1.25fr) minmax(240px,2fr); align-items:end; gap:9px; padding-top:2px; }
+.ranking-exposure-controls label { display:grid; min-width:0; gap:5px; color:var(--text-muted); font-size:10px; }
+.ranking-exposure-controls p { margin:0 0 9px; color:var(--text-muted); font-size:9px; line-height:1.45; }
+.ranking-exposure-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.ranking-exposure-kpis .ranking-kpi:nth-child(n)::after { display:none; }
+.exposure-period-note { margin:-8px 0 15px; color:var(--text-muted); font-size:9px; line-height:1.5; }
+.exposure-table { min-width:960px; }
+.exposure-table th, .exposure-table td { white-space:nowrap; }
+.exposure-table th:nth-child(2), .exposure-table td:nth-child(2) { min-width:220px; white-space:normal; }
+.exposure-table td:nth-child(3), .exposure-table td:nth-child(4), .exposure-table td:nth-child(5), .exposure-table td:nth-child(6), .exposure-table td:nth-child(7), .exposure-table td:nth-child(8), .exposure-table td:nth-child(9) { font-variant-numeric:tabular-nums; }
+@media (max-width:1199px) {
+  .ranking-exposure-controls { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .ranking-exposure-controls p { grid-column:1/-1; }
+}
+@media (max-width:760px) {
+  .ranking-exposure-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ranking-exposure-controls label:nth-child(3), .ranking-exposure-controls p { grid-column:1/-1; }
+  .ranking-exposure-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:480px) {
+  .ranking-exposure-controls { grid-template-columns:minmax(0,1fr); }
+  .ranking-exposure-controls label:nth-child(3), .ranking-exposure-controls p { grid-column:auto; }
+}
