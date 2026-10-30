@@ -12,6 +12,14 @@
     });
   }
 
+  const permissionModules = document.querySelectorAll("[data-permission-modules] .permission-module");
+  if (permissionModules.length) {
+    const mobileLayout = window.matchMedia("(max-width: 680px)");
+    const syncPermissionModules = () => permissionModules.forEach(module => { module.open = !mobileLayout.matches; });
+    syncPermissionModules();
+    mobileLayout.addEventListener("change", syncPermissionModules);
+  }
+
   const status = document.querySelector("[data-theme-save-status]");
   if (!status) return;
 

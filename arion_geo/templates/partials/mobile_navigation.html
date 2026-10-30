@@ -2,39 +2,75 @@
 {% if user.is_authenticated %}
 <dialog class="mobile-navigation" id="mobile-navigation" aria-labelledby="mobile-navigation-title" data-mobile-navigation>
   <div class="mobile-navigation__header">
-    <span class="mobile-navigation__brand" id="mobile-navigation-title"><img class="mobile-navigation__brand-mark" src="{% static 'branding/symbols/arion-symbol-primary.png' %}" width="1024" height="1024" alt="">ARION <small>OPS</small></span>
+    <span class="mobile-navigation__brand" id="mobile-navigation-title">
+      <img class="mobile-navigation__brand-logo mobile-navigation__brand-logo--dark" src="{% static 'branding/arion/arion-ops-logo-light.png' %}" width="1916" height="821" alt="ARION OPS" onerror="const brand=this.closest('.mobile-navigation__brand');brand.classList.add('mobile-navigation__brand--fallback');brand.querySelector('.mobile-navigation__brand-fallback').hidden=false;brand.querySelectorAll('.mobile-navigation__brand-fallback [data-src]').forEach(image=>image.src=image.dataset.src)">
+      <img class="mobile-navigation__brand-logo mobile-navigation__brand-logo--light" src="{% static 'branding/arion/arion-ops-logo-primary.png' %}" width="1916" height="821" alt="ARION OPS" onerror="const brand=this.closest('.mobile-navigation__brand');brand.classList.add('mobile-navigation__brand--fallback');brand.querySelector('.mobile-navigation__brand-fallback').hidden=false;brand.querySelectorAll('.mobile-navigation__brand-fallback [data-src]').forEach(image=>image.src=image.dataset.src)">
+      <span class="mobile-navigation__brand-fallback" hidden>
+        <img class="mobile-navigation__brand-fallback-logo mobile-navigation__brand-fallback-logo--dark" data-src="{% static 'branding/arion/arion-logo-light.png' %}" width="2172" height="724" alt="ARION">
+        <img class="mobile-navigation__brand-fallback-logo mobile-navigation__brand-fallback-logo--light" data-src="{% static 'branding/arion/arion-logo-primary.png' %}" width="2172" height="724" alt="ARION">
+        <span>OPS</span>
+      </span>
+    </span>
     <button class="mobile-navigation__close" type="button" aria-label="Fechar menu" data-mobile-nav-close>&times;</button>
   </div>
-  <nav class="mobile-navigation__links" aria-label="Navegação principal">
-    {% if perms.configuracoes.view_dashboard %}<a href="{% url 'painel:index' %}"{% if request.resolver_match.app_name == 'painel' and request.resolver_match.url_name == 'index' %} aria-current="page"{% endif %}>Início</a>{% endif %}
-    {% if perms.configuracoes.view_dashboard %}<a href="{% url 'dashboard' %}"{% if request.resolver_match.url_name == 'dashboard' %} aria-current="page"{% endif %}>Dashboard</a>{% endif %}
-    {% if perms.configuracoes.view_operational_tickets %}<a href="{% url 'chamados:index' %}"{% if request.resolver_match.app_name == 'chamados' %} aria-current="page"{% endif %}>Chamados</a>{% endif %}
-    {% if perms.configuracoes.view_cockpit %}<a href="{% url 'cockpit' %}"{% if request.resolver_match.url_name == 'cockpit' %} aria-current="page"{% endif %}>Cockpit</a>{% endif %}
-    {% if perms.configuracoes.view_map %}<a href="{% url 'mapa:index' %}"{% if request.resolver_match.app_name == 'mapa' %} aria-current="page"{% endif %}>Mapa</a>{% endif %}
-    {% if perms.configuracoes.view_rankings %}<a href="{% url 'rankings:index' %}"{% if request.resolver_match.app_name == 'rankings' %} aria-current="page"{% endif %}>Rankings</a>{% endif %}
-    {% if perms.configuracoes.view_base %}<a href="{% url 'base_links:index' %}"{% if request.resolver_match.app_name == 'base_links' %} aria-current="page"{% endif %}>Base</a>{% endif %}
-    {% if perms.configuracoes.view_ari %}<a href="{% url 'ari:index' %}"{% if request.resolver_match.app_name == 'ari' %} aria-current="page"{% endif %}>ARI I.A</a>{% endif %}
-    {% if perms.configuracoes.manage_users %}<a href="{% url 'configuracoes:users' %}"{% if request.resolver_match.url_name == 'users' or request.resolver_match.url_name|slice:':5' == 'user-' %} aria-current="page"{% endif %}>Usuários</a>{% endif %}
-    {% if perms.configuracoes.manage_groups %}<a href="{% url 'configuracoes:groups' %}"{% if request.resolver_match.url_name == 'groups' or request.resolver_match.url_name|slice:':6' == 'group-' %} aria-current="page"{% endif %}>Grupos e acessos</a>{% endif %}
-    {% if perms.configuracoes.manage_data_scopes %}<a href="{% url 'configuracoes:scopes' %}"{% if request.resolver_match.url_name == 'scopes' or request.resolver_match.url_name|slice:':6' == 'scope-' %} aria-current="page"{% endif %}>Escopos de dados</a>{% endif %}
-    {% if perms.configuracoes.view_audit_log %}<a href="{% url 'configuracoes:audit' %}"{% if request.resolver_match.url_name == 'audit' or request.resolver_match.url_name == 'audit-detail' %} aria-current="page"{% endif %}>Auditoria</a>{% endif %}
-    {% if perms.configuracoes.manage_groups %}<a href="{% url 'configuracoes:documentation' %}"{% if request.resolver_match.url_name|slice:':13' == 'documentation' %} aria-current="page"{% endif %}>Documentação</a>{% endif %}
-    {% if perms.configuracoes.view_integrations %}<a href="{% url 'configuracoes:integrations' %}"{% if request.resolver_match.url_name == 'integrations' or request.resolver_match.app_name == 'integracoes' %} aria-current="page"{% endif %}>Integrações</a>{% endif %}
-    {% if perms.configuracoes.view_system_info %}<a href="{% url 'configuracoes:system' %}"{% if request.resolver_match.url_name == 'system' %} aria-current="page"{% endif %}>Sistema</a>{% endif %}
-  </nav>
-  <div class="mobile-navigation__divider" role="presentation"></div>
-  <nav class="mobile-navigation__secondary" aria-label="Conta">
-    <a href="{% url 'configuracoes:account' %}"{% if request.resolver_match.url_name == 'account' %} aria-current="page"{% endif %}>Minha conta</a>
-    <a href="{% url 'configuracoes:index' %}"{% if request.resolver_match.url_name == 'index' and request.resolver_match.app_name == 'configuracoes' %} aria-current="page"{% endif %}>Configurações</a>
-    {% if perms.relatorios.view_reports %}<a href="{% url 'relatorios:dashboard' %}"{% if request.resolver_match.app_name == 'relatorios' %} aria-current="page"{% endif %}>Relatórios</a>{% endif %}
-    <a href="{% url 'configuracoes:documentation-releases' %}">Atualiza&ccedil;&otilde;es e vers&otilde;es</a>
-  </nav>
-  <div class="mobile-navigation__preferences">
-    <span>Aparência</span>
-    <div class="theme-choice-row"><button type="button" data-theme-option="dark" aria-pressed="false">Escuro</button><button type="button" data-theme-option="light" aria-pressed="false">Claro</button></div>
+
+  <div class="mobile-navigation__content">
+    <section class="mobile-navigation__section">
+      <h2>Navegação principal</h2>
+      <nav aria-label="Navegação principal">
+        {% if perms.configuracoes.view_dashboard %}<a href="{% url 'painel:index' %}"{% if request.resolver_match.app_name == 'painel' and request.resolver_match.url_name == 'index' %} aria-current="page"{% endif %}>Início</a>{% endif %}
+        {% if perms.configuracoes.view_dashboard %}<a href="{% url 'dashboard' %}"{% if request.resolver_match.url_name == 'dashboard' %} aria-current="page"{% endif %}>Dashboard</a>{% endif %}
+        {% if perms.configuracoes.view_operational_tickets %}<a href="{% url 'chamados:index' %}"{% if request.resolver_match.app_name == 'chamados' %} aria-current="page"{% endif %}>Chamados</a>{% endif %}
+        {% if perms.configuracoes.view_cockpit %}<a href="{% url 'cockpit' %}"{% if request.resolver_match.url_name == 'cockpit' %} aria-current="page"{% endif %}>Cockpit</a>{% endif %}
+        {% if perms.configuracoes.view_map %}<a href="{% url 'mapa:index' %}"{% if request.resolver_match.app_name == 'mapa' %} aria-current="page"{% endif %}>Mapa</a>{% endif %}
+        {% if perms.configuracoes.view_rankings %}<a href="{% url 'rankings:index' %}"{% if request.resolver_match.app_name == 'rankings' %} aria-current="page"{% endif %}>Rankings</a>{% endif %}
+        {% if perms.configuracoes.view_base %}<a href="{% url 'base_links:index' %}"{% if request.resolver_match.app_name == 'base_links' %} aria-current="page"{% endif %}>Base</a>{% endif %}
+        {% if perms.configuracoes.view_ari %}<a href="{% url 'ari:index' %}"{% if request.resolver_match.app_name == 'ari' %} aria-current="page"{% endif %}>ARI I.A</a>{% endif %}
+      </nav>
+    </section>
+
+    <section class="mobile-navigation__section">
+      <h2>Conta</h2>
+      <nav aria-label="Conta">
+        <a href="{% url 'configuracoes:account' %}"{% if request.resolver_match.url_name == 'account' %} aria-current="page"{% endif %}>Minha conta</a>
+        <a href="{% url 'configuracoes:index' %}"{% if request.resolver_match.url_name == 'index' and request.resolver_match.app_name == 'configuracoes' %} aria-current="page"{% endif %}>Configurações</a>
+      </nav>
+    </section>
+
+    {% if perms.configuracoes.manage_users or perms.configuracoes.manage_groups or perms.configuracoes.manage_data_scopes or perms.configuracoes.view_audit_log or perms.configuracoes.view_integrations or perms.configuracoes.view_system_info %}
+    <section class="mobile-navigation__section mobile-navigation__section--admin">
+      <details>
+        <summary>Administração</summary>
+        <nav aria-label="Administração">
+        {% if perms.configuracoes.manage_users %}<a href="{% url 'configuracoes:users' %}"{% if request.resolver_match.url_name == 'users' or request.resolver_match.url_name|slice:':5' == 'user-' %} aria-current="page"{% endif %}>Usuários</a>{% endif %}
+        {% if perms.configuracoes.manage_groups %}<a href="{% url 'configuracoes:groups' %}"{% if request.resolver_match.url_name == 'groups' or request.resolver_match.url_name|slice:':6' == 'group-' %} aria-current="page"{% endif %}>Grupos e acessos</a>{% endif %}
+        {% if perms.configuracoes.manage_data_scopes %}<a href="{% url 'configuracoes:scopes' %}"{% if request.resolver_match.url_name == 'scopes' or request.resolver_match.url_name|slice:':6' == 'scope-' %} aria-current="page"{% endif %}>Escopos de dados</a>{% endif %}
+        {% if perms.configuracoes.view_audit_log %}<a href="{% url 'configuracoes:audit' %}"{% if request.resolver_match.url_name == 'audit' or request.resolver_match.url_name == 'audit-detail' %} aria-current="page"{% endif %}>Auditoria</a>{% endif %}
+        {% if perms.configuracoes.manage_groups %}<a href="{% url 'configuracoes:documentation' %}"{% if request.resolver_match.url_name|slice:':13' == 'documentation' %} aria-current="page"{% endif %}>Documentação</a>{% endif %}
+        {% if perms.configuracoes.view_integrations %}<a href="{% url 'configuracoes:integrations' %}"{% if request.resolver_match.url_name == 'integrations' or request.resolver_match.app_name == 'integracoes' %} aria-current="page"{% endif %}>Integrações</a>{% endif %}
+        {% if perms.configuracoes.view_system_info %}<a href="{% url 'configuracoes:system' %}"{% if request.resolver_match.url_name == 'system' %} aria-current="page"{% endif %}>Sistema</a>{% endif %}
+        </nav>
+      </details>
+    </section>
+    {% endif %}
+
+    <section class="mobile-navigation__section">
+      <h2>Sistema</h2>
+      <nav aria-label="Sistema">
+        {% if perms.relatorios.view_reports %}<a href="{% url 'relatorios:dashboard' %}"{% if request.resolver_match.app_name == 'relatorios' %} aria-current="page"{% endif %}>Relatórios</a>{% endif %}
+        <a href="{% url 'configuracoes:documentation-releases' %}">Atualizações e versões</a>
+      </nav>
+    </section>
   </div>
-  <button class="pwa-install-action" type="button" data-pwa-install hidden><span aria-hidden="true">↓</span><span><strong>Instalar ARION OPS</strong><small>Usar como aplicativo</small></span></button>
-  <p class="pwa-installed-label" data-pwa-installed hidden>ARION OPS está instalado</p>
-  <form class="mobile-navigation__logout" method="post" action="{% url 'autenticacao:logout' %}">{% csrf_token %}<button type="submit">Sair da conta</button></form>
+
+  <div class="mobile-navigation__footer">
+    <div class="mobile-navigation__preferences">
+      <span>Aparência</span>
+      <div class="theme-choice-row"><button type="button" data-theme-option="light" aria-pressed="false">Claro</button><button type="button" data-theme-option="dark" aria-pressed="false">Escuro</button></div>
+    </div>
+    <button class="pwa-install-action" type="button" data-pwa-install hidden><span aria-hidden="true">↓</span><span><strong>Instalar ARION OPS</strong><small>Usar como aplicativo</small></span></button>
+    <p class="pwa-installed-label" data-pwa-installed hidden>ARION OPS está instalado</p>
+    <form class="mobile-navigation__logout" method="post" action="{% url 'autenticacao:logout' %}">{% csrf_token %}<button type="submit">Sair da conta</button></form>
+  </div>
 </dialog>
 {% endif %}

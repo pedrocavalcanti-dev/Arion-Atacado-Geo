@@ -5,6 +5,7 @@ const SHELL_ASSETS = [
   OFFLINE_URL,
   "/static/css/pwa-offline.css",
   "/static/branding/symbols/arion-symbol-primary.png",
+  "/static/branding/ari/ari-icon.png",
   "/static/pwa/arion-192.png",
   "/static/pwa/arion-512.png",
   "/static/pwa/arion-512-maskable.png",

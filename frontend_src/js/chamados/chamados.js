@@ -54,11 +54,18 @@
     const count = activeSelects.length + checked + search;
     mobileFilterCount.hidden = count === 0;
     mobileFilterCount.textContent = String(count);
-    mobileFiltersOpen.setAttribute("aria-label", count ? `Abrir filtros da fila, ${count} ativos` : "Abrir filtros da fila");
+    const expanded = mobileFilters.classList.contains("is-open");
+    mobileFiltersOpen.setAttribute("aria-expanded", String(expanded));
+    mobileFiltersOpen.setAttribute("aria-label", expanded ? "Fechar filtros da fila" : count ? `Abrir filtros da fila, ${count} ativos` : "Abrir filtros da fila");
   };
-  mobileFiltersOpen?.addEventListener("click", () => mobileFilters?.showModal());
-  mobileFiltersClose?.addEventListener("click", () => mobileFilters?.close());
-  mobileFilters?.addEventListener("click", (event) => { if (event.target === mobileFilters) mobileFilters.close(); });
+  const setMobileFiltersExpanded = (expanded, returnFocus = false) => {
+    if (!mobileFilters || !mobileFiltersOpen) return;
+    mobileFilters.classList.toggle("is-open", expanded);
+    refreshMobileFilterCount();
+    if (returnFocus) mobileFiltersOpen.focus({ preventScroll: true });
+  };
+  mobileFiltersOpen?.addEventListener("click", () => setMobileFiltersExpanded(!mobileFilters?.classList.contains("is-open")));
+  mobileFiltersClose?.addEventListener("click", () => setMobileFiltersExpanded(false, true));
   mobileFilters?.querySelectorAll("select, input[type='checkbox']").forEach((control) => control.addEventListener("change", () => { refreshMobileFilterCount(); renderActiveFilterChips(); }));
   filterForm?.querySelector('input[name="q"]')?.addEventListener("input", () => { refreshMobileFilterCount(); renderActiveFilterChips(); });
   refreshMobileFilterCount();
@@ -474,6 +481,7 @@
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && drawer && !drawer.hidden) closeDrawer();
+    if (event.key === "Escape" && mobileFilters?.classList.contains("is-open")) setMobileFiltersExpanded(false, true);
     if ((event.key === "Enter" || event.key === " ") && event.target.matches(".ticket-row[data-ticket-id]") && !event.target.closest("a,button,select,input,textarea,form")) {
       event.preventDefault();
       lastFocus = event.target;

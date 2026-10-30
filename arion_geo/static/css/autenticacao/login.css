@@ -304,3 +304,76 @@
   .login-page .form-field input,.login-submit,.login-carousel__dot,.login-carousel__arrows button,.login-carousel__arrows svg { transition:none; }
   .login-art__slide { transition:none; }
 }
+
+/* On small screens the image and its copy become two natural rows inside each slide. */
+@media (max-width:600px) {
+  .login-art {
+    display:grid;
+    height:auto;
+    overflow:hidden;
+    background:#00463c;
+  }
+  .login-art__slides {
+    position:relative;
+    inset:auto;
+    display:grid;
+    min-width:0;
+  }
+  .login-art__slide {
+    position:relative;
+    inset:auto;
+    grid-area:1 / 1;
+    display:grid;
+    grid-template-rows:clamp(300px, 84vw, 360px) auto;
+    min-width:0;
+    overflow:hidden;
+    border-radius:14px;
+    opacity:0;
+    transform:translateX(10px);
+    pointer-events:none;
+  }
+  .login-art__slide.is-active { opacity:1; transform:translateX(0); pointer-events:auto; }
+  .login-art__image {
+    position:relative;
+    inset:auto;
+    grid-row:1;
+    z-index:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    object-position:center top;
+  }
+  .login-carousel__copy {
+    position:relative;
+    inset:auto;
+    grid-row:2;
+    min-height:104px;
+    padding:13px 14px 48px;
+    border:0;
+    border-radius:0 0 14px 14px;
+    background:rgba(2,46,39,.96);
+    -webkit-backdrop-filter:none;
+    backdrop-filter:none;
+  }
+  .login-carousel__controls { right:17px; bottom:17px; }
+}
+
+@media (max-width:600px) {
+  .login-panel { padding:22px 16px 14px; }
+  .login-logo { width:108px; margin-bottom:9px; }
+  .login-description { margin:14px 0 15px; }
+  .login-form { gap:12px; }
+  .login-page .form-field { gap:7px; }
+  .login-page .form-field input { height:46px; }
+  .login-submit { min-height:46px; margin-top:4px; }
+  .login-security { margin-top:12px; }
+  .login-art__slide { grid-template-rows:clamp(290px, 76vw, 330px) auto; }
+  .login-carousel__copy { min-height:96px; padding:11px 12px 44px; }
+  .login-slide__title { font-size:15px; }
+  .login-slide__description { font-size:11px; }
+  .login-carousel__controls { right:15px; bottom:15px; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .login-art__slide { transition:none; transform:none; }
+}

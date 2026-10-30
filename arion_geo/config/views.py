@@ -95,6 +95,7 @@ def _pwa_service_worker_source(worker_path, app_version, manifest_path):
         "pwa/manifest.webmanifest",
         "pwa/offline.html",
         "branding/symbols/arion-symbol-primary.png",
+        "branding/ari/ari-icon.png",
         "pwa/arion-192.png",
         "pwa/arion-512.png",
         "pwa/arion-512-maskable.png",

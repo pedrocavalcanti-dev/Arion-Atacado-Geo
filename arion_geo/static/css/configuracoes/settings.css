@@ -447,3 +447,29 @@
   .theme-preview { height:88px; }
   .admin-table--cards td { grid-template-columns:minmax(74px,29%) minmax(0,1fr); gap:7px; }
 }
+
+/* Personal account fields pair naturally on wider screens and stack on mobile. */
+.settings-form--account { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px 20px; align-items:start; }
+.settings-form--account > .form-errors,.settings-form--account .settings-field--email,.settings-form--account .settings-form-actions { grid-column:1/-1; }
+.settings-form--account .settings-field { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; margin:0; }
+.settings-form--account .settings-field > label { padding-top:0; }
+.settings-form--account .settings-form-actions { padding:2px 0 0; }
+.settings-form--account .settings-form-actions .settings-button { width:auto; min-width:150px; }
+
+/* Permission groups stay expanded on desktop and become concise disclosures on mobile. */
+.permission-module { display:block; overflow:hidden; margin:0; padding:0; border-radius:var(--radius-sm); }
+.permission-module > summary { display:flex; min-height:46px; align-items:center; gap:10px; padding:5px 13px; color:var(--text-primary); cursor:pointer; list-style:none; }
+.permission-module > summary::-webkit-details-marker { display:none; }
+.permission-module > summary > span { font-size:12px; font-weight:600; }
+.permission-module > summary > small { margin-left:auto; color:var(--text-muted); font-size:10px; }
+.permission-module > summary::after { color:var(--text-muted); content:"⌄"; font-size:14px; }
+.permission-module[open] > summary { border-bottom:1px solid var(--border-primary); }
+.permission-module[open] > summary::after { content:"⌃"; }
+.permission-module-options { display:grid; gap:1px; padding:5px 12px 8px; }
+.group-form .permission-choice { min-height:40px; gap:10px; padding:3px 2px; }
+.group-form .permission-choice input { flex:0 0 18px; width:18px; height:18px; }
+@media(max-width:680px) {
+  .settings-form--account { grid-template-columns:minmax(0,1fr); gap:12px; }
+  .settings-form--account .settings-form-actions .settings-button { width:min(100%,170px); }
+  .permission-module > summary,.group-form .permission-choice { min-height:44px; }
+}

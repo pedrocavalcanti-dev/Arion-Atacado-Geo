@@ -6,6 +6,7 @@
   const endpoint = (template, id) => template.replace('00000000-0000-0000-0000-000000000000', id);
   const history = app.querySelector('[data-history]');
   const messages = app.querySelector('[data-messages]');
+  const scrollLatestButton = app.querySelector('[data-scroll-latest]');
   const welcome = app.querySelector('[data-welcome]');
   const conversationView = app.querySelector('[data-conversation-view]');
   const suggestions = app.querySelector('[data-suggestions]');
@@ -13,6 +14,7 @@
   const input = app.querySelector('[data-prompt-input]');
   const sendButton = app.querySelector('[data-send]');
   const errorBox = app.querySelector('[data-error]');
+  const announcement = app.querySelector('[data-ari-announcement]');
   const titleNode = app.querySelector('[data-current-title]');
   const dialog = document.querySelector('[data-rename-dialog]');
   const renameForm = document.querySelector('[data-rename-form]');
@@ -27,6 +29,23 @@
   let activeId = app.dataset.activeId || '';
   let renameTarget = null;
   let selectedFiles = [];
+  let followLatest = true;
+  let stateResetTimer = 0;
+
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const setAriState = (state) => {
+    window.clearTimeout(stateResetTimer);
+    app.dataset.ariState = state;
+    composer.dataset.state = state;
+  };
+  const scrollToLatest = (behavior = 'smooth') => {
+    if (!followLatest) return;
+    messages.scrollTo({
+      top: messages.scrollHeight,
+      behavior: reducedMotion.matches ? 'auto' : behavior,
+    });
+    scrollLatestButton.hidden = true;
+  };
 
   const api = async (url, options = {}) => {
     const response = await fetch(url, {
@@ -50,7 +69,14 @@
 
   const sizeInput = () => {
     input.style.height = 'auto';
-    input.style.height = `${Math.min(input.scrollHeight, 144)}px`;
+    const maxHeight = Number.parseFloat(window.getComputedStyle(input).maxHeight) || 160;
+    input.style.height = `${Math.min(input.scrollHeight, maxHeight)}px`;
+  };
+
+  const syncViewportHeight = () => {
+    const visibleHeight = window.visualViewport?.height || window.innerHeight;
+    document.body.style.setProperty('--ari-viewport-height', `${visibleHeight}px`);
+    sizeInput();
   };
 
   const node = (tag, className, text) => {
@@ -171,7 +197,6 @@
   };
 
   const renderStructured = (body, messageType, metadata) => {
-    if (metadata.demo_label) body.append(node('span', 'ari-data-badge', metadata.demo_label));
     if (metadata.title) body.append(node('h3', 'ari-rich-title', metadata.title));
     switch (messageType) {
       case 'summary':
@@ -244,11 +269,6 @@
       default:
         break;
     }
-    if (metadata.sources) {
-      const source = node('div', 'ari-source-note');
-      source.append(node('span', '', `Fontes futuras: ${metadata.sources}`), node('small', '', metadata.sources_status || 'Não conectadas à ARI'));
-      body.append(source);
-    }
   };
 
   const makeMessage = ({ role, content, message_type = 'text', metadata = {}, attachments = [] }) => {
@@ -260,7 +280,11 @@
     if (role === 'assistant') {
       const mark = document.createElement('span');
       mark.className = 'ari-mini-mark';
-      mark.textContent = '✦';
+      const icon = document.createElement('img');
+      icon.src = app.dataset.ariIconUrl;
+      icon.alt = '';
+      icon.setAttribute('aria-hidden', 'true');
+      mark.append(icon);
       label.append(mark, document.createTextNode(' ARI'));
     } else {
       label.textContent = 'Você';
@@ -274,9 +298,78 @@
     return article;
   };
 
-  const renderMessages = (items) => {
+  const makeStatusMessage = (state) => {
+    const article = makeMessage({ role: 'assistant', content: '' });
+    article.classList.add('ari-message--status');
+    article.dataset.status = state;
+    article.setAttribute('role', state === 'error' ? 'alert' : 'status');
+    article.setAttribute('aria-live', state === 'error' ? 'assertive' : 'polite');
+    updateStatusMessage(article, state);
+    return article;
+  };
+
+  const updateStatusMessage = (article, state, retry) => {
+    article.dataset.status = state;
+    const body = article.querySelector('.ari-message-content');
+    body.replaceChildren();
+    if (state === 'error') {
+      body.append(node('p', 'ari-message-text', 'Não foi possível concluir esta solicitação.'));
+      const button = node('button', 'ari-status-retry', 'Tentar novamente');
+      button.type = 'button';
+      button.addEventListener('click', retry);
+      body.append(button);
+      article.setAttribute('role', 'alert');
+      article.setAttribute('aria-live', 'assertive');
+      return;
+    }
+
+    const label = state === 'thinking' ? 'ARI está preparando uma resposta de demonstração' : 'Enviando mensagem';
+    body.append(node('p', 'ari-message-text', label));
+    const dots = node('span', 'ari-thinking-dots');
+    dots.setAttribute('aria-hidden', 'true');
+    for (let index = 0; index < 3; index += 1) dots.append(node('i'));
+    body.append(dots);
+  };
+
+  const renderMessages = (items, { scrollToBottom = true } = {}) => {
+    const previousScroll = messages.scrollTop;
     messages.replaceChildren(...items.map(makeMessage));
-    messages.scrollTop = messages.scrollHeight;
+    if (scrollToBottom) {
+      messages.scrollTop = messages.scrollHeight;
+      followLatest = true;
+      scrollLatestButton.hidden = true;
+    } else {
+      messages.scrollTop = previousScroll;
+      scrollLatestButton.hidden = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 90;
+    }
+  };
+
+  const revealAssistantResponse = async (article, content) => {
+    const text = article.querySelector('.ari-message-text');
+    if (!content || reducedMotion.matches) {
+      text.textContent = content || '';
+      return;
+    }
+
+    if (content.length > 1800) {
+      text.textContent = content.slice(0, 190).trimEnd();
+      scrollToLatest('auto');
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+      text.textContent = content;
+      scrollToLatest('auto');
+      return;
+    }
+
+    const words = content.match(/\S+\s*/g) || [content];
+    const chunkSize = content.length < 260 ? 3 : content.length < 900 ? 8 : 16;
+    text.textContent = '';
+    for (let index = 0; index < words.length; index += chunkSize) {
+      text.textContent += words.slice(index, index + chunkSize).join('');
+      scrollToLatest('auto');
+      if (index + chunkSize < words.length) {
+        await new Promise((resolve) => window.setTimeout(resolve, 22));
+      }
+    }
   };
 
   const renderQueue = () => {
@@ -305,8 +398,13 @@
   };
 
   const closeDrawer = () => {
+    const wasOpen = app.classList.contains('is-drawer-open');
     app.classList.remove('is-drawer-open');
     backdrop.hidden = true;
+    app.querySelectorAll('[data-drawer-toggle]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+    if (wasOpen && app.contains(document.activeElement) && document.activeElement.closest('.ari-sidebar')) {
+      app.querySelector('.ari-open-sidebar').focus({ preventScroll: true });
+    }
   };
 
   const showHome = (push = true) => {
@@ -318,7 +416,11 @@
     suggestions.hidden = false;
     history.querySelectorAll('[data-history-row]').forEach((row) => row.classList.remove('is-active'));
     messages.replaceChildren();
+    scrollLatestButton.hidden = true;
     setError();
+    announcement.textContent = '';
+    followLatest = true;
+    setAriState('idle');
     if (push && window.location.pathname !== home) window.history.pushState({}, '', home);
     closeDrawer();
     input.focus({ preventScroll: true });
@@ -387,6 +489,11 @@
     history.querySelectorAll('[data-history-group]').forEach((group) => {
       group.hidden = !group.querySelector('[data-history-row]:not([hidden])');
     });
+    const historyEmpty = history.querySelector('[data-history-empty]');
+    if (historyEmpty) {
+      historyEmpty.textContent = term ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa ainda.';
+      historyEmpty.hidden = Boolean(term);
+    }
     let empty = history.querySelector('[data-search-empty]');
     if (!empty) {
       empty = document.createElement('p');
@@ -399,43 +506,96 @@
     clearSearch.hidden = !search.value;
   };
 
-  const send = async (content) => {
+  const send = async (content, { retryAttempt = null } = {}) => {
     const prompt = (content || '').trim();
-    if ((!prompt && !selectedFiles.length) || sendButton.disabled) return;
+    if ((!prompt && !(retryAttempt?.files.length || selectedFiles.length)) || sendButton.disabled) return;
     setError();
+    announcement.textContent = '';
+    const filesForRequest = retryAttempt ? retryAttempt.files : [...selectedFiles];
+    let attempt = retryAttempt;
+    let statusMessage;
+
+    if (retryAttempt) {
+      statusMessage = makeStatusMessage('sending');
+      retryAttempt.statusMessage.replaceWith(statusMessage);
+      retryAttempt.statusMessage = statusMessage;
+      attempt = retryAttempt;
+    } else {
+      const wasAtLatest = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 90;
+      followLatest = !messages.children.length || wasAtLatest;
+      welcome.hidden = true;
+      conversationView.hidden = false;
+      suggestions.hidden = true;
+      const userMessage = makeMessage({
+        role: 'user',
+        content: prompt || 'Enviei arquivo(s) para demonstração.',
+        attachments: filesForRequest.map((file) => ({ name: file.name, size: file.size })),
+      });
+      statusMessage = makeStatusMessage('sending');
+      messages.append(userMessage, statusMessage);
+      attempt = { prompt, files: filesForRequest, statusMessage };
+      input.value = '';
+      sizeInput();
+      scrollToLatest();
+    }
+
     sendButton.disabled = true;
-    input.disabled = true;
+    sendButton.setAttribute('aria-busy', 'true');
+    composer.dataset.state = 'sending';
+    setAriState('sending');
+    const thinkingTimer = window.setTimeout(() => {
+      if (!sendButton.disabled) return;
+      setAriState('thinking');
+      updateStatusMessage(statusMessage, 'thinking');
+    }, 260);
+
     try {
       const url = activeId ? endpoint(app.dataset.sendTemplate, activeId) : app.dataset.createUrl;
       let body;
-      if (selectedFiles.length) {
+      if (filesForRequest.length) {
         body = new FormData();
         body.append('content', prompt);
-        selectedFiles.forEach((file) => body.append('files', file, file.name));
+        filesForRequest.forEach((file) => body.append('files', file, file.name));
       } else {
         body = JSON.stringify({ content: prompt });
       }
       const data = await api(url, { method: 'POST', body });
+      window.clearTimeout(thinkingTimer);
       activeId = data.conversation.id;
       app.dataset.activeId = activeId;
       titleNode.textContent = data.conversation.title;
       welcome.hidden = true;
       conversationView.hidden = false;
       suggestions.hidden = true;
-      renderMessages(data.messages);
+      const response = data.messages[data.messages.length - 1];
+      const hasAssistantResponse = response?.role === 'assistant';
+      renderMessages(hasAssistantResponse ? data.messages.slice(0, -1) : data.messages, { scrollToBottom: followLatest });
+      if (hasAssistantResponse) {
+        const assistantMessage = makeMessage({ ...response, content: '' });
+        assistantMessage.classList.add('ari-message--revealing');
+        messages.append(assistantMessage);
+        scrollToLatest();
+        setAriState('responding');
+        await revealAssistantResponse(assistantMessage, response.content);
+        assistantMessage.classList.remove('ari-message--revealing');
+      }
       makeRow(data.conversation, data.page_url);
       if (window.location.pathname !== data.page_url) window.history.pushState({}, '', data.page_url);
-      input.value = '';
-      selectedFiles = [];
-      fileInput.value = '';
+      selectedFiles = selectedFiles.filter((file) => !filesForRequest.includes(file));
       renderQueue();
       sizeInput();
-    } catch (error) {
-      setError(error.message);
-    } finally {
+      announcement.textContent = 'Resposta da ARI disponível.';
       sendButton.disabled = false;
-      input.disabled = false;
-      input.focus({ preventScroll: true });
+      sendButton.removeAttribute('aria-busy');
+      setAriState('success');
+      stateResetTimer = window.setTimeout(() => setAriState('idle'), 700);
+    } catch (error) {
+      window.clearTimeout(thinkingTimer);
+      setError(error.message);
+      sendButton.disabled = false;
+      sendButton.removeAttribute('aria-busy');
+      setAriState('error');
+      updateStatusMessage(statusMessage, 'error', () => send(attempt.prompt, { retryAttempt: attempt }));
     }
   };
 
@@ -450,8 +610,13 @@
     app.querySelector('[data-sidebar-toggle]').setAttribute('aria-expanded', 'false');
   }
   app.querySelectorAll('[data-drawer-toggle]').forEach((button) => button.addEventListener('click', () => {
-    const open = app.classList.toggle('is-drawer-open');
-    backdrop.hidden = !open;
+    if (app.classList.contains('is-drawer-open')) {
+      closeDrawer();
+      return;
+    }
+    app.classList.add('is-drawer-open');
+    backdrop.hidden = false;
+    app.querySelectorAll('[data-drawer-toggle]').forEach((toggle) => toggle.setAttribute('aria-expanded', 'true'));
   }));
   backdrop.addEventListener('click', closeDrawer);
 
@@ -489,11 +654,12 @@
         if (!history.querySelector('[data-history-row]')) {
           const empty = document.createElement('p');
           empty.className = 'ari-history-empty';
-          empty.textContent = 'Suas conversas aparecerão aqui.';
+          empty.dataset.historyEmpty = '';
+          empty.textContent = 'Nenhuma conversa ainda.';
           history.replaceChildren(empty);
         }
         if (wasActive) showHome();
-        else updateSearch();
+        updateSearch();
       }).catch((error) => setError(error.message));
     }
   });
@@ -509,6 +675,9 @@
     send(input.value);
   });
   input.addEventListener('input', sizeInput);
+  syncViewportHeight();
+  window.addEventListener('resize', syncViewportHeight, { passive: true });
+  window.visualViewport?.addEventListener('resize', syncViewportHeight, { passive: true });
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
@@ -519,6 +688,14 @@
   messages.addEventListener('click', (event) => {
     const button = event.target.closest('[data-quick-prompt]');
     if (button) send(button.dataset.quickPrompt);
+  });
+  messages.addEventListener('scroll', () => {
+    followLatest = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 90;
+    scrollLatestButton.hidden = followLatest;
+  }, { passive: true });
+  scrollLatestButton.addEventListener('click', () => {
+    followLatest = true;
+    scrollToLatest();
   });
   app.querySelector('[data-attach-trigger]').addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
@@ -572,6 +749,7 @@
       setError('Não foi possível abrir as mensagens desta conversa.');
     }
   }
+  setAriState('idle');
   updateSearch();
   sizeInput();
 })();

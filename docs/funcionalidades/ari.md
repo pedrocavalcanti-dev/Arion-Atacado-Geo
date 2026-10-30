@@ -17,3 +17,9 @@ O conteúdo de Preview deve estar identificado como demonstrativo e não aliment
 ## Limites
 
 Integração com modelo de IA, ferramentas operacionais e automação com decisão permanece **Planejado / Backlog** enquanto não houver código/configuração ativa. Preview não é automação autônoma nem fonte operacional.
+
+## Identidade e estados da interface
+
+A identidade visual da ARI usa um único asset: `arion_geo/static/branding/ari/ari-icon.png`, referenciado nos templates como `{% static 'branding/ari/ari-icon.png' %}`. O PNG tem fundo transparente e sem texto e é compartilhado pelos temas claro e escuro, desktop e mobile, estado vazio, avatar e estado `thinking` do chat. O mesmo arquivo é incluído no cache offline para a ARI funcionar visualmente também no PWA. Não há variantes por tema; o texto `ARI I.A` permanece como identificação junto ao ícone. A ARI continua como módulo do ARION OPS.
+
+O aviso de Preview no topo mantém visível que fontes operacionais não estão conectadas, sem repetir essa informação em cada resposta. Os estados visuais `idle`, `sending`, `thinking`, `responding`, `success` e `error` acompanham o envio real da request e sua resposta ou falha. O indicador usa a resposta simulada atual; a revelação gradual é apenas apresentação no frontend depois que a resposta completa chega, sem streaming nem capacidade operacional adicional. `prefers-reduced-motion` reduz essas animações.

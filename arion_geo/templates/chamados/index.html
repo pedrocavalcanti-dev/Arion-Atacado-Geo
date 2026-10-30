@@ -48,8 +48,8 @@
     <input type="hidden" name="page_size" value="{{ page_size }}">
     <div class="ticket-filter-primary">
       <label class="ticket-search"><span>Buscar</span><input type="search" name="q" value="{{ filters.q }}" placeholder="Número, título, link, CI, projeto, provedor…"></label>
-      <button class="ticket-mobile-filter-trigger" type="button" aria-label="Abrir filtros da fila" aria-haspopup="dialog" data-mobile-filters-open><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10m-7 6h4"/><circle cx="8" cy="6" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg><span>Filtros</span><b data-filter-count hidden></b></button>
-      <dialog class="ticket-filter-sheet" data-mobile-filter-sheet aria-labelledby="mobile-ticket-filters-title">
+      <button class="ticket-mobile-filter-trigger" type="button" aria-label="Abrir filtros da fila" aria-controls="ticket-mobile-filter-panel" aria-expanded="false" data-mobile-filters-open><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10m-7 6h4"/><circle cx="8" cy="6" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg><span>Filtros</span><b data-filter-count hidden></b></button>
+      <section class="ticket-filter-sheet" id="ticket-mobile-filter-panel" data-mobile-filter-sheet aria-labelledby="mobile-ticket-filters-title">
         <header class="ticket-mobile-filter-heading"><h2 id="mobile-ticket-filters-title">Filtros da fila</h2><button type="button" aria-label="Fechar filtros" data-mobile-filters-close><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
         <div class="ticket-filter-sheet-content">
           <div class="ticket-primary-options">
@@ -73,8 +73,8 @@
       </div>
     </details>
         </div>
-    <div class="ticket-filter-actions"><button type="submit" class="button-primary">Aplicar filtros</button><a class="button-secondary" href="{{ clear_url }}">Limpar</a></div>
-      </dialog>
+    <div class="ticket-filter-actions"><a class="button-secondary" href="{{ clear_url }}">Limpar</a><button type="submit" class="button-primary">Aplicar filtros</button></div>
+      </section>
     </div>
   </form>
   <div class="ticket-active-filter-chips" data-ticket-active-filters aria-label="Filtros ativos" hidden></div>

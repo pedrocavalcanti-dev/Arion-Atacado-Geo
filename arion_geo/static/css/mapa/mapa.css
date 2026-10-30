@@ -859,3 +859,121 @@ body.geo-body:has(.geo-map-stage.has-selection) .pwa-update {
   .geo-map-stage .state-hover-tooltip,
   .geo-toolbar.geo-toolbar--map .map-more-filters summary::after { transition:none; }
 }
+
+/* Keep the context controls shrinkable before allowing them to wrap at laptop widths. */
+@media (min-width:761px) and (max-width:1499px) {
+  .geo-toolbar.geo-toolbar--map .geo-context-controls {
+    min-width:0;
+    align-content:center;
+    flex-wrap:wrap;
+    gap:7px 10px;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .future-filters {
+    min-width:0;
+    flex:1 1 420px;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .future-filters label {
+    min-width:96px;
+    flex:0 1 144px;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .future-filters select {
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    text-overflow:ellipsis;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls [data-period-control] {
+    min-width:108px;
+    flex:0 1 136px;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .map-more-filters { flex:0 0 auto; }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls { min-width:0; }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls .mode-filters { max-width:100%; }
+}
+
+@media (min-width:1200px) and (max-width:1799px) {
+  .geo-toolbar.geo-toolbar--map {
+    grid-template-columns:minmax(170px,.7fr) minmax(0,1.3fr);
+    grid-template-rows:auto auto auto;
+    grid-template-areas:"heading analysis" "context context" "filters filters";
+    align-content:center;
+    min-height:105px;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-heading--map { grid-area:heading; }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls { grid-area:context; }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls { grid-area:analysis; justify-content:flex-end; }
+  .geo-toolbar.geo-toolbar--map .map-active-filters { grid-area:filters; grid-column:1/-1; grid-row:3; }
+}
+
+/* Keep the map toolbar's filter groups inside their grid areas at desktop widths. */
+@media (min-width:1800px) {
+  .geo-toolbar.geo-toolbar--map {
+    grid-template-columns:minmax(190px,.75fr) minmax(360px,1.45fr) minmax(520px,1.95fr);
+    grid-template-rows:auto auto;
+    grid-template-areas:"heading context analysis" ". filters filters";
+  }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls { min-width:0; flex-wrap:nowrap; }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .future-filters { min-width:0; flex:1 1 auto; flex-wrap:nowrap; }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .future-filters label { min-width:0; flex:0 1 146px; }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .future-filters select { width:100%; min-width:0; max-width:146px; text-overflow:ellipsis; }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls { min-width:0; flex-wrap:nowrap; gap:clamp(7px,.7vw,12px); }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls .mode-control { min-width:0; flex:0 1 auto; }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls .mode-filters { min-width:0; max-width:100%; flex-wrap:nowrap; }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls .mode-chip { padding-inline:clamp(6px,.5vw,9px); }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls .geo-search-wrap { min-width:140px; max-width:180px; flex:0 1 170px; margin-left:auto; }
+}
+
+@media (min-width:1200px) and (max-width:1799px) {
+  .geo-toolbar.geo-toolbar--map {
+    grid-template-columns:minmax(180px,.34fr) minmax(0,1fr);
+    grid-template-rows:auto auto auto;
+    grid-template-areas:"heading analysis" "context context" "filters filters";
+    min-height:0;
+    gap:7px clamp(12px,1.4vw,22px);
+  }
+  .geo-toolbar.geo-toolbar--map .geo-heading--map { min-width:0; }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls {
+    width:100%;
+    min-width:0;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:7px 10px;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .operator-control { min-width:0; flex:0 0 auto; }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .future-filters {
+    min-width:0;
+    flex:1 1 420px;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .future-filters label { min-width:104px; flex:0 1 150px; }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .future-filters select {
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    text-overflow:ellipsis;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-context-controls .map-more-filters { min-width:0; flex:0 0 auto; }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls {
+    min-width:0;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:7px 10px;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls .mode-control { min-width:0; flex:1 1 380px; }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls .mode-filters {
+    min-width:0;
+    max-width:100%;
+    flex-wrap:wrap;
+  }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls .mode-chip { flex:0 1 auto; padding-inline:clamp(6px,.55vw,9px); }
+  .geo-toolbar.geo-toolbar--map .geo-analysis-controls .geo-search-wrap {
+    min-width:128px;
+    max-width:190px;
+    flex:0 1 170px;
+    margin-left:auto;
+  }
+  .geo-toolbar.geo-toolbar--map .map-active-filters { grid-column:1/-1; grid-row:3; }
+}
