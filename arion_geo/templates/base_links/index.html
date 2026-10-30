@@ -5,7 +5,7 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/base-links.css' %}">{% endblock %}
 {% block content %}
 <section class="links-page" aria-labelledby="links-title">
-  <header class="links-heading">
+  <header class="links-heading brand-decoration brand-decoration--heading">
     <div><p class="section-kicker">NOC ATACADO <span>/</span> BASE</p><h1 id="links-title">Base de Links</h1><p>Espelho operacional da base oficial do OTRS / CMDB.</p></div>
     <div class="links-heading-actions"><span class="source-badge"><i></i>Espelho local CMDB</span>{% if perms.configuracoes.export_base %}<a class="links-primary-button" href="{% url 'base_links:export' %}?{{ request.GET.urlencode }}">Exportar CSV</a>{% endif %}</div>
   </header>

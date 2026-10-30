@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Cockpit da opera&ccedil;&atilde;o &middot; ARION OPS{% endblock %}
+{% block title %}Cockpit &middot; ARION OPS{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/painel/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/painel/cockpit.css' %}">
@@ -8,7 +8,7 @@
 {% block content %}
 <section class="dashboard-page cockpit" data-cockpit data-initial-loading="true" data-results-ready="false" data-default-start="{{ default_start }}" data-default-end="{{ default_end }}" data-query-url="{% url 'analytics-query' %}" data-saved-url="{% url 'analytics-saved-views' %}" data-export-url="{% url 'analytics-export' %}" aria-labelledby="cockpit-title">
   {% csrf_token %}
-  <header class="cockpit-heading">
+  <header class="cockpit-heading brand-decoration brand-decoration--minimal">
     <div class="cockpit-heading-copy"><p class="section-kicker">NOC ATACADO <span>/</span> COCKPIT</p><h1 id="cockpit-title">Explore os tickets da opera&ccedil;&atilde;o</h1><div class="cockpit-context-switch" role="group" aria-label="Contexto do Cockpit"><button type="button" data-scope="support" aria-pressed="true">Suporte</button><button type="button" data-scope="cancellation" aria-pressed="false">Cancelamentos</button><button type="button" data-scope="general" aria-pressed="false">Geral</button></div><p data-scope-description>Suporte operacional da fila NOC - ATACADO.</p><span class="source-badge" data-source-badge aria-live="polite"><i aria-hidden="true"></i><span data-source-badge-label>Espelhos locais CMDB e OTRS</span></span></div>
     <aside class="cockpit-current-analysis" aria-label="An&aacute;lise atual" title="" data-current-analysis>
       <span class="panel-kicker">AN&Aacute;LISE ATUAL</span>

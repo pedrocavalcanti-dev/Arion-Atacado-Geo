@@ -2,6 +2,14 @@
 
 Esta pasta é a fonte Markdown da Central web em `/configuracoes/documentacao/`. Produto/interface: **ARION OPS**; empresa: **ARION**; operação atendida: **NOC ATACADO**. O nome interno do projeto e repositório permanece ARION ATACADO GEO. OTRS e CMDB permanecem fontes oficiais; o banco ARION contém mirrors e dados próprios.
 
+## Desenvolvimento
+
+ARION OPS foi concebido e desenvolvido por Pedro Cavalcanti para apoio às operações do NOC Atacado da ARION. A versão interna atual registrada no catálogo de releases é **1.2.0**; o mesmo catálogo alimenta `/api/version/`, a página de atualizações e a revisão do cache PWA.
+
+## Identidade e atualizações
+
+A identidade visual atual do produto é **ARION OPS**. O login institucional não exibe avisos PWA. Depois da autenticação, avisos de versão acompanham a navegação; o botão Depois registra a versão dispensada e mantém o indicador global acessível. Consulte [Estado Atual](ESTADO-ATUAL.md), [Autenticação e Sessão](funcionalidades/autenticacao.md) e [Arquitetura](ARQUITETURA.md).
+
 ## Começar
 
 - [Projeto](PROJETO.md)
@@ -51,7 +59,7 @@ Esta pasta é a fonte Markdown da Central web em `/configuracoes/documentacao/`.
 
 `estudos/` contém snapshots e pesquisas datadas; não substituem contratos da referência normativa. `tarefas/ATUAL.md` é uma nota histórica de tarefa concluída, não estado de capacidade atual.
 
-O planejamento de evolução está em [Roadmap](ROADMAP.md). Ele registra a próxima release sem substituir a documentação funcional vigente.
+O [Roadmap](ROADMAP.md) separa os itens concluídos na 1.2.0 das melhorias futuras, sem substituir a documentação funcional vigente.
 
 ## Ordem sugerida
 

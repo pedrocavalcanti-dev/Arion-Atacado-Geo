@@ -30,7 +30,7 @@ class DocumentationPortalTests(TestCase):
         self.assertContains(home, "Como podemos ajudar?")
         self.assertContains(home, "Segurança e operação")
         self.assertContains(home, "Dados e Integrações")
-        self.assertContains(home, "8 documentos")
+        self.assertContains(home, "9 documentos")
         self.assertContains(home, "5 documentos")
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "Caminho da request")
@@ -55,13 +55,13 @@ class DocumentationPortalTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(home, "Atualizações e versões")
-        self.assertContains(response, "Atualizações e versões")
-        self.assertContains(response, "Release W44")
+        self.assertContains(response, "Atualiza&ccedil;&otilde;es e vers&otilde;es")
+        self.assertContains(response, "ARION OPS 1.2.0 — Identidade, Cockpit e Inteligência Operacional")
         self.assertContains(response, "data-pwa-update-version")
-        self.assertContains(response, "Segurança")
-        self.assertContains(response, 'id="release-v1.1.0"')
-        self.assertContains(response, "Versão carregada nesta página: v1.1.0")
-        self.assertEqual(response.context["version"], "1.1.0")
+        self.assertContains(response, "Sobre o ARION OPS")
+        self.assertContains(response, 'id="release-v1.2.0"')
+        self.assertContains(response, "Vers&atilde;o carregada nesta p&aacute;gina: v1.2.0")
+        self.assertEqual(response.context["version"], "1.2.0")
         self.assertEqual(response.context["current_release"]["version"], response.context["version"])
 
     def test_portal_receives_the_existing_saved_theme(self):
@@ -128,7 +128,7 @@ class DocumentationPortalTests(TestCase):
                 self.assertTrue(item["description"])
                 self.assertTrue(item["search_terms"])
         project = DocumentationService.get("projeto")
-        self.assertEqual(project["title"], "Projeto — ARION ATACADO GEO")
+        self.assertEqual(project["title"], "Projeto — ARION OPS")
         self.assertNotIn("<h1", project["body"])
         self.assertEqual(len(DOCUMENTS), 28)
 

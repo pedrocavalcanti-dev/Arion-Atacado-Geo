@@ -135,8 +135,18 @@ a { color: inherit; }
 .brand { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; text-decoration: none; white-space: nowrap; }
 .brand-logo { display: block; width: clamp(96px, 7.6vw, 112px); max-height: 38px; height: auto; object-fit: contain; }
 .brand-logo--light { display: none; }
-html[data-theme="light"] .brand-logo--dark { display: none; }
-html[data-theme="light"] .brand-logo--light { display: block; }
+.brand-logo--unified { width: clamp(100px, 6.7vw, 102px); max-height: 44px; }
+.brand-logo--unified-light { display: none; }
+html[data-theme="light"] .brand-logo--unified-dark { display: none; }
+html[data-theme="light"] .brand-logo--unified-light { display: block; }
+.brand { padding-right: calc(clamp(96px, 7.6vw, 112px) + 38px - clamp(100px, 6.7vw, 102px)); }
+.brand-fallback { display: none; align-items: center; gap: 10px; }
+.brand--fallback { padding-right: 0; }
+.brand--fallback .brand-logo--unified { display: none; }
+.brand--fallback .brand-fallback { display: inline-flex; }
+.brand-fallback[hidden] { display: none; }
+html[data-theme="light"] .brand--fallback .brand-logo--dark { display: none; }
+html[data-theme="light"] .brand--fallback .brand-logo--light { display: block; }
 .brand-product { color: var(--brand-link); font-size: 12px; font-weight: 600; letter-spacing: .14em; }
 .header-nav { display: flex; align-items: center; gap: 25px; margin-left: clamp(36px, 7vw, 112px); height: 100%; }
 .header-link { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 100%; color: var(--text-muted); font-size: 12px; text-decoration: none; transition: color var(--transition-fast); }

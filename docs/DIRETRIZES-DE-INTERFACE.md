@@ -33,3 +33,13 @@ A navegação deve permanecer agrupada/recolhível; home e busca contam document
 ## Identidade visual ARION OPS
 
 O nome visual do produto é **ARION OPS**; ARION é a empresa e NOC ATACADO é o contexto operacional. A marca usa `#00BF9A` (verde), `#FF8440` (laranja) e `#6D6E71` (cinza), centralizadas nos tokens de `static/css/base.css`; os componentes compartilhados são ajustados por `static/css/branding.css`. Usar `static/branding/arion/` para as versões principal, clara e monocromática do logotipo, `static/branding/symbols/` para símbolos oficiais, `static/favicon/` para favicons e `static/pwa/` para ícones, manifesto e experiência PWA. Usar o logotipo claro em fundo escuro e o principal em fundo claro.
+
+O header autenticado usa a logo ARION OPS unificada: `arion-ops-logo-light.png` no tema escuro e `arion-ops-logo-primary.png` no tema claro, em `static/branding/arion/`. Se uma variante não carregar, o header mantém como fallback as logos ARION antigas com o texto OPS separado.
+
+Padrões geométricos discretos podem usar triângulos e recortes diagonais em CSS, com baixa opacidade do verde ARION e do cinza. A implementação compartilhada fica em `static/css/branding.css`; use modificadores apenas nas áreas vazias aprovadas de fundo/cabeçalho, fora de cards, gráficos, tabelas e mapas. No Mapa, qualquer detalhe fica no cabeçalho antes da área geográfica. Pseudo-elementos decorativos usam `pointer-events: none` e são reduzidos/ocultos em telas estreitas. O padrão deve permanecer sutil nos temas claro e escuro.
+
+O crédito institucional aparece em **Sobre o ARION OPS** e em `NOTICE.md`, não no header nem em cards operacionais. ARION OPS foi concebido e desenvolvido por Pedro Cavalcanti para apoio às operações do NOC Atacado da ARION.
+
+## Login e atualizações PWA
+
+Preservar a composição institucional aprovada do login ARION OPS e manter a autenticação livre de avisos de versão. O carrossel pode receber ajustes pontuais de espaçamento e vidro translúcido sem mudar sua estrutura. O aviso de release deve ser compacto, legível nos temas claro e escuro e usar o verde ARION como detalhe. Depois fecha o aviso da versão pendente e deixa o indicador global acessível sem reapresentar o toast a cada navegação; uma nova versão deve voltar a ser sinalizada.

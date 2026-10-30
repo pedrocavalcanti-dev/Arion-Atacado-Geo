@@ -92,7 +92,7 @@ O Mapa agrega dados do mirror e não geocodifica endereços ou chama CMDB por re
 flowchart TD
 P[Providers e Links atuais] --> T[Chamados válidos relacionados]
 T --> C[Componentes]
-C --> V[ARION V2]
+C --> V[Índice ARION]
 V --> R[Ranking e detalhe]
 ```
 
@@ -157,4 +157,4 @@ Templates são renderizados por Django; CSS fica em `static/` e os fontes JavaSc
 
 O frontend oferece a mesma aplicação server-rendered em desktop, tablet e mobile. Em viewports até 900 px, o cabeçalho principal abre um `dialog` com navegação filtrada pelas permissões Django. A Documentação conserva sua sidebar e shell próprios. A Base mostra o detalhe de Ticket em `dialog` com cabeçalho persistente e conteúdo rolável.
 
-O PWA usa o manifest `/manifest.webmanifest` e o Service Worker `/service-worker.js`, servido pelo Django com escopo `/` e `no-store`. O Worker trabalha em rede para navegações e APIs; o fallback offline informa que os dados operacionais não estão disponíveis. Cache Storage recebe somente respostas públicas de arquivos estáticos permitidos e um shell offline mínimo; páginas autenticadas, Tickets, payloads JSON, CMDB e OTRS nunca são armazenados para leitura offline. Cookies, CSRF, RBAC e Data Scope permanecem no fluxo Django atual. `docs/releases/releases.json` é a única fonte da versão ativa e do histórico amigável; o endpoint sem cache `/api/version/` e a página protegida Atualizações e versões consomem esse catálogo. O Service Worker injeta essa versão nos nomes de cache, remove somente caches ARION antigos ao ativar e reclama as páginas abertas. O aviso compara a versão do HTML com o servidor; uma troca de worker só recarrega a página depois do clique em Atualizar agora.
+O PWA usa o manifest `/manifest.webmanifest` e o Service Worker `/service-worker.js`, servido pelo Django com escopo `/` e `no-store`. O Worker trabalha em rede para navegações e APIs; o fallback offline informa que os dados operacionais não estão disponíveis. Cache Storage recebe somente respostas públicas de arquivos estáticos permitidos e um shell offline mínimo; páginas autenticadas, Tickets, payloads JSON, CMDB e OTRS nunca são armazenados para leitura offline. Cookies, CSRF, RBAC e Data Scope permanecem no fluxo Django atual. `docs/releases/releases.json` continua sendo a fonte da versão ativa e do histórico; `/api/version/` e a página protegida Atualizações e versões consomem esse catálogo. Nas páginas autenticadas, o aviso compara a versão do HTML com a versão do servidor e com um worker em espera. A versão pendente e a versão dispensada são persistidas no `localStorage`, permitindo continuidade após navegação e F5; Depois mantém um indicador global discreto, e outra versão não herda a dispensa. O login não renderiza avisos PWA. Atualizar agora envia `SKIP_WAITING`; quando o novo worker assume, o estado antigo é limpo e a página recarrega. Nenhuma página autenticada ou dado operacional é incluído no cache offline.

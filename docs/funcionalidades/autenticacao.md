@@ -30,3 +30,9 @@ Falhas de login geram `LOGIN_FAILED` sem registrar senha; login e logout bem-suc
 | `/logout/` (`autenticacao:logout`) | POST | Encerra sessão. |
 
 `LoginForm` adapta o formulário Django; `LoginView` e `LogoutView` implementam os fluxos. Signals de `aplicativos.auditoria` registram eventos de autenticação. Os testes cobrem sucesso, falha, usuário inativo, logout e eventos. Não há MFA ou política de expiração própria documentada. Erros de sessão/CSRF seguem [tratamento global de erros](tratamento-global-erros.md).
+
+## Identidade do login e avisos de versão
+
+O template de login aplica a identidade ARION OPS, com carrossel institucional de três artes. A página não inclui o aviso, o indicador, nem os botões de atualização. Após autenticar, o shell consulta `/api/version/` sem cache e observa o Service Worker em espera.
+
+A versão pendente e a versão dispensada são guardadas no `localStorage`, cada uma pelo identificador de versão. Navegação e F5 preservam o aviso; Depois fecha o toast e mantém um indicador global para acesso posterior. Uma nova versão não herda a dispensa. Atualizar agora mantém o fluxo `SKIP_WAITING` atual; quando o controller muda, o estado local antigo é removido e a página recarrega. O catálogo em `docs/releases/releases.json` continua sendo a fonte canônica, sem alteração de release ou versão publicada nesta etapa.

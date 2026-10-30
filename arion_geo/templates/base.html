@@ -30,9 +30,13 @@
     <a class="reports-topbar-back" href="{% url 'painel:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7M8 12h12"/></svg><span>Voltar para Visão Geral ARION OPS</span></a>
     {% else %}
     <a class="brand" href="{% url 'painel:index' %}" aria-label="ARION OPS, visão geral">
-      <img class="brand-logo brand-logo--dark" src="{% static 'branding/arion/arion-logo-light.png' %}" width="2172" height="724" alt="">
-      <img class="brand-logo brand-logo--light" src="{% static 'branding/arion/arion-logo-primary.png' %}" width="2172" height="724" alt="">
-      <span class="brand-product">OPS</span>
+      <img class="brand-logo brand-logo--unified brand-logo--unified-dark" src="{% static 'branding/arion/arion-ops-logo-light.png' %}" width="1916" height="821" alt="" onerror="const brand=this.closest('.brand');brand.classList.add('brand--fallback');brand.querySelector('.brand-fallback').hidden=false;brand.querySelectorAll('.brand-fallback [data-src]').forEach(image=>image.src=image.dataset.src)">
+      <img class="brand-logo brand-logo--unified brand-logo--unified-light" src="{% static 'branding/arion/arion-ops-logo-primary.png' %}" width="1916" height="821" alt="" onerror="const brand=this.closest('.brand');brand.classList.add('brand--fallback');brand.querySelector('.brand-fallback').hidden=false;brand.querySelectorAll('.brand-fallback [data-src]').forEach(image=>image.src=image.dataset.src)">
+      <span class="brand-fallback" hidden>
+        <img class="brand-logo brand-logo--dark" data-src="{% static 'branding/arion/arion-logo-light.png' %}" width="2172" height="724" alt="">
+        <img class="brand-logo brand-logo--light" data-src="{% static 'branding/arion/arion-logo-primary.png' %}" width="2172" height="724" alt="">
+        <span class="brand-product">OPS</span>
+      </span>
     </a>
     <button class="mobile-nav-toggle" type="button" aria-label="Abrir menu" aria-haspopup="dialog" aria-expanded="false" aria-controls="mobile-navigation" data-mobile-nav-open>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -56,6 +60,7 @@
         <div class="menu-divider" role="presentation"></div>
         <a class="user-menu-link" href="{% url 'configuracoes:account' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20v-1a7 7 0 0 1 14 0v1"/></svg>Minha conta</a>
         <a class="user-menu-link" href="{% url 'configuracoes:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 13v-2l2-1-2-4-2 1-2-1V4h-5v2L8 7 6 6l-2 4 2 1v2l-2 1 2 4 2-1 2 1v2h5v-2l2-1 2 1 2-4z"/></svg>Configurações</a>
+        <a class="user-menu-link" href="{% url 'configuracoes:about' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>Sobre o ARION OPS</a>
         {% if perms.relatorios.view_reports %}<a class="user-menu-link" href="{% url 'relatorios:dashboard' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V12M10 19V7M16 19V4M22 19H2"/></svg>Relatórios</a>{% endif %}
         <a class="user-menu-link" href="{% url 'configuracoes:documentation-releases' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>Atualiza&ccedil;&otilde;es e vers&otilde;es</a>
         <div class="menu-divider" role="presentation"></div>
@@ -70,6 +75,7 @@
     </details>
   </header>
   {% if request.resolver_match.app_name != 'relatorios' %}{% include "partials/mobile_navigation.html" %}{% endif %}
+  {% include "partials/pwa_update_indicator.html" with placement="global" %}
   {% endif %}
   <main id="main-content" class="main-content{% if not user.is_authenticated %} main-content--public{% endif %}">
     {% if messages %}<div class="toast-stack" aria-live="polite" aria-atomic="true">{% for message in messages %}<div class="toast toast--{{ message.tags|default:'info' }}" role="status">{{ message }}</div>{% endfor %}</div>{% endif %}
@@ -77,7 +83,7 @@
   </main>
   <div class="global-loading" data-global-loading hidden aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><span>Carregando</span></div>
   <div class="pwa-launch" data-pwa-launch aria-hidden="true"><img src="{% static 'branding/symbols/arion-symbol-primary.png' %}" alt=""><strong>ARION</strong><span>OPS</span></div>
-  {% include "partials/pwa_update.html" %}
+  {% if user.is_authenticated %}{% include "partials/pwa_update.html" %}{% endif %}
   <dialog class="pwa-install-help" data-pwa-install-help aria-labelledby="pwa-install-title">
     <button class="pwa-install-help__close" type="button" aria-label="Fechar" data-pwa-install-close>×</button>
     <img src="{% static 'pwa/arion-apple-touch-icon.png' %}" alt="" width="64" height="64">

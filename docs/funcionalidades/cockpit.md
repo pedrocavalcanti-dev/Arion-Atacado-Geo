@@ -1,6 +1,6 @@
 ﻿# Cockpit
 
-O Cockpit consulta somente os espelhos locais de Tickets OTRS e Links CMDB. Os três contextos da interface são **Suporte**, **Cancelamentos** e **Geral**; os valores internos da API são `SUPPORT`, `CANCELLATION` e `GENERAL`. A tela e suas APIs exigem login e `configuracoes.view_cockpit`. Data Scope entra no queryset antes das opções, filtros, métricas, grupos e exportações. Permissão funcional e escopo de dados são aplicados no backend. O OTRS é fonte oficial e o Arion permanece uma camada de consulta; nenhuma requisição do Cockpit consulta o OTRS remoto.
+No ARION OPS, o Cockpit consulta somente os espelhos locais de Tickets OTRS e Links CMDB. Os três contextos da interface são **Suporte**, **Cancelamentos** e **Geral**; os valores internos da API são `SUPPORT`, `CANCELLATION` e `GENERAL`. A tela e suas APIs exigem login e `configuracoes.view_cockpit`. Data Scope entra no queryset antes das opções, filtros, métricas, grupos e exportações. Permissão funcional e escopo de dados são aplicados no backend. O OTRS é fonte oficial e o ARION OPS permanece uma camada de consulta; nenhuma requisição do Cockpit consulta o OTRS remoto.
 
 ## Contextos operacionais
 

@@ -1,6 +1,8 @@
 ﻿# Estado atual do ARION OPS
 
-Revisão do workspace em 29/10/2026. A matriz descreve capacidades encontradas no código, sem publicar contagens voláteis de uma base específica.
+Revisão do workspace em 30/10/2026. A matriz descreve capacidades encontradas no código, sem publicar contagens voláteis de uma base específica.
+
+Versão interna registrada em `docs/releases/releases.json`: **1.2.0**. A distribuição em produção depende do build e do procedimento de implantação do ambiente de destino.
 
 ## Matriz de módulos
 
@@ -10,7 +12,7 @@ Revisão do workspace em 29/10/2026. A matriz descreve capacidades encontradas n
 | Chamados | Ativo | Tickets atuais da fila NOC + `TicketTracking` | Acompanhamento apenas no ARION | OTRS read-only. |
 | Cockpit | Ativo | Mirrors OTRS/CMDB; filas de Suporte e Cancelamentos | `SavedAnalyticsView` local; export de leitura | Contextos Suporte, Cancelamentos e Geral; classificação por etapa e Data Scope no backend. |
 | Mapa | Ativo | Mirrors e relações Ticket-ConfigItem | Sem edição da fonte | Agrega por UF; não geocodifica. |
-| Rankings | Ativo (V2) | Snapshot atual CMDB/Base Links + chamados válidos do mirror OTRS no período | Exportação de leitura | Exposição por links ativos e incidência proporcional; Índice V2 preservado, não é SLA nem prova de causalidade. |
+| Rankings | Ativo | Snapshot atual CMDB/Base Links + chamados válidos do mirror OTRS no período | Exportação de leitura | Exposição por links ativos e incidência proporcional; Índice ARION é operacional, não SLA nem prova de causalidade. |
 | Base | Ativo | `CMDBLinkMirror`, `CMDBOperatorMirror` | Consulta/exportação | Importador XLSX legado não é fluxo normal. |
 | ARI | Preview | Models locais de conversas e artifacts | Dados locais de conversa/anexo | Não há integração LLM ativa confirmada. |
 | CMDB Mirror | Ativo no código | ServiceUp Search/Get | Escrita no banco ARION | Sincronizado por processo separado. |
@@ -23,6 +25,8 @@ Revisão do workspace em 29/10/2026. A matriz descreve capacidades encontradas n
 
 ## Banco e fontes
 
+**Desenvolvimento:** ARION OPS foi concebido e desenvolvido por Pedro Cavalcanti para apoio às operações do NOC Atacado da ARION Serviços de Telecomunicações.
+
 A seleção suporta SQLite e MySQL. A validação desta consolidação W44 foi executada com SQLite; produção continua usando MySQL conforme configuração do ambiente de destino. Não publicar nome de schema, host, usuário, senha nem connection string. Consulte [Banco de Dados](BANCO-DE-DADOS.md) para precedência e fallback.
 
 A preparação de produção V1 inclui modo Django explícito, Waitress localhost, supervisor Windows para Web/Worker, build de assets production, `collectstatic`, production-check, preparação do serviço Cloudflare Tunnel e backup MySQL. Isso descreve código/script disponível; domínio, host novo, MySQL restaurado, conta Cloudflare/Tunnel e credenciais de serviço ainda precisam ser configurados e verificados no ambiente de destino. Consulte [Implantação e Produção](IMPLANTACAO-E-PRODUCAO.md).
@@ -32,6 +36,12 @@ OTRS/CMDB são fontes oficiais. `CMDBLinkMirror`, `CMDBOperatorMirror`, `OTRSTic
 ## Frontend mobile e PWA
 
 O frontend Django usa navegação dedicada em tablet/mobile e adaptações por módulo; a Fila apresenta Tickets como cartões em telas estreitas. O PWA possui manifest, ícones derivados do favicon, instalação Chromium/iOS, modo standalone e aviso de atualização sob ação do usuário. A versão e as notas amigáveis vivem em `docs/releases/releases.json`; a página Atualizações e versões integra a Documentação e `/api/version/` serve apenas a versão/data sem cache. Todos os entrypoints próprios referenciados por templates passam pelo build de produção com fingerprint, minificação e ofuscação; o Service Worker é minificado em saída especial e permanece sem ofuscação. O Service Worker não armazena conteúdo operacional autenticado: páginas e APIs seguem para rede e o modo offline mostra apenas indisponibilidade. Build de produção/`collectstatic` e validação em dispositivos no servidor continuam necessários antes de publicar.
+
+## Identidade, login e atualizações
+
+A interface usa a identidade **ARION OPS**, com ARION como empresa e NOC ATACADO como contexto operacional. O login institucional preserva o formulário Django, apresenta carrossel com três artes e permanece sem avisos de versão ou controles de atualização.
+
+Nas páginas autenticadas, a interface consulta `/api/version/` sem cache e observa o Service Worker. A versão pendente e a versão dispensada ficam no `localStorage`: o estado continua após navegação e recarga, e uma versão diferente volta a abrir o aviso. Depois fecha o aviso da versão atual e deixa o indicador global disponível. Atualizar agora preserva a ativação do worker e, quando o novo worker assume, limpa o estado pendente e recarrega a página. O catálogo interno registra a versão 1.2.0; a publicação no ambiente de destino depende do build e do procedimento de implantação.
 
 ## Não anunciar como implementado
 

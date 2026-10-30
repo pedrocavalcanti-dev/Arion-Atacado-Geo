@@ -100,8 +100,8 @@ class AuditEventsIntegrationTests(TestCase):
         response = self.client.post(url, {"name": group.name, "permissions": [base_permission.pk]})
         self.assertEqual(response.status_code, 302)
         event = AuditEvent.objects.get(action="PERMISSIONS_CHANGED")
-        self.assertEqual(event.metadata["permissions_before"], ["view_dashboard"])
-        self.assertEqual(event.metadata["permissions_after"], ["view_base"])
+        self.assertEqual(event.metadata["permissions_before"], [["configuracoes", "view_dashboard"]])
+        self.assertEqual(event.metadata["permissions_after"], [["configuracoes", "view_base"]])
 
     def test_password_change_never_records_password_values(self):
         response = self.client.post(reverse("configuracoes:security"), {

@@ -14,7 +14,7 @@ DOCUMENTS = {
     # title, description, category, Markdown path, explicit search terms
     "projeto": ("Projeto", "Objetivo, público e limites do ARION ATACADO GEO", "Começar", "PROJETO.md", "produto NOC Atacado operação inteligência operacional"),
     "estado-atual": ("Estado Atual", "Matriz verificável de módulos, fontes e capacidades", "Começar", "ESTADO-ATUAL.md", "status feature matrix ativo backlog snapshot"),
-    "roadmap": ("Roadmap", "Próxima release e evolução planejada de Rankings", "Começar", "ROADMAP.md", "próxima release Rankings V2 exposição incidência Top 10 provedores Links chamados ANOP ETIT"),
+    "roadmap": ("Roadmap", "Itens concluídos na versão 1.2.0 e evolução futura", "Começar", "ROADMAP.md", "release 1.2.0 identidade ARION OPS Cockpit exposição incidência Top 10 provedores Links chamados ANOP ETIT"),
     "arquitetura": ("Arquitetura", "Aplicativos, camadas, fluxos e relações entre fontes", "Começar", "ARQUITETURA.md", "apps services views templates worker desenho fluxo"),
     "fontes-de-dados": ("Fontes de Dados", "Fontes oficiais, mirrors, escopo e freshness", "Começar", "FONTES-DE-DADOS.md", "CMDB OTRS MySQL espelho mirror read-only Data Scope"),
     "autenticacao": ("Autenticação e Sessão", "Login, sessão Django e proteção de rotas", "Funcionalidades", "funcionalidades/autenticacao.md", "login logout sessão CSRF senha Django"),
@@ -23,7 +23,7 @@ DOCUMENTS = {
     "cockpit": ("Cockpit", "Análise operacional, consultas, views e exportações", "Funcionalidades", "funcionalidades/cockpit.md", "AnalyticsQuery Saved Views CSV filtros evidências séries"),
     "relatorios": ("Central de Relatórios", "Claro Multas, cálculos, enriquecimento e tratativa", "Funcionalidades", "funcionalidades/relatorios.md", "Claro Multas PenaltyCompetence baseline pausa TMP efetivo ISP tratativa decisão auditoria"),
     "mapa": ("Mapa Operacional", "Agregações por UF, modos e critérios geográficos", "Funcionalidades", "funcionalidades/mapa.md", "mapa UF chamadas reincidência motivos geografia"),
-    "ranking-provedores": ("Ranking de Provedores", "Índice V2, risco e desempenho por Provider/ISP", "Funcionalidades", "funcionalidades/rankings.md", "provedor ISP risco performance Ranking V2"),
+    "ranking-provedores": ("Ranking de Provedores", "Índice ARION, risco e desempenho por Provider/ISP", "Funcionalidades", "funcionalidades/rankings.md", "provedor ISP risco performance exposição incidência"),
     "base": ("Base de Links", "Links e Providers/ISP do espelho CMDB", "Funcionalidades", "funcionalidades/base.md", "links provider operadora ISP ConfigItemID CMDB busca exportação"),
     "ari": ("ARI", "Conversas, anexos e artefatos Preview", "Funcionalidades", "funcionalidades/ari.md", "assistente IA intelligence artificial preview artifacts LLM"),
     "banco-de-dados": ("Banco de Dados e Modelos", "Banco local, schema, chaves e relacionamentos", "Dados e Integrações", "BANCO-DE-DADOS.md", "banco database MySQL SQLite models migrations schema tabelas ConfigItemID OTRSTicketConfigItem CMDBLinkMirror external_id ticket_number closing_code_raw GroupDataScope IntegrationLease CodigoFechamento FalhaMassiva TELMEX Provider DPAPI source_config_item_id"),

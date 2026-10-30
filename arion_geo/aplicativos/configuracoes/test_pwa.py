@@ -12,13 +12,14 @@ from aplicativos.integracoes.services.project_names import canonical_project_nam
 
 
 class PwaDeliveryTests(SimpleTestCase):
-    def test_login_shell_links_manifest_and_hides_install_until_the_browser_allows_it(self):
+    def test_login_shell_links_manifest_and_has_no_version_notice(self):
         response = self.client.get("/login/")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'rel="manifest" href="/manifest.webmanifest"')
-        self.assertContains(response, 'data-pwa-install hidden')
         self.assertContains(response, "apple-mobile-web-app-capable")
+        self.assertNotContains(response, "data-pwa-update")
+        self.assertNotContains(response, "pwa-update-indicator")
 
     def test_manifest_is_public_with_installable_scope_and_icons(self):
         response = self.client.get(reverse("pwa-manifest"))
@@ -53,6 +54,7 @@ class PwaDeliveryTests(SimpleTestCase):
         self.assertIn("no-store", response["Cache-Control"])
         payload = response.json()
         catalog = release_catalog()
+        self.assertEqual(catalog["version"], "1.2.0")
         self.assertEqual(payload["version"], catalog["version"])
         self.assertEqual(payload["released_at"], catalog["current_release"]["released_at"])
         self.assertEqual(payload["release_title"], catalog["current_release"]["title"])
@@ -127,8 +129,9 @@ class PwaDeliveryTests(SimpleTestCase):
         indicator = Path("arion_geo/templates/partials/pwa_update_indicator.html").read_text(encoding="utf-8")
         map_styles = Path("arion_geo/static/css/mapa/mapa.css").read_text(encoding="utf-8")
 
-        self.assertIn("sessionStorage", script)
-        self.assertIn("arion-update-dismissed:", script)
+        self.assertIn("window.localStorage.getItem", script)
+        self.assertIn("arionOpsUpdateVersion", script)
+        self.assertIn("arionOpsUpdateDismissedVersion", script)
         self.assertIn("function syncUpdateState(available, version)", script)
         self.assertIn("Tentar novamente", script)
         self.assertIn("waitForWaitingWorker", script)
@@ -137,12 +140,13 @@ class PwaDeliveryTests(SimpleTestCase):
         self.assertIn('data-pwa-update-menu', indicator)
         self.assertIn('data-pwa-update-indicator', indicator)
         self.assertIn('data-pwa-update-popover', indicator)
-        self.assertNotIn('partials/pwa_update_indicator.html', base_template)
+        self.assertIn('partials/pwa_update_indicator.html', base_template)
         self.assertNotIn('partials/pwa_update_indicator.html', mobile_navigation)
-        self.assertNotIn('partials/pwa_update_indicator.html', documentation_base)
-        self.assertIn('partials/pwa_update_indicator.html', overview)
-        self.assertIn('placement="overview"', overview)
-        self.assertIn('.overview-hero .pwa-update-menu--overview', overview_styles)
+        self.assertIn('partials/pwa_update_indicator.html', documentation_base)
+        self.assertNotIn('partials/pwa_update_indicator.html', overview)
+        self.assertIn('placement="global"', base_template)
+        self.assertIn('.pwa-update-menu--global', Path("arion_geo/static/css/pwa.css").read_text(encoding="utf-8"))
+        self.assertNotIn('.overview-hero .pwa-update-menu--overview', overview_styles)
         self.assertIn('documentation-releases', mobile_navigation)
         self.assertIn('.geo-map-stage .state-panel { position:fixed; top:var(--arion-global-header-height,60px); right:0; bottom:0;', map_styles)
         self.assertIn('.geo-map-stage .map-backdrop { position:fixed; inset:0; }', map_styles)

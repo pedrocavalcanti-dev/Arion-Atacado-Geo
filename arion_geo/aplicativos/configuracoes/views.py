@@ -60,6 +60,11 @@ def index(request):
 
 
 @login_required
+def about(request):
+    return render(request, "configuracoes/about.html")
+
+
+@login_required
 def security(request):
     if request.method == "POST":
         form = PasswordChangeForm(user=request.user, data=request.POST)

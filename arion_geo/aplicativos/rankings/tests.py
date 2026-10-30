@@ -332,23 +332,24 @@ class RankingsMirrorTests(TestCase):
         from django.test import RequestFactory
         from .views import _read_filters
 
-        expected_starts = {
-            "month": "2026-10-01", "3months": "2026-08-01",
-            "6months": "2026-05-01", "12months": "2025-11-01",
-        }
-        for view, expected_start in expected_starts.items():
-            with self.subTest(view=view):
-                request = RequestFactory().get("/rankings/", {"view": view, "month": "2026-10"})
-                filters = _read_filters(request)
-                self.assertEqual(filters["date_from"], expected_start)
-                self.assertEqual(filters["date_to"], "2026-10-29")
-        for top in ("10", "20", "30", "50", "all"):
-            with self.subTest(top=top):
-                request = RequestFactory().get("/rankings/", {"top": top})
-                self.assertEqual(_read_filters(request)["top"], top)
-        defaults = _read_filters(RequestFactory().get("/rankings/"))
-        self.assertEqual(defaults["top"], "20")
-        self.assertEqual(defaults["min_links"], "0")
+        with patch("aplicativos.rankings.views.timezone.localdate", return_value=datetime(2026, 10, 29).date()):
+            expected_starts = {
+                "month": "2026-10-01", "3months": "2026-08-01",
+                "6months": "2026-05-01", "12months": "2025-11-01",
+            }
+            for view, expected_start in expected_starts.items():
+                with self.subTest(view=view):
+                    request = RequestFactory().get("/rankings/", {"view": view, "month": "2026-10"})
+                    filters = _read_filters(request)
+                    self.assertEqual(filters["date_from"], expected_start)
+                    self.assertEqual(filters["date_to"], "2026-10-29")
+            for top in ("10", "20", "30", "50", "all"):
+                with self.subTest(top=top):
+                    request = RequestFactory().get("/rankings/", {"top": top})
+                    self.assertEqual(_read_filters(request)["top"], top)
+            defaults = _read_filters(RequestFactory().get("/rankings/"))
+            self.assertEqual(defaults["top"], "20")
+            self.assertEqual(defaults["min_links"], "0")
 
     def test_one_link_one_incident_remains_visible_with_high_proportional_rate(self):
         small = CMDBOperatorMirror.objects.create(source_config_item_id="op-risk", name="Provider 1 link")
@@ -550,7 +551,8 @@ class RankingsMirrorTests(TestCase):
         self.assertEqual(workbook["Links"].max_row, 2)
         self.assertEqual(workbook["Tickets"].max_row, 2)
         ranking_headers = next(workbook["Ranking"].iter_rows(values_only=True))
-        self.assertIn("Índice ARION V2", ranking_headers)
+        self.assertIn("Índice ARION", ranking_headers)
+        self.assertNotIn("V2", " ".join(str(value) for value in ranking_headers))
         self.assertIn("Impacto no NOC /30", ranking_headers)
         self.assertIn("Chamados / link CMDB", ranking_headers)
         self.assertIn("Chamados / 100 ativos", ranking_headers)

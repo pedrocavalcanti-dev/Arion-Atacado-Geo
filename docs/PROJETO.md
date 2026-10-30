@@ -10,6 +10,14 @@ O sistema reduz a fragmentação entre consultas e facilita a leitura consolidad
 
 Usuários reais: analistas NOC, gestores, administradores de sistema e usuários de consulta/auditoria. O acesso deriva de Django Groups e Permissions; Data Scope restringe linhas operacionais no backend. Não há role separada chamada “apresentação”.
 
+## Identidade visual e login
+
+A interface do produto usa a marca **ARION OPS**; ARION identifica a empresa e NOC ATACADO, a operação atendida. O login institucional combina branding, formulário Django e carrossel de três artes. Avisos de nova versão são reservados às páginas autenticadas.
+
+## Desenvolvimento
+
+ARION OPS foi concebido e desenvolvido por Pedro Cavalcanti para apoio às operações do NOC Atacado da ARION. Produto: ARION OPS; operação: NOC Atacado; empresa: ARION Serviços de Telecomunicações. A página autenticada **Sobre o ARION OPS** apresenta este crédito e a versão atual do catálogo.
+
 ## Fontes oficiais e papel do banco local
 
 OTRS é o registro oficial dos chamados e CMDB é a fonte oficial dos itens de configuração. O ARION não grava alterações nesses sistemas: OTRS é acessado em MySQL somente leitura e CMDB por operações de leitura de ConfigItems. O banco ARION contém mirrors sincronizados, preferências e dados próprios da aplicação, além de camadas analíticas.

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% load static humanize %}
-{% block title %}ARION OPS · Rankings NOC Atacado{% endblock %}
+{% block title %}Rankings · ARION OPS{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/rankings/rankings.css' %}">{% endblock %}
 {% block content %}
 <section class="ranking-page ranking-v2" aria-labelledby="ranking-title" data-ranking-root data-detail-url-template="{{ provider_detail_url_template }}" data-base-url="{{ base_url }}" data-cockpit-url="{{ cockpit_url }}">
-  <header class="ranking-heading">
+  <header class="ranking-heading brand-decoration brand-decoration--heading">
     <div class="ranking-heading-copy">
       <p class="section-kicker">NOC ATACADO <span>/</span> RANKINGS</p>
       <h1 id="ranking-title">Ranking operacional de provedores</h1>
@@ -110,7 +110,7 @@
   <section class="podium-section" aria-labelledby="podium-title">
     <div class="section-title">
       <div>
-        <span class="section-kicker">ÍNDICE OPERACIONAL ARION · V2</span>
+        <span class="section-kicker">ÍNDICE OPERACIONAL ARION</span>
         <h2 id="podium-title">{% if filters.ranking_view == "best" %}Top 3 melhores desempenhos observados{% elif filters.ranking_view == "stable" %}Provedores sem ocorrências{% else %}Top 3 provedores com maior risco operacional{% endif %}</h2>
       </div>
       <span class="podium-caption">{% if filters.ranking_view == "best" %}Considera apenas provedores com chamados válidos no período.{% elif filters.ranking_view == "stable" %}Provedores sem chamados válidos e sem backlog, ordenados pela exposição da base.{% else %}Maior índice representa maior pressão operacional observada.{% endif %}</span>
@@ -288,13 +288,13 @@
   {% endif %}
 
   <dialog class="score-dialog" data-score-dialog aria-labelledby="score-dialog-title">
-    <header><div><span class="section-kicker">TRANSPARÊNCIA DO CÁLCULO</span><h2 id="score-dialog-title">Como o Índice ARION V2 é calculado?</h2></div><button type="button" class="ranking-button ranking-button--quiet" data-score-close>Fechar</button></header>
+    <header><div><span class="section-kicker">TRANSPARÊNCIA DO CÁLCULO</span><h2 id="score-dialog-title">Como o Índice ARION é calculado?</h2></div><button type="button" class="ranking-button ranking-button--quiet" data-score-close>Fechar</button></header>
     <div class="score-dialog-body">
       <p><strong>Exposi&ccedil;&atilde;o.</strong> Links ativos s&atilde;o registros presentes no mirror CMDB com estado de implanta&ccedil;&atilde;o <code>Operacional</code> (ou <code>Operational</code>). Cada ConfigItem &eacute; contado uma vez; n&atilde;o h&aacute; deduplica&ccedil;&atilde;o por nome nem fuzzy matching.</p>
       <p><strong>Incid&ecirc;ncia.</strong> Chamados distintos criados no per&iacute;odo por provedor &divide; links ativos atuais &times; 100. Sem link ativo, a taxa n&atilde;o &eacute; calculada. Links usam o snapshot atual; chamados usam o per&iacute;odo escolhido.</p>
-      <p><strong>Risco atual.</strong> O denominador CMDB do &Iacute;ndice ARION V2 permanece o da f&oacute;rmula aprovada. Essa dimens&atilde;o n&atilde;o muda com o novo contador de exposi&ccedil;&atilde;o.</p>
+      <p><strong>Risco atual.</strong> O denominador CMDB do &Iacute;ndice ARION permanece o da f&oacute;rmula aprovada. Essa dimens&atilde;o n&atilde;o muda com o novo contador de exposi&ccedil;&atilde;o.</p>
       <p><strong>Tempo m&eacute;dio.</strong> Inclui tickets RESOLVED/CLOSED cujo t&eacute;rmino operacional ocorreu no per&iacute;odo e cuja dura&ccedil;&atilde;o n&atilde;o &eacute; negativa.</p>
-      <p><strong>Índice ARION V2.</strong> Métrica operacional de 0 a 100. Zero significa sem pressão observada no período. O índice não representa SLA contratual, disponibilidade ou penalidade financeira.</p>
+      <p><strong>Índice ARION.</strong> Métrica operacional de 0 a 100. Zero significa sem pressão observada no período. O índice não representa SLA contratual, disponibilidade ou penalidade financeira.</p>
       <div class="score-formula">
         <h3>Composição</h3>
         <ul>
@@ -306,7 +306,7 @@
           <li>ARION acima de 24h <b>20 pontos</b>: chamados acima do limite divididos pelos chamados avaliáveis com datas e horas suficientes.</li>
           <li>Backlog atual <b>10 pontos</b>: chamados Em atendimento, Pendente ou Agendado divididos pelo maior valor entre chamados válidos e 1.</li>
         </ul>
-        <p>Os cinco componentes somam um único Índice ARION V2. No consolidado de 3 meses, os dados brutos são agregados e os componentes recalculados uma vez. O histórico calcula o índice V2 separadamente por mês.</p>
+        <p>Os cinco componentes somam um único Índice ARION. No consolidado de 3 meses, os dados brutos são agregados e os componentes recalculados uma vez. O histórico calcula o índice separadamente por mês.</p>
         <p>Amostra pequena: menos de {{ scoring.small_sample_threshold }} links. O provedor continua visível e pode aparecer no pódio de risco.</p>
       </div>
       <p class="aging-disclaimer">O envelhecimento dos chamados ARION considera chamados OPEN/PENDING/SCHEDULED envelhecidos desde a criação e RESOLVED/CLOSED com duração operacional superior a 24h, usando resolved_at e, somente quando ausente, terminal_state_at. A classificação de responsabilidade é informativa e não altera o índice.</p>

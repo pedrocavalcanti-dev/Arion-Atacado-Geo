@@ -28,7 +28,7 @@ KPIs gerais contam tickets distintos. O mesmo ticket pode aparecer em cada Link 
 
 ## Dados derivados
 
-`CodigoFechamento` vira `closing_code_raw` e é agrupado por `ClosingReasonCanonicalizer`, sem apagar valor raw. `FalhaMassiva`, `Falha Massiva` e `Defeito Massivo` são aliases de “Falha Massiva”. Procedência é informativa; não prova culpa de Provider nem altera por si só Ranking V2.
+`CodigoFechamento` vira `closing_code_raw` e é agrupado por `ClosingReasonCanonicalizer`, sem apagar valor raw. `FalhaMassiva`, `Falha Massiva` e `Defeito Massivo` são aliases de “Falha Massiva”. Procedência é informativa; não prova culpa de Provider nem altera por si só os Rankings.
 
 Provider/ISP vem da entidade CMDB relacionada. Cliente/Projeto são derivados do nome original por `LinkBusinessIdentityService`, com fonte/confiança. `legacy_project` é classificação histórica e fallback restrito, não fonte oficial atualizada pelo sync. XLSX legado não alimenta as páginas operacionais atuais. ARI Preview mantém dados locais e não faz parte do mirror.
 

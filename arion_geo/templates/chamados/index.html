@@ -5,7 +5,7 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/chamados/chamados.css' %}">{% endblock %}
 {% block content %}
 <section class="tickets-page" aria-labelledby="tickets-title" data-detail-template="{% url 'chamados:detail' 0 %}" data-tracking-template="{% url 'chamados:tracking_update' 0 %}" data-base-template="{% url 'base_links:index' %}" data-views-action="{{ queue_views_action_url }}" data-active-saved-view="{{ active_saved_view_id }}" data-manage="{% if perms.configuracoes.manage_operational_tickets %}1{% else %}0{% endif %}" data-current-user="{{ request.user.pk }}">
-  <header class="tickets-heading">
+  <header class="tickets-heading brand-decoration brand-decoration--heading">
     <div><p class="section-kicker">NOC ATACADO <span>/</span> CHAMADOS</p><h1 id="tickets-title">Fila operacional</h1><p>Acompanhe e organize os chamados ativos · OTRS e CMDB em espelhos locais</p></div>
     <div class="ticket-header-actions">
       <div class="tickets-sync" role="status">

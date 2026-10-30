@@ -14,15 +14,19 @@
   let waitingWorker = null;
   let serviceWorkerRegistration = null;
   let serverVersion = "";
+  let serviceWorkerCheckComplete = !("serviceWorker" in navigator) || !window.isSecureContext;
   let pendingUpdateActivation = false;
-  let toastDismissed = false;
-  let dismissalVersion = "";
   let updateInProgress = false;
   let reloadStarted = false;
   let lastVersionCheck = 0;
+  const pendingVersionKey = "arionOpsUpdateVersion";
+  const dismissedVersionKey = "arionOpsUpdateDismissedVersion";
   const versionEndpoint = updateNotice?.dataset.pwaVersionEndpoint;
   const pageVersion = updateNotice?.dataset.pwaPageVersion || "";
   const releaseUrl = newsLink?.getAttribute("href") || "";
+  let pendingVersion = readStoredValue(pendingVersionKey);
+  let dismissalVersion = readStoredValue(dismissedVersionKey);
+  let toastDismissed = Boolean(pendingVersion && pendingVersion === dismissalVersion);
   const updateMenus = [...document.querySelectorAll("[data-pwa-update-menu]")];
   const updateIndicators = updateMenus.map((menu) => menu.querySelector("[data-pwa-update-indicator]"));
   const updatePopovers = updateMenus.map((menu) => menu.querySelector("[data-pwa-update-popover]"));
@@ -109,20 +113,35 @@
     newsLink.href = target.pathname + target.search + target.hash;
   }
 
-  function readDismissal(version) {
+  function readStoredValue(key) {
     try {
-      return window.sessionStorage.getItem(`arion-update-dismissed:${version}`) === "1";
+      return window.localStorage.getItem(key) || "";
     } catch {
-      return false;
+      return "";
     }
   }
 
-  function saveDismissal(version) {
+  function writeStoredValue(key, value) {
     try {
-      window.sessionStorage.setItem(`arion-update-dismissed:${version}`, "1");
+      if (value) window.localStorage.setItem(key, value);
+      else window.localStorage.removeItem(key);
     } catch {
-      // Dismissal still applies to the current document when storage is unavailable.
+      // The current document still works when browser storage is unavailable.
     }
+  }
+
+  function clearStoredUpdateState() {
+    writeStoredValue(pendingVersionKey, "");
+    writeStoredValue(dismissedVersionKey, "");
+  }
+
+  function clearResolvedUpdateState() {
+    if (!serviceWorkerCheckComplete || !serverVersion || serverVersion !== pageVersion) return;
+    if (serviceWorkerRegistration?.waiting || serviceWorkerRegistration?.installing) return;
+    pendingVersion = "";
+    dismissalVersion = "";
+    toastDismissed = false;
+    clearStoredUpdateState();
   }
 
   function setUpdateStatus(message) {
@@ -149,15 +168,25 @@
   }
 
   function syncUpdateState(available, version) {
-    const targetVersion = version || pageVersion || "";
+    const targetVersion = version || pendingVersion || pageVersion || "";
     if (!available && updateInProgress) return;
-    if (available && targetVersion !== dismissalVersion) {
-      dismissalVersion = targetVersion;
-      toastDismissed = readDismissal(targetVersion);
+
+    if (available) {
+      const versionChanged = Boolean(targetVersion && targetVersion !== pendingVersion);
+      pendingVersion = targetVersion;
+      if (targetVersion) writeStoredValue(pendingVersionKey, targetVersion);
+      dismissalVersion = readStoredValue(dismissedVersionKey);
+      toastDismissed = Boolean(targetVersion && targetVersion === dismissalVersion);
+      if (versionChanged) {
+        setUpdateStatus("");
+        setUpdateActionState("idle");
+      }
+    } else {
+      toastDismissed = false;
     }
 
     updateMenus.forEach((menu, index) => {
-      menu.hidden = !available;
+      menu.hidden = !available || !toastDismissed;
       const versionText = targetVersion ? `v${targetVersion}` : "Nova vers\u00e3o";
       const indicatorVersion = menu.querySelector("[data-pwa-indicator-version]");
       const popoverVersion = menu.querySelector("[data-pwa-popover-version]");
@@ -168,23 +197,25 @@
     });
 
     if (available) {
+      if (versionLabel) versionLabel.textContent = targetVersion ? `v${targetVersion}` : "Nova vers\u00e3o";
       setReleaseTarget(targetVersion);
       setUpdateVisible(!toastDismissed);
       return;
     }
 
-    dismissalVersion = targetVersion;
-    toastDismissed = false;
     closeUpdatePopovers();
     setUpdateVisible(false);
     setUpdateStatus("");
     setUpdateActionState("idle");
+    clearResolvedUpdateState();
   }
 
   function dismissUpdate() {
     toastDismissed = true;
-    if (dismissalVersion) saveDismissal(dismissalVersion);
+    dismissalVersion = pendingVersion;
+    if (dismissalVersion) writeStoredValue(dismissedVersionKey, dismissalVersion);
     setUpdateVisible(false);
+    updateMenus.forEach((menu) => { menu.hidden = false; });
   }
 
   function reloadOnce() {
@@ -298,7 +329,12 @@
   updateActionButtons.forEach((button) => button.addEventListener("click", applyUpdate));
   document.querySelector("[data-pwa-update-dismiss]")?.addEventListener("click", dismissUpdate);
   navigator.serviceWorker?.addEventListener("controllerchange", () => {
-    if (pendingUpdateActivation) reloadOnce();
+    if (!pendingUpdateActivation) return;
+    pendingVersion = "";
+    dismissalVersion = "";
+    toastDismissed = false;
+    clearStoredUpdateState();
+    reloadOnce();
   });
 
   async function checkServerVersion() {
@@ -336,19 +372,27 @@
       const showWaitingWorker = (worker) => {
         if (!worker) return;
         waitingWorker = worker;
-        syncUpdateState(true, serverVersion || pageVersion);
+        syncUpdateState(true, serverVersion || pendingVersion || pageVersion);
         checkServerVersion();
         if (pendingUpdateActivation) worker.postMessage({ type: "SKIP_WAITING" });
       };
       showWaitingWorker(registration.waiting);
-      registration.addEventListener("updatefound", () => {
-        const installing = registration.installing;
-        installing?.addEventListener("statechange", () => {
+      let observedInstalling = null;
+      const watchInstalling = (installing) => {
+        if (!installing || installing === observedInstalling) return;
+        observedInstalling = installing;
+        installing.addEventListener("statechange", () => {
           if (installing.state === "installed") showWaitingWorker(registration.waiting);
+          if (installing.state === "installed" || installing.state === "redundant") clearResolvedUpdateState();
         });
-      });
+      };
+      registration.addEventListener("updatefound", () => watchInstalling(registration.installing));
+      watchInstalling(registration.installing);
       await registration.update();
+      serviceWorkerCheckComplete = true;
+      watchInstalling(registration.installing);
       showWaitingWorker(registration.waiting);
+      clearResolvedUpdateState();
     } catch {
       // The application remains fully usable when offline support is unavailable.
     }

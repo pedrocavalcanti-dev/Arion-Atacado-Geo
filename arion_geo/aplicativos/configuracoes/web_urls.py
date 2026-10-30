@@ -9,6 +9,7 @@ urlpatterns = [
     path("documentacao/busca/", views.documentation_search, name="documentation-search"),
     path("documentacao/atualizacoes/", views.documentation_releases, name="documentation-releases"),
     path("documentacao/<slug:slug>/", views.documentation_page, name="documentation-page"),
+    path("sobre/", views.about, name="about"),
     path("", views.index, name="index"),
     path("conta/", views.account, name="account"),
     path("seguranca/", views.security, name="security"),

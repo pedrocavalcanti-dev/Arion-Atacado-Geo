@@ -89,7 +89,7 @@ class AccountSettingsTests(TestCase):
         self.other.groups.set([Group.objects.get(name=GROUP_ANALYST)])
 
     def test_settings_pages_require_login(self):
-        for name in ("index", "account", "security", "appearance"):
+        for name in ("index", "account", "security", "appearance", "about"):
             response = self.client.get(reverse(f"configuracoes:{name}"))
             self.assertEqual(response.status_code, 302)
             self.assertIn("/login/", response.url)
@@ -107,6 +107,7 @@ class AccountSettingsTests(TestCase):
             "configuracoes:account",
             "configuracoes:security",
             "configuracoes:appearance",
+            "configuracoes:about",
         )
         for route_name in route_names:
             with self.subTest(route=route_name):
@@ -121,7 +122,19 @@ class AccountSettingsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f'href="{reverse("configuracoes:account")}"')
         self.assertContains(response, f'href="{reverse("configuracoes:index")}"')
+        self.assertContains(response, f'href="{reverse("configuracoes:about")}"')
         self.assertNotEqual(reverse("configuracoes:account"), reverse("configuracoes:index"))
+
+    def test_about_page_shows_product_identity_current_version_and_development_credit(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("configuracoes:about"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ARION OPS")
+        self.assertContains(response, "Plataforma Operacional — NOC Atacado")
+        self.assertContains(response, "Desenvolvido por")
+        self.assertContains(response, "Pedro Cavalcanti")
+        self.assertContains(response, "Versão 1.2.0")
 
     def test_settings_landing_shows_only_allowed_shortcuts_and_all_links_resolve(self):
         self.client.force_login(self.user)

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Sobre o ARION OPS · ARION OPS{% endblock %}
+{% block content %}
+<section class="about-page" aria-labelledby="about-title">
+  <div class="about-page__content">
+    <p class="about-page__kicker">ARION <span>/</span> NOC ATACADO</p>
+    <h1 id="about-title">Sobre o ARION OPS</h1>
+    <p class="about-page__lead">Plataforma Operacional — NOC Atacado</p>
+    <p class="about-page__description">Centralização de dados, chamados, links, provedores, indicadores e análises da operação.</p>
+    <div class="about-page__credit"><span>Desenvolvido por</span><strong>Pedro Cavalcanti</strong></div>
+    <p class="about-page__company">ARION Serviços de Telecomunicações</p>
+    <p class="about-page__version">Versão {{ arion_version }}</p>
+  </div>
+</section>
+{% endblock %}

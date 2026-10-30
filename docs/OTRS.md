@@ -2,7 +2,7 @@
 
 ## Fonte oficial e limite de escrita
 
-OTRS é a fonte oficial dos tickets, estados, relações com ConfigItems e Dynamic Fields. O ARION mantém um espelho local para consulta e análise; Chamados, Dashboard, Cockpit, Mapa e Rankings não escrevem no OTRS e não consultam o servidor remoto durante uma request web.
+OTRS é a fonte oficial dos tickets, estados, relações com ConfigItems e Dynamic Fields. O ARION OPS mantém um espelho local para consulta e análise; Chamados, Dashboard, Cockpit, Mapa e Rankings não escrevem no OTRS e não consultam o servidor remoto durante uma request web.
 
 A integração conecta ao MySQL do OTRS com uma conta dedicada de leitura. O client `OTRSReadOnlyClient` inicia a sessão MySQL em modo somente leitura e limita as consultas de inspeção a `SELECT` e metadados. A conta remota também deve receber grants somente de leitura, limitados ao schema necessário.
 

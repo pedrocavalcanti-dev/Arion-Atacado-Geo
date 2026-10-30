@@ -3,7 +3,7 @@
 {% block title %}Vis&atilde;o geral &middot; ARION OPS{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/painel/painel.css' %}">{% endblock %}
 {% block content %}
-<section class="overview-page" aria-labelledby="overview-title">
+<section class="overview-page brand-decoration brand-decoration--home" aria-labelledby="overview-title">
   <div class="overview-container">
     <header class="overview-hero">
       <p class="section-kicker overview-kicker">ARION <span>/</span> NOC ATACADO</p>
@@ -16,7 +16,6 @@
         <i aria-hidden="true">&middot;</i>
         <span><strong>{{ provider_count|default:0|intcomma }}</strong> Provedores</span>
       </div>
-      {% include "partials/pwa_update_indicator.html" with placement="overview" %}
     </header>
 
     {% if can_view_operation %}

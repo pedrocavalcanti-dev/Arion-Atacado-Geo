@@ -2,7 +2,7 @@
 
 ## Processo separado
 
-`integration_worker` é uma management command executada em processo separado do servidor HTTP. Views, middleware e `AppConfig.ready()` não iniciam a sincronização. A web lê o último snapshot local e continua disponível se o worker parar; o dado pode ficar stale.
+`integration_worker` é uma management command do ARION OPS executada em processo separado do servidor HTTP. Views, middleware e `AppConfig.ready()` não iniciam a sincronização. A web lê o último snapshot local e continua disponível se o worker parar; o dado pode ficar stale.
 
 ```powershell
 .venv\Scripts\python.exe arion_geo\gerenciar.py integration_worker
